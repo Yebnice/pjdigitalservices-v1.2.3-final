@@ -20,6 +20,15 @@ export default function handler(req, res) {
   state.count += 1;
   if (!constantTimePasswordMatch(req.body?.password)) return res.status(401).json({ error: "Wrong password." });
   attempts.delete(key);
-  createAdminSession(res);
+  try {
+    createAdminSession(res);
+  } catch (err) {
+    // Fails closed by design when ADMIN_SESSION_SECRET is missing/too short —
+    // but report it as a clean JSON error instead of crashing the request,
+    // so the login form can show something actionable instead of a raw
+    // "Internal Server Error" the client can't parse.
+    console.error("Admin login: could not create session —", err.message);
+    return res.status(500).json({ error: "Server misconfigured: ADMIN_SESSION_SECRET is missing or invalid. Set a random string of 32+ characters in your environment variables and redeploy." });
+  }
   return res.status(200).json({ ok: true });
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MessageCircle, X, Send, Search } from "lucide-react";
 
 const QUICK = ["Track my order", "Data bundles", "ECG bill", "TV subscription", "Report a problem"];
@@ -35,6 +35,20 @@ export default function ChatWidget() {
   const [complaint, setComplaint] = useState(EMPTY_COMPLAINT);
   const [complaintBusy, setComplaintBusy] = useState(false);
 
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Without this, every new reply lands below the visible scroll area and
+  // the person has to manually scroll down to read it — easy to miss on a
+  // small 320px-wide panel.
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, loading]);
+
+  useEffect(() => {
+    if (open && !trackMode && !complaintMode) inputRef.current?.focus();
+  }, [open, trackMode, complaintMode]);
+
   const isDataOrAirtime = complaint.serviceType === "data" || complaint.serviceType === "airtime";
   const setC = (key, value) => setComplaint((c) => ({ ...c, [key]: value }));
 
@@ -50,8 +64,16 @@ export default function ChatWidget() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: next, ...extra }),
       });
-      const data = await r.json();
-      setMessages((m) => [...m, { role: "assistant", content: data.reply || "Sorry, I couldn't answer that just now." }]);
+      let data = {};
+      try {
+        data = await r.json();
+      } catch {
+        data = {};
+      }
+      // Surface the real reason (e.g. rate limiting) instead of a generic
+      // "couldn't answer" message whenever the server actually told us why.
+      const content = data.reply || data.error || "Sorry, I couldn't answer that just now.";
+      setMessages((m) => [...m, { role: "assistant", content }]);
     } catch {
       setMessages((m) => [...m, { role: "assistant", content: "I couldn't reach support right now. Please use the Feedback page for urgent issues." }]);
     } finally {
@@ -62,7 +84,7 @@ export default function ChatWidget() {
   async function checkOrder() {
     if (!orderReference || !orderEmail.includes("@")) return;
     setTrackMode(false);
-    await send("Please check my order status using the verified order details provided below.", { orderReference, orderEmail });
+    await send(`Please check the status of order ${orderReference}.`, { orderReference, orderEmail });
   }
 
   function complaintMissingFields() {
@@ -125,6 +147,7 @@ export default function ChatWidget() {
               <div key={i} className={`chat-msg ${m.role === "assistant" ? "bot" : "user"}`}>{m.content}</div>
             ))}
             {loading && <div className="chat-msg bot">Checking…</div>}
+            <div ref={messagesEndRef} />
           </div>
 
           <div className="chat-quick">
@@ -181,16 +204,19 @@ export default function ChatWidget() {
 
           <div style={{ display: "flex", gap: 8, padding: 12, borderTop: "1px solid var(--line)" }}>
             <input
+              ref={inputRef}
               className="input"
               style={{ flex: 1 }}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && send()}
               placeholder="Ask a question..."
+              disabled={loading}
             />
             <button
               onClick={() => send()}
-              style={{ background: "var(--blue)", border: "none", borderRadius: 8, width: 38, display: "flex", alignItems: "center", justifyContent: "center" }}
+              disabled={loading || !input.trim()}
+              style={{ background: "var(--blue)", border: "none", borderRadius: 8, width: 38, display: "flex", alignItems: "center", justifyContent: "center", opacity: loading || !input.trim() ? 0.6 : 1 }}
             >
               <Send size={15} color="#fff" />
             </button>

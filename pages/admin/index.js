@@ -15,7 +15,15 @@ function PasswordGate({ onUnlock }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: value }),
       });
-      const data = await r.json();
+      let data = {};
+      try {
+        data = await r.json();
+      } catch {
+        // Server sent back something that isn't JSON (e.g. a raw 500 error
+        // page) — treat it as an unexpected-failure message instead of
+        // letting the JSON.parse error itself leak into the UI.
+        throw new Error(`Server error (${r.status}). Check the deployment logs.`);
+      }
       if (!r.ok) throw new Error(data.error || "Login failed");
       onUnlock(true);
     } catch (err) {
