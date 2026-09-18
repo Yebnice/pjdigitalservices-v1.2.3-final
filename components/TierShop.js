@@ -57,18 +57,37 @@ function estimateBulkTotal(kind, rows, tier) {
   }, 0);
 }
 
-function BundleGrid({ tier, sizeSelected, onSelect }) {
+function mergeBundles(tier, liveSizes) {
+  return tier.bundles.map((b) => {
+    if (!liveSizes) return { ...b, available: true };
+    const live = liveSizes.find((s) => s.size === b.size);
+    return live ? { ...b, price: live.price, available: true } : { ...b, available: false };
+  });
+}
+
+function BundleGrid({ tier, sizeSelected, onSelect, liveSizes }) {
+  // liveSizes is null until the live check resolves (or if it fails) — in
+  // that window everything shows as available, same as before this check
+  // existed, so a slow/failed lookup never blocks anyone from buying.
+  const merged = mergeBundles(tier, liveSizes);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 12 }}>
-      {tier.bundles.map((b) => (
+      {merged.map((b) => (
         <button
           key={b.size}
           className={`bundle-card ${sizeSelected === b.size ? "active" : ""}`}
-          onClick={() => onSelect(b.size)}
-          style={sizeSelected === b.size ? { borderColor: "var(--gold)" } : undefined}
+          onClick={() => b.available && onSelect(b.size)}
+          disabled={!b.available}
+          title={b.available ? undefined : "Currently unavailable — try another size"}
+          style={{
+            ...(sizeSelected === b.size ? { borderColor: "var(--gold)" } : {}),
+            ...(b.available ? {} : { opacity: 0.4, cursor: "not-allowed" }),
+          }}
         >
           <span className="heading-font" style={{ fontSize: 18, fontWeight: 600 }}>{b.size}GB</span>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "var(--price)", marginTop: 4 }}>GHS {b.price.toFixed(2)}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "var(--price)", marginTop: 4 }}>
+            {b.available ? `GHS ${b.price.toFixed(2)}` : "Unavailable"}
+          </span>
         </button>
       ))}
     </div>
@@ -100,14 +119,26 @@ function ModeTabs({ mode, setMode }) {
 
 /* ---------- single ---------- */
 
-function TierSingleForm({ tierKey, tier, networkId, email, setEmail, loading, setLoading, onDone, onError }) {
+function TierSingleForm({ tierKey, tier, networkId, email, setEmail, loading, setLoading, onDone, onError, liveSizes }) {
   const [phone, setPhone] = useState("");
   const [size, setSize] = useState(null);
-  const selected = tier.bundles.find((b) => b.size === size);
+  const merged = mergeBundles(tier, liveSizes);
+  const selected = merged.find((b) => b.size === size && b.available);
   const prefixOk = networkId !== "airteltigo" || isLikelyAirtelTigoNumber(phone);
   const valid = phone.length >= 10 && selected && email.includes("@") && prefixOk;
 
+  // If the live check comes back after a size was already picked (a real
+  // race: clicking a tile in the moment before the availability check
+  // resolves) and it turns out that size isn't actually available, drop the
+  // selection instead of letting a stale price sit behind an enabled Pay
+  // button — this is exactly the scenario that let the "no longer
+  // available" error reach checkout in the first place.
+  useEffect(() => {
+    if (size != null && liveSizes && !liveSizes.some((s) => s.size === size)) setSize(null);
+  }, [liveSizes, size]);
+
   function submit() {
+    if (!selected) return;
     setLoading(true);
     payAndFulfil({
       orderType: "tierData",
@@ -131,7 +162,7 @@ function TierSingleForm({ tierKey, tier, networkId, email, setEmail, loading, se
           That doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053).
         </p>
       )}
-      <BundleGrid tier={tier} sizeSelected={size} onSelect={setSize} />
+      <BundleGrid tier={tier} sizeSelected={size} onSelect={setSize} liveSizes={liveSizes} />
       <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>
       <NoRefundNotice />
       <div style={{ maxWidth: 300 }}>
@@ -326,6 +357,7 @@ export default function TierShop({ networkKey }) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [liveSizes, setLiveSizes] = useState(null);
 
   useEffect(() => {
     setEmail(window.localStorage.getItem("pj_email") || "");
@@ -336,6 +368,22 @@ export default function TierShop({ networkKey }) {
   }, [activeTierKey]);
 
   const isEvd = activeTierKey === "evd";
+
+  // Check what Techlink's live catalogue actually has for this tier so the
+  // grid can gray out sizes that would otherwise fail at checkout (see the
+  // note in lib/agentProducts.js — that reference list can drift out of
+  // sync with the real, live catalogue).
+  useEffect(() => {
+    if (isEvd) return;
+    let cancelled = false;
+    setLiveSizes(null);
+    fetch(`/api/techlink/tier-products?tierKey=${encodeURIComponent(activeTierKey)}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setLiveSizes(d.sizes || null); })
+      .catch(() => { if (!cancelled) setLiveSizes(null); });
+    return () => { cancelled = true; };
+  }, [activeTierKey, isEvd]);
+
   const tier = !isEvd ? TIERS[activeTierKey] : null;
 
   function finish(message) {
@@ -349,7 +397,7 @@ export default function TierShop({ networkKey }) {
     setToast({ type: "error", message: msg });
   }
 
-  const sharedProps = { networkId: page.networkId, email, setEmail, loading, setLoading, onDone: finish, onError: fail };
+  const sharedProps = { networkId: page.networkId, email, setEmail, loading, setLoading, onDone: finish, onError: fail, liveSizes };
 
   return (
     <div className="page-wrap" style={{ maxWidth: 720 }}>
