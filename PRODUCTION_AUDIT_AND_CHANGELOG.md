@@ -9,7 +9,7 @@ Current external facts were checked against official documentation for Next.js, 
 ## Major fixes applied
 
 ### 1. Framework/security baseline
-- Targeted Next.js 16.3.3 and React 19.2.
+- Targeted Next.js 16.2.x (Active LTS) and React 19.2.
 - Added Node.js >=20.9 engine requirement.
 - This matches the current Next.js support guidance: 16.x is Active LTS; 14.x is unsupported.
 
@@ -48,7 +48,7 @@ Current external facts were checked against official documentation for Next.js, 
 ### 7. AI customer support
 - Reworked the chatbot into a hybrid assistant.
 - No AI key: built-in FAQ mode still works.
-- With `GEMINI_API_KEY`: the server uses the Gemini API with `GEMINI_MODEL` (default `gemini-3.8-flash`).
+- With `GEMINI_API_KEY`: the server uses the Gemini API with `GEMINI_MODEL` (default `gemini-flash-latest`, Google's rolling alias for their current flash model).
 - Added secure order lookup inside chat only when both order reference and checkout email are supplied.
 - The AI is prohibited from charging customers, bypassing Paystack, inventing live prices/statuses, or requesting/repeating PINs and sensitive identity information.
 - Added a secure “Track my order” flow inside the chat widget.

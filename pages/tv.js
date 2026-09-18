@@ -4,9 +4,11 @@ import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, NetworkBadge }
 import { payAndFulfil } from "../lib/payment";
 
 const PROVIDERS = {
-  DSTV: { label: "DSTV", color: "#0f4fa8", initial: "D" },
-  GOTV: { label: "GOtv", color: "#e0a53a", initial: "G" },
-  STARTIMES: { label: "StarTimes", color: "#c1465a", initial: "S" },
+  DSTV: { label: "DSTV", color: "#0f4fa8", initial: "D", logo: "/icons/tv/dstv.png" },
+  // GOtv's real mark is red "GO" + green "tv" — corrected from the previous gold badge.
+  GOTV: { label: "GOtv", color: "#d81f26", initial: "G", logo: "/icons/tv/gotv.png" },
+  // StarTimes' real mark is an orange-and-blue diamond — corrected from the previous pink/red badge.
+  STARTIMES: { label: "StarTimes", color: "#f2851c", initial: "S", logo: "/icons/tv/startimes.png" },
 };
 
 export default function TvPage() {

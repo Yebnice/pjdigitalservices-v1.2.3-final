@@ -1,14 +1,17 @@
+import { useState } from "react";
 import { Loader2, Check, X, Bolt, Droplet, GraduationCap } from "lucide-react";
 
 export const NETWORKS = {
-  mtn: { label: "MTN", color: "var(--gold)", initial: "M" },
-  telecel: { label: "Telecel", color: "var(--red)", initial: "T" },
-  airteltigo: { label: "AirtelTigo", color: "var(--blue)", initial: "AT" },
+  mtn: { label: "MTN", color: "var(--gold)", initial: "M", logo: "/icons/networks/mtn.png" },
+  telecel: { label: "Telecel", color: "var(--red)", initial: "T", logo: "/icons/networks/telecel.png" },
+  airteltigo: { label: "AirtelTigo", color: "var(--blue)", initial: "AT", logo: "/icons/networks/airteltigo.png" },
 };
 
 export const BILL_PROVIDERS = {
-  ecg: { label: "ECG (Electricity)", color: "var(--gold)", Icon: Bolt },
-  water: { label: "Ghana Water", color: "var(--blue)", Icon: Droplet },
+  // ECG's real mark is navy-blue-primary (with a yellow disc and red bolts),
+  // not gold — corrected from the previous gold badge.
+  ecg: { label: "ECG (Electricity)", color: "#0b1f66", Icon: Bolt, logo: "/icons/providers/ecg.png" },
+  water: { label: "Ghana Water", color: "var(--blue)", Icon: Droplet, logo: "/icons/providers/ghana-water.png" },
 };
 
 // Same badge treatment as NETWORKS/BILL_PROVIDERS — a color mark, not the
@@ -35,7 +38,41 @@ export function NetworkDot({ id, palette = NETWORKS }) {
 // panel use.
 export function NetworkBadge({ id, palette = NETWORKS, size = 22 }) {
   const n = palette[id];
+  const [logoFailed, setLogoFailed] = useState(false);
   if (!n) return <NetworkDot id={id} palette={palette} />;
+
+  // Prefer the real provider logo when one has been supplied (drop a file at
+  // the path in `logo` — e.g. public/icons/networks/mtn.png) and it loads
+  // successfully. Falls back to the color-badge/initial treatment otherwise,
+  // so the app never shows a broken image.
+  if (n.logo && !logoFailed) {
+    return (
+      <span
+        aria-hidden="true"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          overflow: "hidden",
+          background: "#fff",
+          flexShrink: 0,
+        }}
+      >
+        <img
+          src={n.logo}
+          alt=""
+          width={size}
+          height={size}
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          onError={() => setLogoFailed(true)}
+        />
+      </span>
+    );
+  }
+
   return (
     <span
       aria-hidden="true"
