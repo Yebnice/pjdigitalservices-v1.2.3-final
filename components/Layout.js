@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import {
   Home, Wifi, Smartphone, Bolt, UserPlus, Tv, GraduationCap,
   ClipboardList, HelpCircle, MessageSquare, Menu, ShoppingCart,
-  Shield, FileText, RotateCcw,
+  Shield, FileText, RotateCcw, Zap, UserCircle,
 } from "lucide-react";
 import { useState } from "react";
 import ChatWidget from "./ChatWidget";
@@ -14,6 +14,7 @@ const MAIN_LINKS = [
   { href: "/at-data", label: "AT Data", icon: Wifi },
   { href: "/telecel-data", label: "Telecel Data", icon: Wifi },
   { href: "/airtime", label: "Airtime", icon: Smartphone },
+  { href: "/data", label: "Quick Data Top-up", icon: Zap },
   { href: "/bills", label: "Bills (ECG/Water)", icon: Bolt },
   { href: "/afa", label: "AFA Registration", icon: UserPlus },
   { href: "/tv", label: "TV Subscription", icon: Tv },
@@ -21,6 +22,7 @@ const MAIN_LINKS = [
 ];
 
 const ACCOUNT_LINKS = [
+  { href: "/register", label: "Create Account", icon: UserCircle },
   { href: "/dashboard", label: "My Orders", icon: ClipboardList },
   { href: "/track", label: "Track an Order", icon: ShoppingCart },
   { href: "/faq", label: "FAQ", icon: HelpCircle },
@@ -71,10 +73,6 @@ export default function Layout({ children }) {
             <div className="brand-word"><span className="pj">Pj</span><span className="rest">DigitalServices</span></div>
             <div className="brand-tagline">Think Data, Think PjDigitalServices</div>
           </div>
-        </Link>
-
-        <Link href="/data" className="sidebar-cta">
-          <Wifi size={15} /> Buy data now
         </Link>
 
         <div className="sidebar-section-label">Services</div>

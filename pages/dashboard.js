@@ -47,7 +47,7 @@ export default function DashboardPage() {
         {processing.length > 0 && <div className="card" style={{ padding: 12, margin: "16px 0", fontSize: 13, borderColor: "var(--gold)" }}>Your order is still being processed. We are sorry for the delay. Please do not place a duplicate order; refresh this page later to see the latest status.</div>}
         <OrderList items={orders} />
       </>}
-      {!reference && <p style={{ fontSize: 13, color: "var(--muted-dim)", marginTop: 16 }}>After checkout, your last order reference is saved on this device. You can also find the reference in your payment confirmation. <Link href="/track" style={{ color: "var(--gold)" }}>Track an order</Link>.</p>}
+      {!reference && <p style={{ fontSize: 13, color: "var(--muted-dim)", marginTop: 16 }}>After checkout, your last order reference is saved on this device. You can also find the reference in your payment confirmation. <Link href="/track" style={{ color: "var(--price)" }}>Track an order</Link>.</p>}
     </div>
   );
 }

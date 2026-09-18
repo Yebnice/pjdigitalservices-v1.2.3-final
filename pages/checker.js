@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { Field, EmailField, PrimaryButton, Toast } from "../components/ui";
+import { Field, EmailField, PrimaryButton, Toast, EXAM_TYPES, NetworkBadge } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
+
+// Defensive: Techlink's docs don't publish a sample response body for
+// GET /products/checker-prices or GET /result-check-service/prices, so this
+// tries the field names that would be reasonable for a prices-by-exam-type
+// list without assuming one exact shape. If none match, we simply don't show
+// a number and fall back to "Price shown at checkout" rather than guess wrong.
+function findPrice(list, examType) {
+  if (!Array.isArray(list)) return null;
+  const row = list.find((r) => String(r?.type || r?.exam || r?.name || "").toUpperCase() === examType);
+  const value = row?.price ?? row?.amount ?? row?.cost;
+  return typeof value === "number" ? value : null;
+}
 
 export default function CheckerPage() {
   const router = useRouter();
@@ -16,11 +28,19 @@ export default function CheckerPage() {
   const [candidateName, setCandidateName] = useState("");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [prices, setPrices] = useState(null);
 
   useEffect(() => {
     setEmail(window.localStorage.getItem("pj_email") || "");
     setPhone(window.localStorage.getItem("pj_phone") || "");
+    fetch("/api/techlink/checker-prices")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => data && setPrices(data))
+      .catch(() => {});
   }, []);
+
+  const voucherPrice = findPrice(prices?.vouchers, type);
+  const lookupPrice = findPrice(prices?.lookupService, type);
 
   const voucherValid = email.includes("@") && (deliveryMethod === "email" || phone.length >= 10);
   const lookupValid = indexNumber && examYear && email.includes("@");
@@ -69,13 +89,25 @@ export default function CheckerPage() {
 
         <Field label="Exam">
           <div className="network-picker">
-            <button className={`network-btn ${type === "BECE" ? "active" : ""}`} onClick={() => setType("BECE")}>BECE</button>
-            <button className={`network-btn ${type === "WASSCE" ? "active" : ""}`} onClick={() => setType("WASSCE")}>WASSCE</button>
+            {Object.entries(EXAM_TYPES).map(([id, e]) => (
+              <button
+                key={id}
+                className={`network-btn ${type === id.toUpperCase() ? "active" : ""}`}
+                onClick={() => setType(id.toUpperCase())}
+                style={type === id.toUpperCase() ? { borderColor: e.color } : undefined}
+              >
+                <NetworkBadge id={id} palette={EXAM_TYPES} size={18} />
+                {e.label}
+              </button>
+            ))}
           </div>
         </Field>
 
         {mode === "voucher" && (
           <>
+            <div style={{ fontSize: 13, color: "var(--muted)" }}>
+              {voucherPrice != null ? `GHS ${voucherPrice.toFixed(2)} per voucher` : "Price shown at checkout"}
+            </div>
             <Field label="How many?">
               <input className="input" type="number" min={1} value={quantity} onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))} style={{ maxWidth: 120 }} />
             </Field>
@@ -98,6 +130,7 @@ export default function CheckerPage() {
           <>
             <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
               Not instant — we look this up and email the result once it's ready.
+              {lookupPrice != null ? ` GHS ${lookupPrice.toFixed(2)}.` : ""}
             </p>
             <Field label="Index number">
               <input className="input" value={indexNumber} onChange={(e) => setIndexNumber(e.target.value)} placeholder="e.g. 0123456789" />

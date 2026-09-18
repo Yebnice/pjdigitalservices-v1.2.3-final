@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice } from "../components/ui";
+import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, NetworkBadge } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
 
-const PROVIDERS = { DSTV: "DSTV", GOTV: "GOtv", STARTIMES: "StarTimes" };
+const PROVIDERS = {
+  DSTV: { label: "DSTV", color: "#0f4fa8", initial: "D" },
+  GOTV: { label: "GOtv", color: "#e0a53a", initial: "G" },
+  STARTIMES: { label: "StarTimes", color: "#c1465a", initial: "S" },
+};
 
 export default function TvPage() {
   const router = useRouter();
@@ -74,13 +78,15 @@ export default function TvPage() {
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <Field label="Provider">
           <div className="network-picker">
-            {Object.entries(PROVIDERS).map(([id, label]) => (
+            {Object.entries(PROVIDERS).map(([id, p]) => (
               <button
                 key={id}
                 className={`network-btn ${service === id ? "active" : ""}`}
                 onClick={() => setService(id)}
+                style={service === id ? { borderColor: p.color } : undefined}
               >
-                {label}
+                <NetworkBadge id={id} palette={PROVIDERS} size={18} />
+                {p.label}
               </button>
             ))}
           </div>

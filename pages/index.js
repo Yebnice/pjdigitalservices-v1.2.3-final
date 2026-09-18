@@ -34,9 +34,9 @@ export default function Home() {
           Fast, trackable <span className="accent-text">airtime &amp; data</span> delivery across every network.
         </h1>
         <p>
-          PjDigitalServices delivers MTN, Telecel and AirtelTigo airtime and data in seconds, plus ECG and
-          water bill payments, TV subscriptions and BECE/WASSCE result checkers — all paid securely through
-          Paystack, with every order tracked from purchase to delivery.
+          PjDigitalServices delivers MTN, Telecel and AirtelTigo airtime and data, plus ECG and water
+          bill payments, TV subscriptions and BECE/WASSCE result checkers — all paid securely through
+          MoMo, Telecel Cash, AT Money or card, with every order tracked from purchase to delivery.
         </p>
 
         <div className="network-strip">
@@ -49,7 +49,7 @@ export default function Home() {
         </div>
 
         <div className="trust-strip">
-          <span><ShieldCheck size={14} color="var(--blue-light)" /> Secure Paystack checkout</span>
+          <span><ShieldCheck size={14} color="var(--blue-light)" /> Secure checkout</span>
           <span><Headset size={14} color="var(--blue-light)" /> Real support, real people</span>
         </div>
 
@@ -84,9 +84,9 @@ export default function Home() {
         <div className="card" style={{ marginTop: 28, padding: 22 }}>
           <div style={{ fontSize: 14.5, fontWeight: 600, marginBottom: 6 }}>Why customers stick with us</div>
           <p style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.7, margin: 0 }}>
-            Every order is confirmed against your actual Paystack payment before anything is sent — so delivery is
+            Every order is confirmed against your actual payment before anything is sent — so delivery is
             fast without cutting corners on security. Already bought from us? Check your order any
-            time from <Link href="/dashboard" style={{ color: "var(--blue-light)" }}>My Orders</Link> using
+            time from <Link href="/dashboard" style={{ color: "var(--price)" }}>My Orders</Link> using
             your order reference and the email you checked out with.
           </p>
         </div>

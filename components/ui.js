@@ -1,4 +1,4 @@
-import { Loader2, Check, X } from "lucide-react";
+import { Loader2, Check, X, Bolt, Droplet, GraduationCap } from "lucide-react";
 
 export const NETWORKS = {
   mtn: { label: "MTN", color: "var(--gold)", initial: "M" },
@@ -7,8 +7,15 @@ export const NETWORKS = {
 };
 
 export const BILL_PROVIDERS = {
-  ecg: { label: "ECG (Electricity)", color: "var(--gold)" },
-  water: { label: "Ghana Water", color: "var(--blue)" },
+  ecg: { label: "ECG (Electricity)", color: "var(--gold)", Icon: Bolt },
+  water: { label: "Ghana Water", color: "var(--blue)", Icon: Droplet },
+};
+
+// Same badge treatment as NETWORKS/BILL_PROVIDERS — a color mark, not the
+// exam board's actual logo artwork.
+export const EXAM_TYPES = {
+  bece: { label: "BECE", color: "var(--gold)", initial: "B" },
+  wassce: { label: "WASSCE", color: "var(--blue)", initial: "W" },
 };
 
 // NOTE: data bundle prices are NOT hardcoded here anymore — they load live
@@ -20,11 +27,12 @@ export function NetworkDot({ id, palette = NETWORKS }) {
   return <span className="dot" style={{ background: palette[id]?.color || "var(--muted-dim)" }} />;
 }
 
-// A small brand-colored initial badge — MTN's actual yellow, Telecel's red,
-// AirtelTigo's blue — used wherever a network needs a stronger visual mark
-// than the plain dot. Deliberately not the operators' actual logo artwork
-// (which is trademarked); this is a same-color, same-initial stand-in, the
-// same treatment resale dashboards like Techlink's own panel use.
+// A small brand-colored badge — a network's real color, ECG/Water's real
+// color, or an exam board's real color — used wherever a service needs a
+// stronger visual mark than plain text. Deliberately not the operator/board's
+// actual logo artwork (which is trademarked); this is a same-color icon or
+// initial stand-in, the same treatment resale dashboards like Techlink's own
+// panel use.
 export function NetworkBadge({ id, palette = NETWORKS, size = 22 }) {
   const n = palette[id];
   if (!n) return <NetworkDot id={id} palette={palette} />;
@@ -46,7 +54,7 @@ export function NetworkBadge({ id, palette = NETWORKS, size = 22 }) {
         flexShrink: 0,
       }}
     >
-      {n.initial || n.label?.[0]}
+      {n.Icon ? <n.Icon size={size * 0.58} color="#14151a" /> : (n.initial || n.label?.[0])}
     </span>
   );
 }

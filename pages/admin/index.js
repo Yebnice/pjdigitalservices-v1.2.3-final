@@ -110,7 +110,7 @@ export default function AdminPage() {
             <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}><strong>{o.reference}</strong><span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{new Date(o.createdAt).toLocaleString()}</span></div>
             <div style={{ fontSize: 13, color: "var(--muted)" }}>GHS {Number(o.amount).toFixed(2)} · {o.orderType} · {o.network || "service"}</div>
             <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>{o.lastFulfillmentError || "Provider outcome requires confirmation before any retry."}</div>
-            <div style={{ fontSize: 12, color: "var(--gold)" }}>Confirm the provider outcome before taking action. The buttons below create an admin audit note.</div><div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}><button className="nav-item" style={{ width: "auto", padding: "6px 10px" }} onClick={() => manualAction(o.reference, "confirm_fulfilled")}>Mark fulfilled</button><button className="nav-item" style={{ width: "auto", padding: "6px 10px" }} onClick={() => manualAction(o.reference, "retry")}>Authorize retry</button></div>
+            <div style={{ fontSize: 12, color: "var(--price)" }}>Confirm the provider outcome before taking action. The buttons below create an admin audit note.</div><div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}><button className="nav-item" style={{ width: "auto", padding: "6px 10px" }} onClick={() => manualAction(o.reference, "confirm_fulfilled")}>Mark fulfilled</button><button className="nav-item" style={{ width: "auto", padding: "6px 10px" }} onClick={() => manualAction(o.reference, "retry")}>Authorize retry</button></div>
           </div>
         ))}
       </div>}

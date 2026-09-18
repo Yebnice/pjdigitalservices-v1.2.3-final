@@ -137,7 +137,7 @@ export default function DataPage() {
                       >
                         <span className="heading-font" style={{ fontSize: 18, fontWeight: 600 }}>{b.size || b.name || b.data}</span>
                         {(b.validity || b.duration) && <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{b.validity || b.duration}</span>}
-                        <span style={{ fontSize: 14, fontWeight: 500, color: "var(--gold)", marginTop: 4 }}>GHS {Number(b.price ?? b.amount).toFixed(2)}</span>
+                        <span style={{ fontSize: 16, fontWeight: 700, color: "var(--price)", marginTop: 4 }}>GHS {Number(b.price ?? b.amount).toFixed(2)}</span>
                       </button>
                     );
                   })}

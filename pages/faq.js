@@ -80,7 +80,7 @@ export default function FaqPage() {
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Frequently asked questions</h1>
         <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 4 }}>
-          Can't find what you're looking for? Use the <a href="/feedback" style={{ color: "var(--gold)" }}>Feedback</a> page.
+          Can't find what you're looking for? Use the <a href="/feedback" style={{ color: "var(--price)" }}>Feedback</a> page.
         </p>
       </div>
       <input

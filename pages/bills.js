@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { Field, EmailField, PrimaryButton, Toast, BILL_PROVIDERS, NoRefundNotice } from "../components/ui";
+import { Field, EmailField, PrimaryButton, Toast, BILL_PROVIDERS, NoRefundNotice, NetworkBadge } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
 
 export default function BillsPage() {
@@ -104,6 +104,7 @@ export default function BillsPage() {
                 onClick={() => setProvider(id)}
                 style={provider === id ? { borderColor: p.color } : undefined}
               >
+                <NetworkBadge id={id} palette={BILL_PROVIDERS} size={18} />
                 {p.label}
               </button>
             ))}

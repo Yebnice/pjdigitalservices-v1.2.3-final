@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import * as XLSX from "xlsx";
-import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, isLikelyAirtelTigoNumber } from "./ui";
+import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, isLikelyAirtelTigoNumber, NetworkBadge } from "./ui";
 import { payAndFulfil } from "../lib/payment";
 import { TIERS, NETWORK_PAGES } from "../lib/agentProducts";
 
@@ -68,7 +68,7 @@ function BundleGrid({ tier, sizeSelected, onSelect }) {
           style={sizeSelected === b.size ? { borderColor: "var(--gold)" } : undefined}
         >
           <span className="heading-font" style={{ fontSize: 18, fontWeight: 600 }}>{b.size}GB</span>
-          <span style={{ fontSize: 14, fontWeight: 500, color: "var(--gold)", marginTop: 4 }}>GHS {b.price.toFixed(2)}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "var(--price)", marginTop: 4 }}>GHS {b.price.toFixed(2)}</span>
         </button>
       ))}
     </div>
@@ -294,7 +294,7 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
       </Field>
       <button
         onClick={() => downloadSampleCsv(kind)}
-        style={{ background: "none", border: "none", color: "var(--gold)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}
+        style={{ background: "none", border: "none", color: "var(--price)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}
       >
         Download sample template
       </button>
@@ -353,9 +353,12 @@ export default function TierShop({ networkKey }) {
 
   return (
     <div className="page-wrap" style={{ maxWidth: 720 }}>
-      <div style={{ marginBottom: 16 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>{page.label} Data</h1>
-        <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 4 }}>Select a bundle and complete your purchase.</p>
+      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+        <NetworkBadge id={page.networkId} size={34} />
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>{page.label} Data</h1>
+          <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 4 }}>Select a bundle and complete your purchase.</p>
+        </div>
       </div>
 
       <div className="network-picker" style={{ marginBottom: 16, flexWrap: "wrap" }}>
