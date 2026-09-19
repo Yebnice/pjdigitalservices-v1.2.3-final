@@ -3,9 +3,9 @@ import { useRouter } from "next/router";
 import {
   Home, Wifi, Smartphone, Bolt, UserPlus, Tv, GraduationCap,
   ClipboardList, HelpCircle, MessageSquare, Menu, ShoppingCart,
-  Shield, FileText, RotateCcw, Zap, UserCircle,
+  Shield, FileText, RotateCcw, Zap, UserCircle, LogOut,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ChatWidget from "./ChatWidget";
 
 const MAIN_LINKS = [
@@ -63,6 +63,24 @@ function NavList({ links, router, onNavigate }) {
 export default function Layout({ children }) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Lets a logged-in admin sign out from anywhere on the site, not just
+  // from the /admin page itself — previously the only sign-out control
+  // lived inside pages/admin/index.js, so browsing away from /admin left
+  // no way to end the session without navigating back there first.
+  useEffect(() => {
+    fetch("/api/admin/me")
+      .then((r) => r.json())
+      .then((d) => setIsAdmin(!!d.authenticated))
+      .catch(() => {});
+  }, [router.pathname]);
+
+  async function adminSignOut() {
+    await fetch("/api/admin/logout", { method: "POST" });
+    setIsAdmin(false);
+    router.push("/");
+  }
 
   return (
     <div className="app-shell">
@@ -83,7 +101,20 @@ export default function Layout({ children }) {
 
         <div className="sidebar-footer">
           <NavList links={LEGAL_LINKS} router={router} />
-          <div style={{ fontSize: 11, color: "var(--muted-dim)", padding: "10px 10px 0" }}>
+          {isAdmin && (
+            <button
+              onClick={adminSignOut}
+              className="nav-item"
+              style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", cursor: "pointer", color: "var(--red)" }}
+            >
+              <LogOut size={16} />
+              Sign out (Admin)
+            </button>
+          )}
+          <div style={{ fontSize: 11, color: "var(--muted-dim)", padding: "10px 10px 0", lineHeight: 1.5 }}>
+            We'll never ask for your password, PIN, or OTP by phone, email, or WhatsApp.
+          </div>
+          <div style={{ fontSize: 11, color: "var(--muted-dim)", padding: "4px 10px 0" }}>
             © {new Date().getFullYear()} PjDigitalServices
           </div>
         </div>
@@ -105,6 +136,16 @@ export default function Layout({ children }) {
         {mobileOpen && (
           <nav className="mobile-nav">
             <NavList links={[...MAIN_LINKS, ...ACCOUNT_LINKS]} router={router} onNavigate={() => setMobileOpen(false)} />
+            {isAdmin && (
+              <button
+                onClick={() => { setMobileOpen(false); adminSignOut(); }}
+                className="nav-item"
+                style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", cursor: "pointer", color: "var(--red)" }}
+              >
+                <LogOut size={16} />
+                Sign out (Admin)
+              </button>
+            )}
           </nav>
         )}
 

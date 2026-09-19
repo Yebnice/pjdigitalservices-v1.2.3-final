@@ -43,6 +43,7 @@ const FAQS = [
       { q: "Can I get a refund for a wrong number?", a: "No — please double-check the number before paying. Wrong numbers, duplicate orders, and lines with an outstanding balance can't be refunded, in line with the networks' own rules." },
       { q: "How do I check my order status?", a: "Use the My Orders or Track Order page with the order reference and the checkout email — no account is required." },
       { q: "Something went wrong with my order — what do I do?", a: "Go to the Feedback page and include your order reference. We'll look into it." },
+      { q: "Someone contacted me asking for my password or a code — is that really you?", a: "No. We will never call, text, email, or WhatsApp you asking for your password, PIN, mobile money PIN, or a one-time code. If anyone claiming to be PjDigitalServices asks for these, it's a scam — don't share anything, and report it through the Feedback page." },
     ],
   },
 ];

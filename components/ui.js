@@ -187,6 +187,17 @@ export function Toast({ toast }) {
   );
 }
 
+const FAIL_REASON_LABELS = {
+  bundle_unavailable: "Selected data bundle was no longer in the live catalogue at checkout",
+  tier_size_unavailable: "Selected bundle size was no longer in Techlink's live catalogue at checkout",
+  tier_bulk_row_unavailable: "A bulk order line's bundle size was no longer available at checkout",
+  water_amount_unresolved: "Could not resolve a bill amount for that water account",
+  tv_amount_unresolved: "Could not resolve an amount due for that smartcard",
+  checker_price_unresolved: "Could not resolve a price for that result checker",
+  currency_mismatch: "Payment came back in the wrong currency",
+  amount_mismatch: "Amount paid didn't match the amount charged",
+};
+
 export function OrderList({ items }) {
   if (!items || items.length === 0) {
     return (
@@ -207,26 +218,31 @@ export function OrderList({ items }) {
   return (
     <div className="card" style={{ overflow: "hidden" }}>
       {items.map((o) => (
-        <div className="tx-row" key={o.reference}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 500 }}>{labelFor[o.orderType] || o.orderType}</div>
-              <div style={{ fontSize: 12, color: "var(--muted-dim)", marginTop: 2 }}>
-                {o.phone} · Ref {o.reference} · {new Date(o.createdAt).toLocaleString()}
+        <div className="tx-row" key={o.reference} style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>{labelFor[o.orderType] || o.orderType}</div>
+                <div style={{ fontSize: 12, color: "var(--muted-dim)", marginTop: 2 }}>
+                  {o.phone} · Ref {o.reference} · {new Date(o.createdAt).toLocaleString()}
+                </div>
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>GHS {Number(o.amount).toFixed(2)}</div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: o.status === "success" ? "var(--green)" : o.status === "failed" ? "var(--red)" : "var(--muted)",
+                }}
+              >
+                {o.status === "success" ? "Delivered" : o.status === "failed" ? "Failed" : "Pending"}
               </div>
             </div>
           </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>GHS {Number(o.amount).toFixed(2)}</div>
-            <div
-              style={{
-                fontSize: 12,
-                color: o.status === "success" ? "var(--green)" : o.status === "failed" ? "var(--red)" : "var(--muted)",
-              }}
-            >
-              {o.status === "success" ? "Delivered" : o.status === "failed" ? "Failed" : "Pending"}
-            </div>
-          </div>
+          {o.status === "failed" && o.failReason && (
+            <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>Reason: {FAIL_REASON_LABELS[o.failReason] || o.failReason}</div>
+          )}
         </div>
       ))}
     </div>
