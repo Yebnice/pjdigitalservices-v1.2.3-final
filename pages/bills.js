@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
-import { Field, EmailField, PrimaryButton, Toast, BILL_PROVIDERS, NoRefundNotice, NetworkBadge } from "../components/ui";
+import { Field, EmailField, PrimaryButton, Toast, BILL_PROVIDERS, NoRefundNotice, NetworkBadge, OrderReceipt } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
 
 export default function BillsPage() {
-  const router = useRouter();
   const [provider, setProvider] = useState("ecg");
   const [meterNumber, setMeterNumber] = useState("");
   const [phone, setPhone] = useState("");
@@ -12,6 +10,7 @@ export default function BillsPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [receipt, setReceipt] = useState(null);
 
   // ECG: fraud-prevention lookup before topping up
   const [ecgLookup, setEcgLookup] = useState(null); // { customerName, district } | "error" | null
@@ -74,18 +73,25 @@ export default function BillsPage() {
       email,
       meterNumber,
       billAmount: provider === "ecg" ? Number(amount) : undefined,
-      onDone: () => {
+      onDone: (order, paidAmount) => {
         setLoading(false);
         window.localStorage.setItem("pj_email", email);
         window.localStorage.setItem("pj_phone", phone);
-        setToast({ type: "success", message: `${BILL_PROVIDERS[provider].label} payment submitted` });
-        setTimeout(() => router.push("/dashboard"), 1200);
+        setReceipt({ order, amount: paidAmount });
       },
       onError: (msg) => {
         setLoading(false);
         setToast({ type: "error", message: msg });
       },
     });
+  }
+
+  if (receipt) {
+    return (
+      <div className="page-wrap" style={{ maxWidth: 460 }}>
+        <OrderReceipt order={receipt.order} amount={receipt.amount} onNewOrder={() => { setReceipt(null); setEcgLookup(null); setWaterBill(null); setMeterNumber(""); setAmount(""); }} />
+      </div>
+    );
   }
 
   return (

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
 import * as XLSX from "xlsx";
-import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, isLikelyAirtelTigoNumber, NetworkBadge } from "./ui";
+import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, isLikelyAirtelTigoNumber, NetworkBadge, OrderReceipt } from "./ui";
 import { payAndFulfil } from "../lib/payment";
 import { TIERS, NETWORK_PAGES } from "../lib/agentProducts";
 
@@ -147,7 +146,7 @@ function TierSingleForm({ tierKey, tier, networkId, email, setEmail, loading, se
       email,
       tierKey,
       size,
-      onDone: () => onDone(`${size}GB sent to ${phone}`),
+      onDone: (order, paidAmount) => onDone(order, paidAmount),
       onError,
     });
   }
@@ -188,7 +187,7 @@ function EvdSingleForm({ networkId, email, setEmail, loading, setLoading, onDone
       phone,
       email,
       airtimeAmount: Number(amount),
-      onDone: () => onDone(`GHS ${amount} airtime sent to ${phone}`),
+      onDone: (order, paidAmount) => onDone(order, paidAmount),
       onError,
     });
   }
@@ -230,7 +229,7 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
         email,
         tierKey,
         rows: rows.map((r) => ({ phone: r.phone, size: r.value })),
-        onDone: () => onDone(`${rows.length} orders placed`),
+        onDone: (order, paidAmount) => onDone(order, paidAmount),
         onError,
       });
     } else {
@@ -239,7 +238,7 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
         network: networkId,
         email,
         rows: rows.map((r) => ({ phone: r.phone, amount: r.value })),
-        onDone: () => onDone(`${rows.length} airtime orders placed`),
+        onDone: (order, paidAmount) => onDone(order, paidAmount),
         onError,
       });
     }
@@ -303,7 +302,7 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
         email,
         tierKey,
         rows: rows.map((r) => ({ phone: r.phone, size: r.value })),
-        onDone: () => onDone(`${rows.length} orders placed`),
+        onDone: (order, paidAmount) => onDone(order, paidAmount),
         onError,
       });
     } else {
@@ -312,7 +311,7 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
         network: networkId,
         email,
         rows: rows.map((r) => ({ phone: r.phone, amount: r.value })),
-        onDone: () => onDone(`${rows.length} airtime orders placed`),
+        onDone: (order, paidAmount) => onDone(order, paidAmount),
         onError,
       });
     }
@@ -350,13 +349,13 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
 /* ---------- shell ---------- */
 
 export default function TierShop({ networkKey }) {
-  const router = useRouter();
   const page = NETWORK_PAGES[networkKey];
   const [activeTierKey, setActiveTierKey] = useState(page.tierKeys[0]);
   const [mode, setMode] = useState("single");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [receipt, setReceipt] = useState(null);
   const [liveSizes, setLiveSizes] = useState(null);
 
   useEffect(() => {
@@ -386,11 +385,10 @@ export default function TierShop({ networkKey }) {
 
   const tier = !isEvd ? TIERS[activeTierKey] : null;
 
-  function finish(message) {
+  function finish(order, paidAmount) {
     setLoading(false);
     if (email) window.localStorage.setItem("pj_email", email);
-    setToast({ type: "success", message });
-    setTimeout(() => router.push("/dashboard"), 1400);
+    setReceipt({ order, amount: paidAmount });
   }
   function fail(msg) {
     setLoading(false);
@@ -398,6 +396,18 @@ export default function TierShop({ networkKey }) {
   }
 
   const sharedProps = { networkId: page.networkId, email, setEmail, loading, setLoading, onDone: finish, onError: fail, liveSizes };
+
+  if (receipt) {
+    return (
+      <div className="page-wrap" style={{ maxWidth: 720 }}>
+        <OrderReceipt
+          order={receipt.order}
+          amount={receipt.amount}
+          onNewOrder={() => { setReceipt(null); setMode("single"); }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="page-wrap" style={{ maxWidth: 720 }}>

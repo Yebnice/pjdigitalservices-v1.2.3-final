@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
-import { Field, EmailField, PrimaryButton, Toast, EXAM_TYPES, NetworkBadge } from "../components/ui";
+import { Field, EmailField, PrimaryButton, Toast, EXAM_TYPES, NetworkBadge, OrderReceipt } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
 
 // Defensive: Techlink's docs don't publish a sample response body for
@@ -16,7 +15,6 @@ function findPrice(list, examType) {
 }
 
 export default function CheckerPage() {
-  const router = useRouter();
   const [mode, setMode] = useState("voucher"); // "voucher" | "lookup"
   const [type, setType] = useState("BECE");
   const [quantity, setQuantity] = useState(1);
@@ -28,6 +26,7 @@ export default function CheckerPage() {
   const [candidateName, setCandidateName] = useState("");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [receipt, setReceipt] = useState(null);
   const [prices, setPrices] = useState(null);
 
   useEffect(() => {
@@ -56,21 +55,30 @@ export default function CheckerPage() {
         mode === "voucher"
           ? { mode: "voucher", type, quantity, deliveryMethod }
           : { mode: "lookup", type: type.toLowerCase(), indexNumber, examYear, candidateName },
-      onDone: () => {
+      onDone: (order, paidAmount) => {
         setLoading(false);
         window.localStorage.setItem("pj_email", email);
         if (phone) window.localStorage.setItem("pj_phone", phone);
-        setToast({
-          type: "success",
-          message: mode === "voucher" ? "Voucher purchased — check your inbox/SMS." : "Request received — we'll email your result once it's ready.",
-        });
-        setTimeout(() => router.push("/dashboard"), 1400);
+        setReceipt({ order, amount: paidAmount });
       },
       onError: (msg) => {
         setLoading(false);
         setToast({ type: "error", message: msg });
       },
     });
+  }
+
+  if (receipt) {
+    return (
+      <div className="page-wrap" style={{ maxWidth: 460 }}>
+        <OrderReceipt order={receipt.order} amount={receipt.amount} onNewOrder={() => setReceipt(null)} />
+        {mode === "lookup" && (
+          <p style={{ fontSize: 12, color: "var(--muted-dim)", textAlign: "center", marginTop: -8 }}>
+            This one isn't instant — we'll email your result once it's ready.
+          </p>
+        )}
+      </div>
+    );
   }
 
   return (

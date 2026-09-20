@@ -1,4 +1,5 @@
 import { constantTimePasswordMatch, createAdminSession } from "../../../lib/adminAuth";
+import { recordAuditEvent } from "../../../lib/auditLog";
 
 const attempts = new Map();
 const WINDOW_MS = 10 * 60 * 1000;
@@ -9,7 +10,7 @@ function getKey(req) {
   return (Array.isArray(forwarded) ? forwarded[0] : String(forwarded || "").split(",")[0]).trim() || "unknown";
 }
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   const key = getKey(req);
   const now = Date.now();
@@ -30,5 +31,6 @@ export default function handler(req, res) {
     console.error("Admin login: could not create session —", err.message);
     return res.status(500).json({ error: "Server misconfigured: ADMIN_SESSION_SECRET is missing or invalid. Set a random string of 32+ characters in your environment variables and redeploy." });
   }
+  await recordAuditEvent({ action: "admin_login", note: `Signed in from IP ${key}` });
   return res.status(200).json({ ok: true });
 }

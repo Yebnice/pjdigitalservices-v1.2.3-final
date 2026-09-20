@@ -198,6 +198,72 @@ const FAIL_REASON_LABELS = {
   amount_mismatch: "Amount paid didn't match the amount charged",
 };
 
+export const ORDER_TYPE_LABELS = {
+  airtime: "Airtime top-up",
+  data: "Data bundle",
+  tierData: "Data bundle",
+  tierBulkData: "Bulk data bundles",
+  tierBulkAirtime: "Bulk airtime top-up",
+  afa: "AFA registration",
+  ecg: "Electricity bill (ECG)",
+  water: "Water bill",
+  tv: "TV subscription",
+  checker: "Result checker",
+};
+
+function ReceiptRow({ label, value }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, gap: 12 }}>
+      <span style={{ color: "var(--muted)" }}>{label}</span>
+      <span style={{ fontWeight: 600, textAlign: "right" }}>{value}</span>
+    </div>
+  );
+}
+
+// The post-purchase confirmation screen — order number, product, amount,
+// date/time — shown in place of the checkout form right after a successful
+// payment, the way a subscription receipt would. Previously every checkout
+// page just flashed a one-line toast for ~1 second and redirected away,
+// with no lasting record of what was bought for the customer to see.
+export function OrderReceipt({ order, amount, onNewOrder }) {
+  if (!order) return null;
+  const label = ORDER_TYPE_LABELS[order.orderType] || "Order";
+  const when = order.createdAt ? new Date(order.createdAt) : new Date();
+  const displayAmount = Number(order.amount ?? amount ?? 0);
+  const showRecipient = order.phone && order.phone !== "—" && !String(order.phone).includes("recipient");
+  return (
+    <div className="card" style={{ padding: "32px 28px", textAlign: "center", maxWidth: 420, margin: "0 auto" }}>
+      <div
+        style={{
+          width: 56, height: 56, borderRadius: "50%", background: "var(--green)",
+          display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
+        }}
+      >
+        <Check size={30} color="#fff" />
+      </div>
+      <h1 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 4px" }}>Thank you!</h1>
+      <p style={{ color: "var(--muted)", fontSize: 14, margin: "0 0 24px" }}>Your order has been processed.</p>
+      <div
+        style={{
+          textAlign: "left", display: "flex", flexDirection: "column", gap: 10,
+          borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+          padding: "16px 0", marginBottom: 20,
+        }}
+      >
+        <ReceiptRow label="Order number" value={order.reference} />
+        <ReceiptRow label="Product" value={label} />
+        {showRecipient && <ReceiptRow label="Recipient" value={order.phone} />}
+        <ReceiptRow label="Amount" value={`GHS ${displayAmount.toFixed(2)}`} />
+        <ReceiptRow label="Date & time" value={when.toLocaleString()} />
+      </div>
+      <p style={{ fontSize: 12, color: "var(--muted-dim)", marginBottom: 20 }}>
+        A confirmation has been emailed to you. Keep the order number above for reference.
+      </p>
+      <PrimaryButton onClick={onNewOrder}>Make another purchase</PrimaryButton>
+    </div>
+  );
+}
+
 export function OrderList({ items }) {
   if (!items || items.length === 0) {
     return (
@@ -206,15 +272,7 @@ export function OrderList({ items }) {
       </div>
     );
   }
-  const labelFor = {
-    airtime: "Airtime top-up",
-    data: "Data bundle",
-    afa: "AFA registration",
-    ecg: "Electricity bill (ECG)",
-    water: "Water bill",
-    tv: "TV subscription",
-    checker: "Result checker",
-  };
+  const labelFor = ORDER_TYPE_LABELS;
   return (
     <div className="card" style={{ overflow: "hidden" }}>
       {items.map((o) => (

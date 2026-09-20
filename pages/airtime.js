@@ -1,16 +1,15 @@
 import { useEffect, useState } from "react";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NoRefundNotice, isLikelyAirtelTigoNumber } from "../components/ui";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NoRefundNotice, OrderReceipt, isLikelyAirtelTigoNumber } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
-import { useRouter } from "next/router";
 
 export default function AirtimePage() {
-  const router = useRouter();
   const [network, setNetwork] = useState("mtn");
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [receipt, setReceipt] = useState(null);
 
   useEffect(() => {
     setEmail(window.localStorage.getItem("pj_email") || "");
@@ -27,18 +26,25 @@ export default function AirtimePage() {
       phone,
       email,
       airtimeAmount: Number(amount),
-      onDone: () => {
+      onDone: (order, paidAmount) => {
         setLoading(false);
         window.localStorage.setItem("pj_email", email);
         window.localStorage.setItem("pj_phone", phone);
-        setToast({ type: "success", message: `GHS ${amount} airtime sent to ${phone}` });
-        setTimeout(() => router.push("/dashboard"), 1200);
+        setReceipt({ order, amount: paidAmount });
       },
       onError: (msg) => {
         setLoading(false);
         setToast({ type: "error", message: msg });
       },
     });
+  }
+
+  if (receipt) {
+    return (
+      <div className="page-wrap" style={{ maxWidth: 460 }}>
+        <OrderReceipt order={receipt.order} amount={receipt.amount} onNewOrder={() => { setReceipt(null); setAmount(""); }} />
+      </div>
+    );
   }
 
   return (

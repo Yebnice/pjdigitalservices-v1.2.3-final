@@ -39,7 +39,7 @@ create table if not exists orders (
 create table if not exists customers (
   id uuid primary key default gen_random_uuid(),
   name text,
-  email text,
+  email text unique not null,
   phone text,
   created_at timestamptz not null default now()
 );
@@ -86,6 +86,20 @@ alter table feedback add column if not exists requested_data text;
 alter table feedback add column if not exists beneficiary text;
 alter table feedback add column if not exists transaction_at timestamptz;
 alter table feedback add column if not exists transaction_details text;
+
+-- Centralized admin action trail. Note: since the app currently uses one
+-- shared ADMIN_PASSWORD rather than individual admin logins, `actor` will
+-- always read "admin" — this records WHAT happened and WHEN, not WHICH
+-- person, unless the app later adds named admin accounts.
+create table if not exists audit_log (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  actor text not null default 'admin',
+  action text not null,
+  reference text,
+  note text
+);
+create index if not exists audit_log_created_at_idx on audit_log (created_at desc);
 -- Existing rows should be backfilled with unique SUP-YYYYMMDD-XXXXX references before adding a NOT NULL/UNIQUE constraint.
 -- alter table orders add column if not exists fulfillment_status text not null default 'pending';
 -- alter table orders add column if not exists fulfillment_attempts integer not null default 0;

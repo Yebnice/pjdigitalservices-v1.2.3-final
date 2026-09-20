@@ -1,6 +1,7 @@
 import { isAdminAuthed } from "../../../lib/adminAuth";
 import { listManualReviewOrders, manuallyResolveOrder } from "../../../lib/store";
-import { notifyCustomerOrderFulfilled } from "../../../lib/notifications";
+import { notifyCustomerOrderFulfilled, notifyCustomerOrderSms } from "../../../lib/notifications";
+import { recordAuditEvent } from "../../../lib/auditLog";
 
 export default async function handler(req, res) {
   if (!isAdminAuthed(req)) return res.status(401).json({ error: "Unauthorized" });
@@ -18,6 +19,7 @@ export default async function handler(req, res) {
       if (!reference || !action || !note) return res.status(400).json({ error: "reference, action and confirmation note are required" });
       const order = await manuallyResolveOrder(String(reference).trim(), action, note);
       if (!order) return res.status(404).json({ error: "Manual-review order not found or already resolved" });
+      await recordAuditEvent({ action: `manual_review_${action}`, reference, note });
       // This is the OTHER route to "fulfilled" besides the automated worker
       // (lib/orderProcessing.js's fulfillClaimedOrder) — it bypasses that
       // function's DB update entirely, so it needs its own copy of the same
@@ -28,6 +30,11 @@ export default async function handler(req, res) {
           await notifyCustomerOrderFulfilled(order);
         } catch (err) {
           console.error("Customer delivery confirmation failed (manual review)", reference, err);
+        }
+        try {
+          await notifyCustomerOrderSms(order);
+        } catch (err) {
+          console.error("Customer delivery SMS failed (manual review)", reference, err);
         }
       }
       return res.status(200).json({ order });

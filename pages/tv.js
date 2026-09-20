@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
-import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, NetworkBadge } from "../components/ui";
+import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, NetworkBadge, OrderReceipt } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
 
 const PROVIDERS = {
@@ -12,13 +11,13 @@ const PROVIDERS = {
 };
 
 export default function TvPage() {
-  const router = useRouter();
   const [service, setService] = useState("DSTV");
   const [account, setAccount] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [receipt, setReceipt] = useState(null);
 
   const [validation, setValidation] = useState(null); // { customerName, package, amountDue } | "error" | null
   const [validating, setValidating] = useState(false);
@@ -57,18 +56,25 @@ export default function TvPage() {
       email,
       meterNumber: account,
       tvDetails: { service },
-      onDone: () => {
+      onDone: (order, paidAmount) => {
         setLoading(false);
         window.localStorage.setItem("pj_email", email);
         window.localStorage.setItem("pj_phone", phone);
-        setToast({ type: "success", message: "Subscription payment submitted" });
-        setTimeout(() => router.push("/dashboard"), 1200);
+        setReceipt({ order, amount: paidAmount });
       },
       onError: (msg) => {
         setLoading(false);
         setToast({ type: "error", message: msg });
       },
     });
+  }
+
+  if (receipt) {
+    return (
+      <div className="page-wrap" style={{ maxWidth: 460 }}>
+        <OrderReceipt order={receipt.order} amount={receipt.amount} onNewOrder={() => { setReceipt(null); setValidation(null); setAccount(""); }} />
+      </div>
+    );
   }
 
   return (

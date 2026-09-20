@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast } from "../components/ui";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, OrderReceipt } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
 
 const REGIONS = [
@@ -10,7 +9,6 @@ const REGIONS = [
 const OCCUPATIONS = ["Farmer", "Trader", "Fisherman", "Artisan", "Student", "Unemployed", "Other"];
 
 export default function AfaPage() {
-  const router = useRouter();
   const [network, setNetwork] = useState("mtn");
   const [fullName, setFullName] = useState("");
   const [ghanaCard, setGhanaCard] = useState("");
@@ -22,6 +20,7 @@ export default function AfaPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [receipt, setReceipt] = useState(null);
   const [fee, setFee] = useState(null); // null = still loading from Techlink
 
   useEffect(() => {
@@ -42,17 +41,24 @@ export default function AfaPage() {
       phone,
       email,
       afaDetails: { fullName, ghanaCard, dob, region, location, occupation },
-      onDone: () => {
+      onDone: (order, paidAmount) => {
         setLoading(false);
         window.localStorage.setItem("pj_email", email);
-        setToast({ type: "success", message: `${fullName} registered successfully` });
-        setTimeout(() => router.push("/dashboard"), 1200);
+        setReceipt({ order, amount: paidAmount });
       },
       onError: (msg) => {
         setLoading(false);
         setToast({ type: "error", message: msg });
       },
     });
+  }
+
+  if (receipt) {
+    return (
+      <div className="page-wrap" style={{ maxWidth: 460 }}>
+        <OrderReceipt order={receipt.order} amount={receipt.amount} onNewOrder={() => setReceipt(null)} />
+      </div>
+    );
   }
 
   return (
