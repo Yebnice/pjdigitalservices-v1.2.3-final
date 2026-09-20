@@ -1,5 +1,6 @@
 import { rateLimit } from "../../../lib/rateLimit";
 import { createFeedback } from "../../../lib/feedback";
+import { notifyAdminNewFeedback } from "../../../lib/notifications";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -30,8 +31,20 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: `Please provide: ${missing.join(", ")}.` });
     }
     const entry = await createFeedback({ name, email, phone, orderReference, category: category || "general", message, serviceType: normalizedService, transactionId, transactionAmount: amountNumber, requestedData, beneficiary, transactionAt, transactionDetails });
+    // Best-effort: previously nothing notified admin at all when a
+    // complaint came in — it just sat silently in the database. A failure
+    // here must never stop the customer from seeing their case was saved.
+    try {
+      await notifyAdminNewFeedback(entry);
+    } catch (err) {
+      console.error("Admin feedback notification failed", entry.caseReference, err);
+    }
     res.status(200).json({ feedback: entry });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    // Log the real error for us to debug, but never hand a raw internal
+    // error message (a database constraint name, a stack fragment) to the
+    // customer — they just need a plain, safe message here.
+    console.error("Feedback submission error", err);
+    res.status(500).json({ error: "Something went wrong saving your feedback. Please try again in a moment." });
   }
 }

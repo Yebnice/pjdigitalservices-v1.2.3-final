@@ -13,6 +13,7 @@ export default async function handler(req, res) {
     const customer = await upsertCustomer({ name, email, phone });
     res.status(200).json({ customer });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Customer registration error", err);
+    res.status(500).json({ error: "Something went wrong saving your details. Please try again in a moment." });
   }
 }

@@ -678,7 +678,7 @@ summary:hover {
 
 .toast {
   position: fixed;
-  bottom: 24px;
+  bottom: 90px;
   right: 24px;
   display: flex;
   align-items: center;
@@ -689,4 +689,5 @@ summary:hover {
   border: 1px solid var(--line);
   box-shadow: var(--shadow-md);
   z-index: 50;
+  max-width: min(340px, calc(100vw - 48px));
 }

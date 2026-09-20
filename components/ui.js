@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Check, X, Bolt, Droplet, GraduationCap } from "lucide-react";
 
 export const NETWORKS = {
@@ -163,8 +163,21 @@ export function PrimaryButton({ children, onClick, disabled, loading }) {
   );
 }
 
-export function Toast({ toast }) {
-  if (!toast) return null;
+export function Toast({ toast, duration = 7000 }) {
+  const [dismissed, setDismissed] = useState(false);
+
+  // Reset whenever the parent hands us a genuinely new toast (a fresh
+  // object from a new setToast({...}) call) — but stays dismissed if the
+  // component re-renders with the same toast still in state, so closing it
+  // once actually keeps it closed instead of it reappearing.
+  useEffect(() => {
+    setDismissed(false);
+    if (!toast) return undefined;
+    const timer = setTimeout(() => setDismissed(true), duration);
+    return () => clearTimeout(timer);
+  }, [toast, duration]);
+
+  if (!toast || dismissed) return null;
   const ok = toast.type === "success";
   return (
     <div className="toast" style={{ border: `1px solid ${ok ? "var(--green)" : "var(--red)"}` }}>
@@ -182,7 +195,14 @@ export function Toast({ toast }) {
       >
         {ok ? <Check size={13} color="#0d1117" /> : <X size={13} color="#0d1117" />}
       </div>
-      <span style={{ fontSize: 14 }}>{toast.message}</span>
+      <span style={{ fontSize: 14, flex: 1 }}>{toast.message}</span>
+      <button
+        onClick={() => setDismissed(true)}
+        aria-label="Dismiss"
+        style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)", padding: 2, flexShrink: 0, display: "flex" }}
+      >
+        <X size={14} />
+      </button>
     </div>
   );
 }
