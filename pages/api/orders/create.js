@@ -113,7 +113,11 @@ export default async function handler(req, res) {
       // Water is a fixed bill amount, resolved from Techlink's validation —
       // never from a number the customer typed in themselves.
       const validation = await validateWaterMeter({ account: meterNumber });
-      amount = Number(validation.amountDue ?? validation.amount);
+      // Techlink's docs show /korba/validate returns "balance" (as a
+      // string, e.g. "124.50") for the amount owed — not "amountDue". This
+      // was the actual reason every water bill payment failed to resolve
+      // an amount, regardless of the account's real balance.
+      amount = Number(validation.balance ?? validation.amountDue ?? validation.amount);
       if (!amount || amount <= 0) {
         const reference = await logFailedAttempt("water_amount_unresolved", { orderType, network: "water", phone, email });
         return res.status(400).json({ error: "Could not resolve a bill amount for that account", reference });
@@ -123,12 +127,16 @@ export default async function handler(req, res) {
     } else if (orderType === "tv") {
       if (!meterNumber || !tvDetails?.service) return res.status(400).json({ error: "Smartcard number and provider are required" });
       const validation = await validateTvSmartcard({ billType: tvDetails.service, account: meterNumber });
-      amount = Number(validation.amountDue ?? validation.amount);
+      // Same field-name issue as water above: Techlink's docs show
+      // /provider/validate returns "balance" for the amount due, and
+      // "packageName" for the subscription package — not "amountDue" or
+      // "package". This was blocking every TV subscription payment.
+      amount = Number(validation.balance ?? validation.amountDue ?? validation.amount);
       if (!amount || amount <= 0) {
         const reference = await logFailedAttempt("tv_amount_unresolved", { orderType, network: tvDetails?.service, phone, email });
         return res.status(400).json({ error: "Could not resolve an amount due for that smartcard", reference });
       }
-      extra.tvDetails = { ...tvDetails, customerName: validation.customerName || null, package: validation.package || null };
+      extra.tvDetails = { ...tvDetails, customerName: validation.customerName || null, package: validation.packageName || validation.package || null };
 
     } else if (orderType === "checker") {
       if (!checkerDetails?.type) return res.status(400).json({ error: "Checker type is required" });
@@ -159,7 +167,11 @@ export default async function handler(req, res) {
       // Authoritative price + exact product name come from Techlink's own
       // catalogue right now — never from the browser or the local reference file.
       const catalogue = await listProducts(tier.category);
-      const products = catalogue.products || catalogue.data || [];
+      // Techlink's docs show this endpoint returns a plain array directly,
+      // not wrapped in {products: [...]} — this was the actual reason
+      // every purchase attempt for these tiers failed as "no longer
+      // available", regardless of what was really in the catalogue.
+      const products = Array.isArray(catalogue) ? catalogue : (catalogue.products || catalogue.data || []);
       const product = products.find((p) => Number(p.size) === Number(size));
       if (!product) {
         const reference = await logFailedAttempt("tier_size_unavailable", { orderType, network: tier.network, phone, email });
@@ -174,7 +186,7 @@ export default async function handler(req, res) {
       resolvedNetwork = tier.network; // same hardening as tierData above
       if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: "Add at least one order line" });
       const catalogue = await listProducts(tier.category);
-      const products = catalogue.products || catalogue.data || [];
+      const products = Array.isArray(catalogue) ? catalogue : (catalogue.products || catalogue.data || []);
       const resolvedRows = [];
       for (const r of rows) {
         const product = products.find((p) => Number(p.size) === Number(r.size));

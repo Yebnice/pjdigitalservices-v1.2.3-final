@@ -209,18 +209,20 @@ export default function AdminPage() {
   const [feedback, setFeedback] = useState([]);
   const [manualReview, setManualReview] = useState([]);
   const [auditLog, setAuditLog] = useState([]);
+  const [reviews, setReviews] = useState([]);
   const [tab, setTab] = useState("orders");
   const [orderSearch, setOrderSearch] = useState("");
   const [feedbackSearch, setFeedbackSearch] = useState("");
 
   async function load() {
-    const [ordersRes, feedbackRes, reviewRes, auditRes] = await Promise.all([
+    const [ordersRes, feedbackRes, reviewRes, auditRes, reviewsRes] = await Promise.all([
       fetch("/api/orders/list"),
       fetch("/api/feedback/list"),
       fetch("/api/orders/manual-review"),
       fetch("/api/admin/audit-log"),
+      fetch("/api/admin/reviews"),
     ]);
-    if ([ordersRes, feedbackRes, reviewRes, auditRes].some((r) => r.status === 401)) {
+    if ([ordersRes, feedbackRes, reviewRes, auditRes, reviewsRes].some((r) => r.status === 401)) {
       setAuth(false);
       return;
     }
@@ -228,10 +230,12 @@ export default function AdminPage() {
     const feedbackData = await feedbackRes.json();
     const reviewData = await reviewRes.json();
     const auditData = await auditRes.json();
+    const reviewsData = await reviewsRes.json();
     setOrders(ordersData.orders || []);
     setFeedback(feedbackData.feedback || []);
     setManualReview(reviewData.orders || []);
     setAuditLog(auditData.entries || []);
+    setReviews(reviewsData.reviews || []);
     setAuth(true);
   }
 
@@ -289,6 +293,7 @@ export default function AdminPage() {
         <TabButton active={tab === "feedback"} onClick={() => setTab("feedback")}>Feedback</TabButton>
         <TabButton active={tab === "review"} onClick={() => setTab("review")}>Manual Review ({manualReview.length})</TabButton>
         <TabButton active={tab === "reconcile"} onClick={() => setTab("reconcile")}>Reconciliation</TabButton>
+        <TabButton active={tab === "reviews"} onClick={() => setTab("reviews")}>Reviews ({reviews.length})</TabButton>
         <TabButton active={tab === "audit"} onClick={() => setTab("audit")}>Audit Log</TabButton>
       </div>
 
@@ -323,6 +328,31 @@ export default function AdminPage() {
       )}
 
       {tab === "reconcile" && <ReconciliationTab />}
+
+      {tab === "reviews" && (
+        <div className="card" style={{ overflow: "hidden" }}>
+          {reviews.length === 0 && <div style={{ padding: 24, textAlign: "center", color: "var(--muted)", fontSize: 14 }}>No reviews yet.</div>}
+          {reviews.map((r) => (
+            <div key={r.id} className="tx-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4, opacity: r.isHidden ? 0.5 : 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+                <strong style={{ fontSize: 14 }}>{r.customerName} — {"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</strong>
+                <button
+                  className="nav-item"
+                  style={{ width: "auto", padding: "4px 10px", fontSize: 12 }}
+                  onClick={async () => {
+                    const res = await fetch("/api/admin/reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: r.id, isHidden: !r.isHidden }) });
+                    if (res.ok) load();
+                  }}
+                >
+                  {r.isHidden ? "Unhide" : "Hide"}
+                </button>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>Order {r.orderReference} · {r.serviceType} · {new Date(r.createdAt).toLocaleString()}</div>
+              {r.comment && <div style={{ fontSize: 13, color: "var(--muted)" }}>{r.comment}</div>}
+            </div>
+          ))}
+        </div>
+      )}
 
       {tab === "audit" && <AuditLogTab entries={auditLog} />}
 

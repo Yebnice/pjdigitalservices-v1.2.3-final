@@ -110,8 +110,8 @@ export default function TvPage() {
         {validation === "error" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>Could not find that smartcard — double-check the number.</p>}
         {validation && validation !== "error" && (
           <div className="card" style={{ padding: 12, fontSize: 13 }}>
-            <div><strong>{validation.customerName}</strong>{validation.package ? ` · ${validation.package}` : ""}</div>
-            <div style={{ marginTop: 4 }}>Amount due: <strong>GHS {Number(validation.amountDue ?? validation.amount).toFixed(2)}</strong></div>
+            <div><strong>{validation.customerName}</strong>{ (validation.packageName || validation.package) ? ` · ${validation.packageName || validation.package}` : ""}</div>
+            <div style={{ marginTop: 4 }}>Amount due: <strong>GHS {Number(validation.balance ?? validation.amountDue ?? validation.amount).toFixed(2)}</strong></div>
           </div>
         )}
         <Field label="Phone number">
@@ -120,7 +120,7 @@ export default function TvPage() {
         <EmailField email={email} setEmail={setEmail} />
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
           {validation && validation !== "error"
-            ? `Pay GHS ${Number(validation.amountDue ?? validation.amount).toFixed(2)} with Paystack`
+            ? `Pay GHS ${Number(validation.balance ?? validation.amountDue ?? validation.amount).toFixed(2)} with Paystack`
             : "Check your smartcard first"}
         </PrimaryButton>
         <NoRefundNotice />

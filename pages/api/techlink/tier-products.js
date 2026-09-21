@@ -18,7 +18,10 @@ export default async function handler(req, res) {
 
   try {
     const catalogue = await listProducts(tier.category);
-    const products = catalogue.products || catalogue.data || [];
+    // Techlink's docs show GET /products returns a plain JSON array
+    // directly — not wrapped in {products: [...]} or {data: [...]}. Handle
+    // both shapes defensively in case that ever changes.
+    const products = Array.isArray(catalogue) ? catalogue : (catalogue.products || catalogue.data || []);
     const sizes = products
       .map((p) => ({ size: Number(p.size), price: Number(p.price ?? p.amount) }))
       .filter((p) => p.size > 0);

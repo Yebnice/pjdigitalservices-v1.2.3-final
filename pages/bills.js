@@ -164,7 +164,7 @@ export default function BillsPage() {
             {waterBill && waterBill !== "error" && (
               <div className="card" style={{ padding: 12, fontSize: 13 }}>
                 <div><strong>{waterBill.accountName || waterBill.customerName}</strong></div>
-                <div style={{ marginTop: 4 }}>Amount due: <strong>GHS {Number(waterBill.amountDue ?? waterBill.amount).toFixed(2)}</strong></div>
+                <div style={{ marginTop: 4 }}>Amount due: <strong>GHS {Number(waterBill.balance ?? waterBill.amountDue ?? waterBill.amount).toFixed(2)}</strong></div>
               </div>
             )}
             <Field label="Phone number">
@@ -173,7 +173,7 @@ export default function BillsPage() {
             <EmailField email={email} setEmail={setEmail} />
             <PrimaryButton disabled={!waterValid} loading={loading} onClick={submit}>
               {waterBill && waterBill !== "error"
-                ? `Pay GHS ${Number(waterBill.amountDue ?? waterBill.amount).toFixed(2)} with Paystack`
+                ? `Pay GHS ${Number(waterBill.balance ?? waterBill.amountDue ?? waterBill.amount).toFixed(2)} with Paystack`
                 : "Check your bill first"}
             </PrimaryButton>
             <NoRefundNotice />

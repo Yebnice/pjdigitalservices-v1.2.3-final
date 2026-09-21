@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import {
   Home, Wifi, Smartphone, Bolt, UserPlus, Tv, GraduationCap,
   ClipboardList, HelpCircle, MessageSquare, Menu, ShoppingCart,
-  Shield, FileText, RotateCcw, Zap, UserCircle, LogOut,
+  Shield, FileText, RotateCcw, Zap, UserCircle, LogOut, Star, LogIn,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import ChatWidget from "./ChatWidget";
@@ -19,6 +19,7 @@ const MAIN_LINKS = [
   { href: "/afa", label: "AFA Registration", icon: UserPlus },
   { href: "/tv", label: "TV Subscription", icon: Tv },
   { href: "/checker", label: "Result Checker", icon: GraduationCap },
+  { href: "/reviews", label: "Reviews", icon: Star },
 ];
 
 const ACCOUNT_LINKS = [
@@ -64,6 +65,7 @@ export default function Layout({ children }) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [customer, setCustomer] = useState(null);
 
   // Lets a logged-in admin sign out from anywhere on the site, not just
   // from the /admin page itself — previously the only sign-out control
@@ -74,11 +76,21 @@ export default function Layout({ children }) {
       .then((r) => r.json())
       .then((d) => setIsAdmin(!!d.authenticated))
       .catch(() => {});
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => setCustomer(d.customer || null))
+      .catch(() => {});
   }, [router.pathname]);
 
   async function adminSignOut() {
     await fetch("/api/admin/logout", { method: "POST" });
     setIsAdmin(false);
+    router.push("/");
+  }
+
+  async function customerSignOut() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setCustomer(null);
     router.push("/");
   }
 
@@ -97,6 +109,21 @@ export default function Layout({ children }) {
         <NavList links={MAIN_LINKS} router={router} />
 
         <div className="sidebar-section-label">Account</div>
+        {customer ? (
+          <button
+            onClick={customerSignOut}
+            className="nav-item"
+            style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", cursor: "pointer" }}
+          >
+            <LogOut size={16} />
+            Log out ({customer.name?.split(" ")[0] || customer.username})
+          </button>
+        ) : (
+          <Link href="/login" className={`nav-item ${router.pathname === "/login" ? "active" : ""}`}>
+            <LogIn size={16} />
+            Log in
+          </Link>
+        )}
         <NavList links={ACCOUNT_LINKS} router={router} />
 
         <div className="sidebar-footer">
