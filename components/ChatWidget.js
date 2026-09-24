@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Send, Search } from "lucide-react";
+import { MessageCircle, X, Send, Search, Sparkles, UserRound, Headphones, ShieldCheck } from "lucide-react";
 
-const QUICK = ["Instant Airtime", "Quick Data Top-up", "Track my order", "ECG bill", "Report a problem"];
+const QUICK = ["Instant Airtime", "Quick Data Top-up", "Track my order", "ECG bill"];
 const SERVICES = ["data", "airtime", "ECG", "water", "TV", "AFA", "result checker", "other"];
 
 const EMPTY_COMPLAINT = {
@@ -26,6 +26,7 @@ export default function ChatWidget() {
     { role: "assistant", content: "Hi there! 😊 I'm Annette from PjDigitalServices. I'm here to help with instant Airtime, Quick Data Top-up, data bundles, bills, TV, AFA, result checkers, payments, or order tracking. What can I help you with today?" },
   ]);
   const [loading, setLoading] = useState(false);
+  const [aiMode, setAiMode] = useState("unknown");
 
   const [trackMode, setTrackMode] = useState(false);
   const [orderReference, setOrderReference] = useState("");
@@ -73,6 +74,7 @@ export default function ChatWidget() {
       // Surface the real reason (e.g. rate limiting) instead of a generic
       // "couldn't answer" message whenever the server actually told us why.
       const content = data.reply || data.error || "Sorry, I couldn't answer that just now.";
+      setAiMode(data.source === "gemini" ? "gemini" : "faq");
       setMessages((m) => [...m, { role: "assistant", content }]);
     } catch {
       setMessages((m) => [...m, { role: "assistant", content: "I couldn't reach support right now. Please use the Feedback page for urgent issues." }]);
@@ -127,7 +129,7 @@ export default function ChatWidget() {
 
   function handleQuickAction(q) {
     if (q === "Track my order") setTrackMode(true);
-    else if (q === "Report a problem") setComplaintMode(true);
+    else if (q === "Report a problem" || q === "Talk to a person") setComplaintMode(true);
     else send(q);
   }
 
@@ -136,31 +138,55 @@ export default function ChatWidget() {
       {open && (
         <div className="chat-panel">
           <div className="chat-header">
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>PjDigitalServices · Support</div>
-              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Annette · AI-assisted customer support</div>
+            <div className="chat-agent">
+              <div className="chat-avatar"><Sparkles size={16} /></div>
+              <div style={{ minWidth: 0 }}>
+                <div className="chat-agent-name">Annette <span className="chat-agent-role">· Support</span></div>
+                <div className="chat-status-row">
+                  <span className="chat-status-dot" />
+                  <span>{aiMode === "gemini" ? "AI support is active" : aiMode === "faq" ? "Quick-help mode" : "Ready to help"}</span>
+                </div>
+              </div>
             </div>
-            <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "var(--muted)" }}>
+            <button className="chat-close" onClick={() => setOpen(false)} aria-label="Close support chat">
               <X size={16} />
             </button>
+          </div>
+          <div className="chat-welcome">
+            <div className="chat-welcome-icon"><Headphones size={15} /></div>
+            <div>
+              <div className="chat-welcome-title">How can I help today?</div>
+              <div className="chat-welcome-text">I can help with purchases, order updates and support. For anything sensitive or complex, I'll guide you to a person.</div>
+            </div>
           </div>
 
           <div className="chat-messages">
             {messages.map((m, i) => (
-              <div key={i} className={`chat-msg ${m.role === "assistant" ? "bot" : "user"}`}>{m.content}</div>
+              <div key={i} className={`chat-row ${m.role === "assistant" ? "bot-row" : "user-row"}`}>
+                {m.role === "assistant" && <div className="chat-mini-avatar"><Sparkles size={11} /></div>}
+                <div className={`chat-msg ${m.role === "assistant" ? "bot" : "user"}`}>{m.content}</div>
+                {m.role === "user" && <div className="chat-mini-avatar user-avatar"><UserRound size={11} /></div>}
+              </div>
             ))}
-            {loading && <div className="chat-msg bot">Checking…</div>}
+            {loading && (
+              <div className="chat-row bot-row">
+                <div className="chat-mini-avatar"><Sparkles size={11} /></div>
+                <div className="chat-msg bot chat-typing"><span /><span /><span /></div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
+          <div className="chat-quick-label">Popular help</div>
           <div className="chat-quick">
             {QUICK.map((q) => (
               <button key={q} onClick={() => handleQuickAction(q)}>{q}</button>
             ))}
+            <button onClick={() => setComplaintMode(true)} className="chat-human-chip"><Headphones size={12} /> Human help</button>
           </div>
 
           {trackMode && (
-            <div style={{ padding: 12, borderTop: "1px solid var(--line)" }}>
+            <div className="chat-tool-card">
               <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
                 For privacy, provide both details. They are used only for this lookup.
               </div>
@@ -173,7 +199,14 @@ export default function ChatWidget() {
           )}
 
           {complaintMode && (
-            <div style={{ padding: 12, borderTop: "1px solid var(--line)", maxHeight: 330, overflowY: "auto" }}>
+            <div className="chat-tool-card chat-complaint-card">
+              <div className="chat-tool-heading">
+                <ShieldCheck size={14} />
+                <div>
+                  <div className="chat-tool-title">Let's get this sorted</div>
+                  <div className="chat-tool-subtitle">I'll collect the details support needs — no passwords, PINs or one-time codes.</div>
+                </div>
+              </div>
               <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
                 Data and airtime complaints require all transaction fields. Other products still require transaction details.
               </div>
@@ -205,7 +238,7 @@ export default function ChatWidget() {
             </div>
           )}
 
-          <div style={{ display: "flex", gap: 8, padding: 12, borderTop: "1px solid var(--line)" }}>
+          <div className="chat-input-wrap">
             <input
               ref={inputRef}
               className="input"
@@ -213,7 +246,7 @@ export default function ChatWidget() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && send()}
-              placeholder="Ask a question..."
+              placeholder="Ask Annette anything…"
               disabled={loading}
             />
             <button
