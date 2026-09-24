@@ -2,11 +2,18 @@ import { faqReply, supportReply } from "../../../lib/assistant";
 import { rateLimit } from "../../../lib/rateLimit";
 import { findCustomerOrder, toPublicOrder } from "../../../lib/store";
 
+function redactSensitiveText(text) {
+  return String(text || "")
+    .replace(/(?:\d[ -]?){13,19}/g, "[REDACTED_CARD_NUMBER]")
+    .replace(/\b(ghana\s*card(?:\s*(?:no|number))?|pin|otp|one[- ]time(?:\s+pass(?:word|code))?|password|passcode|cvv|cvc)\s*[:#-]?\s*[A-Za-z0-9-]{2,32}/gi, "$1 [REDACTED]")
+    .slice(0, 2000);
+}
+
 function sanitizeMessages(messages) {
   if (!Array.isArray(messages)) return [];
   return messages.slice(-8).map((m) => ({
     role: m?.role === "assistant" ? "assistant" : "user",
-    content: String(m?.content || "").slice(0, 2000),
+    content: redactSensitiveText(m?.content),
   })).filter((m) => m.content);
 }
 
@@ -64,7 +71,7 @@ async function callGemini(model, messages, system) {
         : exponentialMs + Math.floor(Math.random() * 250);
       await new Promise((resolve) => setTimeout(resolve, waitMs));
     } catch (err) {
-      const transient = ["AbortError", "TimeoutError"].includes(err?.name) || [408, 429, 500, 502, 503, 504].includes(Number(err?.status));
+      const transient = ["AbortError", "TimeoutError", "TypeError"].includes(err?.name) || [408, 429, 500, 502, 503, 504].includes(Number(err?.status));
       if (!transient || attempt === maxAttempts) throw err;
       const waitMs = Math.min(8000, 500 * (2 ** (attempt - 1))) + Math.floor(Math.random() * 250);
       await new Promise((resolve) => setTimeout(resolve, waitMs));
