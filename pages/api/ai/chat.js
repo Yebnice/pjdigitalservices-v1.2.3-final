@@ -12,40 +12,66 @@ function sanitizeMessages(messages) {
 
 async function callGemini(model, messages, system) {
   const apiKey = process.env.GEMINI_API_KEY;
+  const timeoutMs = Math.max(5000, Number(process.env.GEMINI_TIMEOUT_MS || 15000));
+  const maxAttempts = Math.max(1, Math.min(4, Number(process.env.GEMINI_MAX_RETRIES || 3)));
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "x-goog-api-key": apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: messages.map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      })),
-      generationConfig: {
-        maxOutputTokens: 450,
-      },
-    }),
-  });
 
-  const data = await response.json();
-  if (!response.ok) {
-    const message = data?.error?.message || "Gemini service unavailable";
-    const err = new Error(message);
-    err.status = data?.error?.code || response.status;
-    throw err;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: {
+          "x-goog-api-key": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: messages.map((m) => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }],
+          })),
+          generationConfig: {
+            maxOutputTokens: 450,
+          },
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) {
+        const text = data?.candidates?.[0]?.content?.parts
+          ?.filter((part) => typeof part?.text === "string")
+          ?.map((part) => part.text)
+          ?.join("\n")
+          ?.trim();
+        return text || null;
+      }
+
+      const message = data?.error?.message || "Gemini service unavailable";
+      const status = Number(response.status || data?.error?.code || 0);
+      const transient = [408, 429, 500, 502, 503, 504].includes(status);
+
+      if (!transient || attempt === maxAttempts) {
+        const err = new Error(message);
+        err.status = status;
+        throw err;
+      }
+
+      const retryAfter = Number(response.headers.get("retry-after"));
+      const exponentialMs = Math.min(8000, 500 * (2 ** (attempt - 1)));
+      const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(10000, retryAfter * 1000)
+        : exponentialMs + Math.floor(Math.random() * 250);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    } catch (err) {
+      const transient = ["AbortError", "TimeoutError"].includes(err?.name) || [408, 429, 500, 502, 503, 504].includes(Number(err?.status));
+      if (!transient || attempt === maxAttempts) throw err;
+      const waitMs = Math.min(8000, 500 * (2 ** (attempt - 1))) + Math.floor(Math.random() * 250);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
   }
 
-  const text = data?.candidates?.[0]?.content?.parts
-    ?.filter((part) => typeof part?.text === "string")
-    ?.map((part) => part.text)
-    ?.join("\n")
-    ?.trim();
-
-  return text || null;
+  return null;
 }
 
 async function askGemini(messages, order) {
@@ -63,11 +89,11 @@ Personality: warm, upbeat, and genuinely helpful — like a friendly, competent 
 
 Answer clearly and briefly, in plain conversational text only — no markdown (no asterisks, no headers, no numbered-list syntax); the chat window displays raw text, so any markdown shows up as literal symbols. Never invent prices, payment success, order status, refunds, Techlink results, or service availability. Never request or repeat card numbers, PINs, mobile-money PINs, passwords, Ghana Card numbers, dates of birth, or other sensitive identity data in chat. If a customer asks whether a message, call, or account claiming to be PjDigitalServices asking for their password, PIN, or a one-time code is legitimate, tell them clearly it is not — PjDigitalServices never asks for those by phone, email, or WhatsApp, and they should not share anything and should report it via the Feedback page. If live order context is provided, explain only those safe fields. For payments and purchases, direct the customer to the website checkout; never claim you can charge a customer from chat. If the issue needs a human, direct the customer to the Feedback & complaints page. For data or airtime complaints, tell the customer the form requires Transaction ID, Amount, Data/Airtime Requested, Recipient/Beneficiary, Transaction Date & Time, and Transaction Details. Never say an issue has been formally escalated unless the verified order context has fulfillmentStatus "manual_review" or the customer has just successfully submitted a support complaint. When a verified order is in "manual_review", tell the customer the issue has been escalated to the support team for manual review and advise them not to place a duplicate order or make another payment. For other products, tell them to complete the normal support form with relevant transaction details. Use the store's public service knowledge: MTN/Telecel/AirtelTigo data and airtime, ECG, Ghana Water, DSTV/GOtv/StarTimes, AFA, and result checkers. Before-you-buy rules for data and airtime you can share if asked: don't buy if the line has an outstanding balance (the bundle won't deliver and it isn't refunded); Turbonet and Broadband SIMs aren't eligible for data bundles; don't place duplicate orders (they aren't refunded); double-check the phone number before paying (wrong-number orders aren't refunded either).${orderContext}`;
 
-  // Keep the model configurable. The checked-in default is a historically
-  // documented Gemini Flash model; set GEMINI_MODEL explicitly if your
-  // Google AI account supports a different currently available model.
-  const primaryModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-  const fallbackModel = "gemini-2.5-flash";
+  // Keep the model configurable. Gemini 3.8 Flash is the current stable
+  // default for new projects; set GEMINI_MODEL explicitly to another
+  // supported model when cost/latency needs differ.
+  const primaryModel = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+  const fallbackModel = "gemini-3.5-flash-lite";
   try {
     const text = await callGemini(primaryModel, messages, system);
     return { text, model: primaryModel };
