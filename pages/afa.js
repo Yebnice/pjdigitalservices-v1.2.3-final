@@ -25,7 +25,7 @@ export default function AfaPage() {
   const [fee, setFee] = useState(null); // null = still loading from Techlink
 
   useEffect(() => {
-    setEmail(window.localStorage.getItem("pj_email") || "");
+    setEmail(window.sessionStorage.getItem("pj_email") || "");
     fetch("/api/techlink/afa-price")
       .then((r) => r.json())
       .then((d) => setFee(Number(d.price ?? d.amount)))
@@ -44,7 +44,7 @@ export default function AfaPage() {
       afaDetails: { fullName, ghanaCard, dob, region, location, occupation },
       onDone: (order, paidAmount) => {
         setLoading(false);
-        window.localStorage.setItem("pj_email", email);
+        window.sessionStorage.setItem("pj_email", email);
         setReceipt({ order, amount: paidAmount });
       },
       onError: (msg) => {
