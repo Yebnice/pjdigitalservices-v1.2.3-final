@@ -30,5 +30,8 @@ jobs:
       - name: Check distributed rate-limit usage
         run: npm run check:rate-limit
 
+      - name: Check production contracts
+        run: npm run check:production
+
       - name: Build
         run: npm run build
