@@ -16,6 +16,8 @@
     "react-dom": "^19.2.0",
     "lucide-react": "^1.17.0",
     "@supabase/supabase-js": "^2.45.4",
+    "@upstash/ratelimit": "^2.1.0",
+    "@upstash/redis": "^1.39.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }
