@@ -7,7 +7,7 @@ const GENERIC_MESSAGE = "If an unverified account exists with that email, a new 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const rl = rateLimit(req, { limit: 3, windowMs: 15 * 60_000, keySuffix: "auth-resend-verification" });
+  const rl = await rateLimit(req, { limit: 3, windowMs: 15 * 60_000, keySuffix: "auth-resend-verification" });
   if (!rl.allowed) {
     // Keep the response generic even when throttled so the endpoint cannot
     // be used to discover whether an address has an account.
