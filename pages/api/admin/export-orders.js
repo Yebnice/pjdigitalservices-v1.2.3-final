@@ -1,4 +1,4 @@
-import { isAdminAuthed } from "../../../lib/adminAuth";
+import { requireAdminRole } from "../../../lib/adminAuth";
 import { listOrders } from "../../../lib/store";
 import { recordAuditEvent } from "../../../lib/auditLog";
 
@@ -30,7 +30,7 @@ const COLUMNS = [
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
-  if (!isAdminAuthed(req)) return res.status(401).json({ error: "Unauthorized" });
+  if (!requireAdminRole(req, res, ["operator"])) return;
   try {
     const orders = await listOrders();
     const header = COLUMNS.map(([, label]) => csvField(label)).join(",");
