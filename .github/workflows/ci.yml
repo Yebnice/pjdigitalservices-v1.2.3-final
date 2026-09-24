@@ -27,5 +27,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Check distributed rate-limit usage
+        run: npm run check:rate-limit
+
       - name: Build
         run: npm run build
