@@ -1,9 +1,9 @@
-import { isAdminAuthed } from "../../../lib/adminAuth";
+import { requireAdminRole } from "../../../lib/adminAuth";
 import { listAllReviews, setReviewHidden } from "../../../lib/reviews";
 import { recordAuditEvent } from "../../../lib/auditLog";
 
 export default async function handler(req, res) {
-  if (!isAdminAuthed(req)) return res.status(401).json({ error: "Unauthorized" });
+  if (!requireAdminRole(req, res, ["viewer"])) return;
   if (req.method === "GET") {
     try {
       return res.status(200).json({ reviews: await listAllReviews() });
