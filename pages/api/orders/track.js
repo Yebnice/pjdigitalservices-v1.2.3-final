@@ -3,12 +3,12 @@ import { findCustomerOrder, toPublicOrder } from "../../../lib/store";
 import { checkQueuedOrder } from "../../../lib/orderProcessing";
 
 export default async function handler(req, res) {
-  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   const rl = await rateLimit(req, { limit: 12, windowMs: 60_000, keySuffix: "orders" });
   if (!rl.allowed) return res.status(429).setHeader("Retry-After", rl.retryAfter).json({ error: "Too many requests. Please wait a moment and try again." });
 
-  const reference = String(req.query.reference || "").trim();
-  const email = String(req.query.email || "").trim().toLowerCase();
+  const reference = String(req.body?.reference || "").trim();
+  const email = String(req.body?.email || "").trim().toLowerCase();
   if (!reference || !email || reference.length < 6 || !email.includes("@")) {
     return res.status(400).json({ error: "Enter your order reference and the email used at checkout" });
   }
