@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST" && req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
   if (!authorized(req)) return res.status(401).json({ error: "Unauthorized" });
   try {
-    const batchSize = Math.max(1, Math.min(100, Number(process.env.FULFILLMENT_BATCH_SIZE || 10)));
+    const batchSize = Math.max(1, Math.min(100, Number(process.env.FULFILLMENT_BATCH_SIZE || 3)));
     const paystackWebhookResults = await processPaystackWebhookQueue(batchSize);
     // Proactive wallet-balance check — runs FIRST so a slow/failed fulfillment
     // loop (or a 500 from a Supabase/Techlink incident, the exact moment the
