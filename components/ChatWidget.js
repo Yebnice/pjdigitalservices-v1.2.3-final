@@ -23,7 +23,7 @@ export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hi, I'm Annette from PjDigitalServices. 😊 You're in the right place for help with Airtime, Quick Data Top-up, data bundles, bills, TV, AFA, result checkers, payments and order tracking. What are you trying to do today?" },
+    { role: "assistant", content: "Hello! 😊 I'm Annette from PjDigitalServices. I'm here to help. What would you like to do today — make a purchase, check your order, or resolve an issue?" },
   ]);
   const [loading, setLoading] = useState(false);
   const [aiMode, setAiMode] = useState("unknown");
