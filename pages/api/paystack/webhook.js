@@ -1,5 +1,5 @@
 import { verifyWebhookSignature } from "../../../lib/paystack";
-import { verifyAndPrepareOrder } from "../../../lib/orderProcessing";
+import { enqueuePaystackWebhook } from "../../../lib/paystackWebhookQueue";
 
 export const config = { api: { bodyParser: false } };
 
@@ -17,18 +17,22 @@ export default async function handler(req, res) {
   try {
     const rawBody = await readRawBody(req);
     const signature = req.headers["x-paystack-signature"];
-    if (!verifyWebhookSignature(rawBody, signature)) return res.status(401).json({ error: "Invalid signature" });
+    if (!verifyWebhookSignature(rawBody, signature)) {
+      return res.status(401).json({ error: "Invalid signature" });
+    }
 
     const event = JSON.parse(rawBody);
-    if (event.event === "charge.success" && event.data?.reference) {
-      // A webhook must acknowledge quickly. We verify the payment and put the
-      // order into the retryable `ready` state; the browser callback or the
-      // scheduled worker performs the actual Techlink fulfillment.
-      await verifyAndPrepareOrder(event.data.reference);
-    }
-    return res.status(200).json({ received: true });
+
+    // Do not verify Paystack or call Techlink inside the webhook request.
+    // Persist first so a successful 200 acknowledgement always corresponds
+    // to durable work that the fulfillment worker can retry safely.
+    await enqueuePaystackWebhook({ event, rawBody });
+
+    return res.status(200).json({ received: true, queued: true });
   } catch (err) {
-    console.error("Paystack webhook error", err);
-    return res.status(500).json({ error: "Webhook processing failed" });
+    console.error("Paystack webhook enqueue error", err);
+    // A non-2xx response tells Paystack to retry when the durable queue
+    // could not be written.
+    return res.status(500).json({ error: "Webhook could not be queued" });
   }
 }
