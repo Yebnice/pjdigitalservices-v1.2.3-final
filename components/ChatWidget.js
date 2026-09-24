@@ -23,11 +23,9 @@ export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hello! 😊 I'm Annette from PjDigitalServices. I'm here to help. What would you like to do today — make a purchase, check your order, or resolve an issue?" },
+    { role: "assistant", content: "Hello! 😊 I'm Annette - Customer Support at PjDigitalServices. I'm here to help. What would you like to do today — make a purchase, check your order, or resolve an issue?" },
   ]);
   const [loading, setLoading] = useState(false);
-  const [aiMode, setAiMode] = useState("unknown");
-
   const [trackMode, setTrackMode] = useState(false);
   const [orderReference, setOrderReference] = useState("");
   const [orderEmail, setOrderEmail] = useState("");
@@ -74,7 +72,6 @@ export default function ChatWidget() {
       // Surface the real reason (e.g. rate limiting) instead of a generic
       // "couldn't answer" message whenever the server actually told us why.
       const content = data.reply || data.error || "Sorry, I couldn't answer that just now.";
-      setAiMode(data.source === "gemini" ? "gemini" : data.source === "support-rule" ? "support" : "faq");
       setMessages((m) => [...m, { role: "assistant", content }]);
     } catch {
       setMessages((m) => [...m, { role: "assistant", content: "I couldn't reach support right now. Please use the Feedback page for urgent issues." }]);
@@ -141,11 +138,7 @@ export default function ChatWidget() {
             <div className="chat-agent">
               <div className="chat-avatar" aria-label="Annette avatar" role="img">👩🏾‍💼</div>
               <div style={{ minWidth: 0 }}>
-                <div className="chat-agent-name">Annette <span className="chat-agent-role">· Support</span></div>
-                <div className="chat-status-row">
-                  <span className="chat-status-dot" />
-                  <span>{aiMode === "gemini" ? "AI support is active" : aiMode === "support" ? "Support guidance" : aiMode === "faq" ? "Quick-help mode" : "Ready to help"}</span>
-                </div>
+                <div className="chat-agent-name">Annette - Customer Support</div>
               </div>
             </div>
             <button className="chat-close" onClick={() => setOpen(false)} aria-label="Close support chat">
