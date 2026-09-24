@@ -1,5 +1,5 @@
 -- PjDigitalServices production database schema.
--- Version: v1.3.3
+-- Version: v1.3.6
 --
 -- SOURCE OF TRUTH:
 -- This file matches the current application code on the main branch.
