@@ -235,6 +235,7 @@ const FAIL_REASON_LABELS = {
   checker_price_unresolved: "Could not resolve a price for that result checker",
   currency_mismatch: "Payment came back in the wrong currency",
   amount_mismatch: "Amount paid didn't match the amount charged",
+  payment_abandoned: "Payment was cancelled before completion — no payment was completed.",
 };
 
 export const ORDER_TYPE_LABELS = {
@@ -375,10 +376,10 @@ export function OrderList({ items }) {
               <div
                 style={{
                   fontSize: 12,
-                  color: o.status === "success" ? "var(--green)" : o.status === "failed" ? "var(--red)" : o.fulfillmentStatus === "queued_with_provider" ? "var(--gold)" : "var(--muted)",
+                  color: o.status === "success" ? "var(--green)" : o.failReason === "payment_abandoned" ? "var(--muted)" : o.status === "failed" ? "var(--red)" : o.fulfillmentStatus === "queued_with_provider" ? "var(--gold)" : "var(--muted)",
                 }}
               >
-                {o.status === "success" ? "Delivered" : o.status === "failed" ? "Failed" : o.fulfillmentStatus === "queued_with_provider" ? "Queued for delivery" : "Pending"}
+                {o.status === "success" ? "Delivered" : o.failReason === "payment_abandoned" ? "Payment cancelled" : o.status === "failed" ? "Failed" : o.fulfillmentStatus === "queued_with_provider" ? "Queued for delivery" : "Payment not completed"}
               </div>
             </div>
           </div>
