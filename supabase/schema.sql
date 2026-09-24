@@ -255,6 +255,9 @@ create index if not exists orders_phone_idx
 create index if not exists orders_fulfillment_idx
   on orders (fulfilled, fulfillment_status, created_at);
 
+create index if not exists orders_payment_state_idx
+  on orders (status, fulfillment_status, created_at);
+
 create index if not exists orders_created_at_idx
   on orders (created_at desc);
 
@@ -335,6 +338,18 @@ where fulfillment_status is null
 update orders
 set fulfillment_attempts = 0
 where fulfillment_attempts is null;
+
+-- Historical payment failures from pre-v1.3.4 used status='failed' and
+-- fulfillment_status='failed'. Normalize only unfulfilled records that were
+-- never payment-verified so they can never enter the fulfillment queue.
+update orders
+set
+  status = 'payment_failed',
+  fulfillment_status = 'pending'
+where fulfilled = false
+  and status = 'failed'
+  and fulfillment_status = 'failed'
+  and payment_verified_at is null;
 
 update orders
 set status = 'pending'
