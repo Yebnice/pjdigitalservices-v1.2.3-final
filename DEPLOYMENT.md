@@ -240,3 +240,18 @@ Set `CRON_SECRET` to a random 32+ character secret so the fulfillment cron can a
 ### Admin hardening
 
 The rebuilt package supports optional named admin accounts through `ADMIN_USERS_JSON`; legacy `ADMIN_PASSWORD` remains supported when that variable is left empty. Use unique named accounts when staff access is introduced. Two-factor authentication is still a separate deployment hardening item and is not claimed as implemented in this release.
+
+
+## v1.3.5 security and deployment hardening
+
+Before deploying the hardened build:
+
+1. Add a separate `AFA_ENCRYPTION_KEY` environment variable (32+ random characters) to the Vercel Production environment. Do not reuse `CRON_SECRET`, `ADMIN_SESSION_SECRET`, or `CUSTOMER_SESSION_SECRET`.
+2. Run `supabase/migration_v1_3_5.sql` against the production database. It removes retained AFA identity payloads from already-fulfilled historical orders.
+3. Keep the same `CRON_SECRET` value in GitHub Actions, Supabase Vault (`pjd_cron_secret`), and Vercel. A Vercel environment-variable edit does not affect the running deployment until a new deployment is created.
+4. If using `ADMIN_USERS_JSON`, roles are hierarchical: `viewer < operator < admin`. Viewer is read-only; operator can perform operational reconciliation/recheck/wallet actions; admin has full access.
+5. Customer order and support-case lookups use POST bodies rather than query strings so email/phone values are not placed in URLs.
+
+### Data retention
+
+New AFA registration details are encrypted at rest. Once an AFA order is successfully fulfilled, the sensitive registration payload is cleared from the order row. Manual-review and unresolved orders retain the encrypted data only while operationally necessary.
