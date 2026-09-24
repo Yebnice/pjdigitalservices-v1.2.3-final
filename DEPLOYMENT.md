@@ -255,3 +255,16 @@ Before deploying the hardened build:
 ### Data retention
 
 New AFA registration details are encrypted at rest. Once an AFA order is successfully fulfilled, the sensitive registration payload is cleared from the order row. Manual-review and unresolved orders retain the encrypted data only while operationally necessary.
+
+
+## Release-quality checks
+
+Before a production deployment, the repository CI should pass all of these gates in order:
+
+1. `npm test` — automated regression tests for pricing, AFA encryption, rate limiting, and Techlink request contracts.
+2. `npm run check:rate-limit` — prevents API routes from accidentally calling the async limiter without `await`.
+3. `npm run check:production` — verifies the hardened pricing, AFA, POST lookup, CSP, and browser-storage contracts.
+4. `npm run build` — confirms the Next.js application compiles.
+5. Live verification — one controlled Paystack transaction followed by confirmed Techlink fulfillment/status handling.
+
+A release should not be treated as fully production-ready until the CI build and the controlled end-to-end transaction both pass.
