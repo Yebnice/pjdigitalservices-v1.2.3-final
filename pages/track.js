@@ -11,14 +11,18 @@ export default function TrackPage() {
   useEffect(() => {
     try {
       setReference(window.localStorage.getItem("pj_last_reference") || "");
-      setEmail(window.localStorage.getItem("pj_email") || "");
+      setEmail(window.sessionStorage.getItem("pj_email") || "");
     } catch {}
   }, []);
 
   async function search() {
     setError(""); setLoading(true);
     try {
-      const r = await fetch(`/api/orders/track?reference=${encodeURIComponent(reference)}&email=${encodeURIComponent(email)}`);
+      const r = await fetch("/api/orders/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reference, email }),
+      });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Could not find the order");
       setResults(d.orders);
