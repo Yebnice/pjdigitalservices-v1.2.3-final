@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "check:rate-limit": "node scripts/check-rate-limit.js",
-    "check:production": "node scripts/check-production-contracts.js"
+    "check:production": "node scripts/check-production-contracts.js",
+    "test": "vitest run"
   },
   "engines": {
     "node": "24.x"
@@ -21,5 +22,8 @@
     "@upstash/ratelimit": "^2.1.0",
     "@upstash/redis": "^1.39.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.1"
   }
 }
