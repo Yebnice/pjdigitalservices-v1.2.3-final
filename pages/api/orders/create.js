@@ -20,7 +20,7 @@ import { getOrderPricing } from "../../../lib/pricing";
 // more) than what Techlink will actually charge your wallet.
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  const rl = rateLimit(req, { limit: 12, windowMs: 60_000, keySuffix: "orders-create" });
+  const rl = await rateLimit(req, { limit: 12, windowMs: 60_000, keySuffix: "orders-create" });
   if (!rl.allowed) return res.status(429).setHeader("Retry-After", rl.retryAfter).json({ error: "Too many order attempts. Please wait a moment and try again." });
   const rawIdempotency = req.headers["idempotency-key"] || req.body?.idempotencyKey || "";
   const idempotencyKey = String(Array.isArray(rawIdempotency) ? rawIdempotency[0] : rawIdempotency).trim();
