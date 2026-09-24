@@ -23,7 +23,7 @@ export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hi there! 😊 I'm Annette from PjDigitalServices. I'm here to help with instant Airtime, Quick Data Top-up, data bundles, bills, TV, AFA, result checkers, payments, or order tracking. What can I help you with today?" },
+    { role: "assistant", content: "Hi, I'm Annette from PjDigitalServices. 😊 You're in the right place for help with Airtime, Quick Data Top-up, data bundles, bills, TV, AFA, result checkers, payments and order tracking. What are you trying to do today?" },
   ]);
   const [loading, setLoading] = useState(false);
   const [aiMode, setAiMode] = useState("unknown");
@@ -182,7 +182,7 @@ export default function ChatWidget() {
             {QUICK.map((q) => (
               <button key={q} onClick={() => handleQuickAction(q)}>{q}</button>
             ))}
-            <button onClick={() => setComplaintMode(true)} className="chat-human-chip"><Headphones size={12} /> Human help</button>
+            <button onClick={() => setComplaintMode(true)} className="chat-human-chip"><Headphones size={12} /> Get human help</button>
           </div>
 
           {trackMode && (
