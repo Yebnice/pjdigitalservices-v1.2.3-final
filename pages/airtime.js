@@ -13,8 +13,8 @@ export default function AirtimePage() {
   const [receipt, setReceipt] = useState(null);
 
   useEffect(() => {
-    setEmail(window.localStorage.getItem("pj_email") || "");
-    setPhone(window.localStorage.getItem("pj_phone") || "");
+    setEmail(window.sessionStorage.getItem("pj_email") || "");
+    setPhone(window.sessionStorage.getItem("pj_phone") || "");
   }, []);
 
   const valid = phone.length >= 10 && Number(amount) > 0 && email.includes("@");
@@ -29,8 +29,8 @@ export default function AirtimePage() {
       airtimeAmount: Number(amount),
       onDone: (order, paidAmount) => {
         setLoading(false);
-        window.localStorage.setItem("pj_email", email);
-        window.localStorage.setItem("pj_phone", phone);
+        window.sessionStorage.setItem("pj_email", email);
+        window.sessionStorage.setItem("pj_phone", phone);
         setReceipt({ order, amount: paidAmount });
       },
       onError: (msg) => {
