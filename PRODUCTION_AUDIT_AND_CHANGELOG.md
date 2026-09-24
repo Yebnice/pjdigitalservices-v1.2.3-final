@@ -1,5 +1,15 @@
 # PjDigitalServices — Production Audit & Hardening Changelog
 
+## v1.3.6 full workflow/document audit — September 24, 2026
+
+- Audited the payment -> order -> Techlink fulfillment -> background-worker path against the supplied Techlink Business API V1 document.
+- Found and fixed a real Paystack webhook retry runtime bug: an undefined `terminal` variable could crash webhook job requeueing.
+- Found and fixed a real pricing-policy bug: `tierBulkAirtime` was not normalized before the zero-margin lookup, so it could receive the default 1% business margin.
+- Found and fixed a customer-facing pricing mismatch for Agent Data Products: the live tier catalogue endpoint was returning raw Techlink prices while order creation applied the customer pricing policy and Paystack fee. The endpoint now returns only customer-facing product/checkout prices, and the tier UI uses those values where available.
+- Removed the unused public `/api/techlink/airtime-fee` proxy so Techlink's internal provider fee is not unnecessarily exposed to customers.
+- Tightened idempotency-key reuse so a reused key must match the original checkout email before an existing order is returned.
+- Updated release documentation/schema versioning to v1.3.6.
+
 ## What was reviewed
 
 The project was reviewed layer-by-layer across the Next.js application, API routes, Paystack flow, Techlink integration, Supabase storage, customer order tracking, admin area, PWA files and customer-support chatbot.
@@ -9,7 +19,7 @@ Current external facts were checked against official documentation for Next.js, 
 ## Major fixes applied
 
 ### 1. Framework/security baseline
-- Targeted Next.js 16.2.x (Active LTS) and React 19.2.
+- Current release is pinned to Next.js 16.3.x (declared floor `^16.3.6`) and React 19.2.
 - Added Node.js >=20.9 engine requirement.
 - This matches the current Next.js support guidance: 16.x is Active LTS; 14.x is unsupported.
 
