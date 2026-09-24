@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "check:rate-limit": "node scripts/check-rate-limit.js"
   },
   "engines": {
     "node": "24.x"
