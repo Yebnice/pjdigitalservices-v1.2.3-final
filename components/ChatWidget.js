@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MessageCircle, X, Send, Search } from "lucide-react";
 
-const QUICK = ["Track my order", "Data bundles", "ECG bill", "TV subscription", "Report a problem"];
+const QUICK = ["Instant Airtime", "Quick Data Top-up", "Track my order", "ECG bill", "Report a problem"];
 const SERVICES = ["data", "airtime", "ECG", "water", "TV", "AFA", "result checker", "other"];
 
 const EMPTY_COMPLAINT = {
@@ -23,7 +23,7 @@ export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hi there! 🙂 I'm Annette from PjDigitalServices. Happy to help with data, airtime, bills, TV, AFA, result checkers, or tracking an order — what's up?" },
+    { role: "assistant", content: "Hi there! 😊 I'm Annette from PjDigitalServices. I'm here to help with instant Airtime, Quick Data Top-up, data bundles, bills, TV, AFA, result checkers, payments, or order tracking. What can I help you with today?" },
   ]);
   const [loading, setLoading] = useState(false);
 
@@ -136,7 +136,10 @@ export default function ChatWidget() {
       {open && (
         <div className="chat-panel">
           <div className="chat-header">
-            <span style={{ fontSize: 14, fontWeight: 600 }}>PjDigitalServices · Support</span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>PjDigitalServices · Support</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Annette · AI-assisted customer support</div>
+            </div>
             <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "var(--muted)" }}>
               <X size={16} />
             </button>

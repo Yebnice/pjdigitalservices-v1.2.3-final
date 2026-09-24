@@ -176,3 +176,158 @@ Release: v1.2.1. Full npm install/build remains a deployment-environment verific
 - Fixed a case-sensitivity bug in the result-checker "lookup" fulfillment path (`lib/techlink.js`): sent uppercase `BECE`/`WASSCE` to `/result-check-service/request`, which the API's own docs example shows as lowercase — paid lookup orders could fail fulfillment over letter case.
 - Replaced the Twilio WhatsApp/SMS escalation with Brevo transactional SMS + the existing Resend email as the second channel (see `.env.example` and DEPLOYMENT.md section 3).
 - Chat widget and AI system prompt now consistently introduce the assistant as "Annette."
+
+
+## v1.2.5 — Paystack fee pass-through, Techlink docs fact-check, admin Overview tab
+- **Paystack fee pass-through (1.95%)**: `lib/pricing.js` had a `withPaystackFee()` helper that was already written but never called anywhere — customers were charged the raw product price and the business absorbed Paystack's cut out of margin on every order. Wired it into checkout end-to-end: `pages/api/orders/create.js` now computes and stores a fee-inclusive `checkoutAmount` alongside the original `amount` (which stays the authoritative product cost — unchanged, and still what's sent to Techlink for fulfillment, so no product is ever over-delivered). Payment verification (`lib/orderProcessing.js`) now checks Paystack's transaction against `checkoutAmount`. New nullable columns `checkout_amount`, `paystack_fee_amount` on `orders` (see `migration_v1_2_5.sql`); `amount` is untouched.
+- **Caught before shipping**: `pages/api/admin/reconcile.js` compares stored orders against Paystack's CSV export by amount — it was matching against the base `amount`, which would have flagged every single order as a mismatch the moment the fee went live. Fixed to compare against `checkoutAmount`.
+- All customer-facing "Pay GHS X" checkout buttons (airtime, data, bills, TV, AFA, TierShop bulk/Excel) now show the fee-inclusive total that will actually be charged, instead of the bare product price. `OrderReceipt` now shows a transparent Product price / Processing fee / Total paid breakdown instead of only ever showing the product price.
+- Admin dashboard: added "Paystack fees recovered" as its own stat, kept "Total sales" as net product revenue (not inflated by the fee pass-through). CSV export now has separate Product/Fee/Total columns.
+- **Techlink API fact-check** against the vendor's own Postman documentation: cross-checked every endpoint, method, body field, and response shape currently integrated in `lib/techlink.js` against the docs. No incorrect endpoint calls or field-name bugs found — the water/TV bill-lookup response field fallbacks (`balance ?? amountDue ?? amount`, `customerName`/`packageName ?? package`) already defensively cover the field-name ambiguity the docs themselves show. One real gap found and fixed (below).
+- **New: Techlink wallet balance monitoring.** Every order fulfilled by this app debits the business's own Techlink wallet (`paymentMethod: "wallet"`), but nothing in the app ever checked that balance — Paystack still charges the customer even if the wallet is empty, so a dry wallet meant orders would start failing at fulfillment, silently, after the customer had already paid. Added `getWalletBalance()` (`lib/techlink.js`, `GET /wallet/balance`), an admin-only endpoint (`pages/api/admin/wallet-balance.js`), and a live low-balance warning banner + stat card on the admin dashboard (polls every 2 minutes; threshold is a constant in `pages/admin/index.js`, adjust to your typical order size).
+- **New: admin dashboard Overview tab** — set as the default tab. Date-range filter (Today / 7 days / 30 days / All time), headline stats (revenue, orders, success rate, avg order value, fees recovered), a daily revenue trend bar chart, and a top-5-products-by-revenue breakdown. Hand-rolled (no charting library in `package.json`); pure SVG.
+
+
+## v1.2.6 — Silent-failure escalation gap
+- **Real bug found and fixed**: orders that fail outright (Techlink call throws — insufficient wallet balance, bad meter/account, a provider error) are correctly retried automatically by the fulfillment worker up to `MAX_FULFILLMENT_ATTEMPTS`. But once an order exhausted those attempts, it just sat at `fulfillment_status: "failed"` forever — excluded from further automatic retry, and invisible to the admin email/SMS escalation pipeline, which only ever looked at orders recovered from a stale "processing" state. It was still listed in the admin "Needs Attention" tab, but nobody was ever paged about it — a run of failures sharing one root cause (e.g. the Techlink wallet running dry, so every order after that point fails the same way) would have produced zero alerts, discoverable only by an admin happening to open the dashboard.
+- Fixed with `promoteExhaustedFailedOrders()` (`lib/store.js`): once a "failed" order exhausts its automatic retries, it's promoted into the same `manual_review` state used by the existing stale-processing recovery path, which routes it through the already-working admin notification and urgent-escalation logic (`recoverAndListReadyOrders`, `lib/orderProcessing.js`) — no new, separate notification path to maintain.
+- Cleaned up two other comments left over from earlier reviews that incorrectly claimed this project "has no cron running the promotion job" — it does (`/api/jobs/fulfill`, documented in `DEPLOYMENT.md`); the actual gap was narrower than that (see above).
+
+
+
+
+## v1.2.6 production hardening (rebuilt)
+
+- Automated `queued_with_provider` checks in the fulfillment worker; customer/admin page views remain a backstop.
+- Added Vercel Cron configuration at `/api/jobs/fulfill` (5-minute schedule). No Cloudflare dependency. Verify the deployment plan permits the configured cron frequency.
+- Added database-backed unique idempotency key on orders and client/server retry using the same key.
+- Added configurable business markup engine separate from provider cost and Paystack fee; airtime provider fees are included in provider-cost estimation before margin is calculated.
+- Added server-enforced bulk row, per-line airtime, bulk-total, and single-order product-value limits.
+- Added `.gitignore` and bumped package metadata to v1.2.6.
+- Added customer-facing chatbot response metadata (`source: gemini|faq`) so a successful FAQ fallback is not mistaken for a successful Gemini call.
+- Defaulted Gemini to `gemini-2.5-flash` rather than the previously documented unverified newer model name. Live availability still requires a real API-key test.
+
+
+## Pricing update
+
+- Default PjDigitalServices business margin is now **1%** of provider cost.
+- Paystack fee remains **1.95%** of the gross checkout transaction and is grossed up so the business still receives the provider-cost-plus-margin amount after the Paystack fee.
+- Service/network-specific margins remain configurable through `SERVICE_MARKUP_RULES_JSON`.
+- No Cloudflare dependency is introduced.
+
+
+## v1.2.6 follow-up correction — service pricing and support grounding
+- Plain Airtime and Quick Data Top-up (`orderType: airtime` and `orderType: data`) now have an explicit 0% business margin. They still include the configured 1.95% Paystack fee.
+- Bulk Airtime is also treated as 0% business margin so an Airtime product does not receive the 1% margin unintentionally.
+- Tiered data products continue to use the 1% default business margin unless an explicit service rule overrides it.
+- The customer-support FAQ and Gemini grounding now describe Airtime and Quick Data Top-up as instant after payment confirmation, while retaining MTN Master as non-instant.
+- The chatbot language was rewritten to be warmer, more professional, action-oriented, and grounded in verified store facts; it explicitly avoids inventing prices, statuses, delivery guarantees, or provider outcomes. The widget identifies Annette as AI-assisted support, while the backend retains a deterministic FAQ fallback.
+
+
+## v1.2.7 — Two more real bugs found and fixed, plus a manual-resolution gap closed
+
+- **Real bug: bulk/Excel MTN Master orders were falsely marked "Delivered."** The v1.2.6 fix for the non-instant-tier queuing bug (see the v1.2.6 entry above) only checked `orderType === "tierData"` — a single order. But `components/TierShop.js` lets a customer run MTN Master through Bulk or Excel mode too (`orderType: "tierBulkData"`), and that path was never covered: it skipped the queued state and went straight to `fulfilled`, sending the customer a "Delivered!" email/SMS for an order Techlink's own docs describe as queued and non-instant. Fixed in `lib/orderProcessing.js` (`fulfillClaimedOrder`) by checking both order types against `TIERS[tierKey].instant`.
+- **Consequence of the above, also fixed**: Techlink's bulk order endpoint (`POST /orders/bulk`) returns no response body per its own docs, so a queued bulk order has no `orderId` to auto-verify against — `checkQueuedOrder` will correctly leave it queued forever rather than guessing. Since `manuallyResolveOrder` previously only accepted orders in `manual_review`/`failed`, this meant a queued bulk order had no resolution path at all once an admin actually confirmed delivery with Techlink directly. Added `queued_with_provider` as an eligible source state for the `confirm_fulfilled` action only (`lib/store.js`) — deliberately **not** for `retry`, since retrying would resubmit an already-accepted bulk batch and risk double delivery. Wired a "Mark fulfilled manually" button into the existing "Queued with provider" admin panel (`pages/admin/index.js`), next to the existing "Re-check with Techlink" button.
+- **Real bug: `FULFILLMENT_BATCH_SIZE` was silently ignored.** `pages/api/jobs/fulfill.js` passed `batchSize` into `recoverAndListReadyOrders(batchSize)`, but that function took no parameters — the argument was dropped, and every call fell through to the hardcoded default `limit = 20` in `recoverStaleProcessingOrders()`, `promoteExhaustedFailedOrders()`, and `listReadyOrders()` (`lib/store.js`). A deployment that raised `FULFILLMENT_BATCH_SIZE` above 20 for a busier store was still capped at 20 ready/stale/exhausted orders per worker run. Fixed by threading `limit` through `recoverAndListReadyOrders(limit)` to all three calls.
+- Repinned `next` to `^16.2.11` in `package.json` — `16.2.10` (the previous floor) predates the July 20, 2026 Active-LTS security release that patched 4 HIGH and 5 MEDIUM severity vulnerabilities in the 16.2.x line. No lockfile is committed, so a fresh `npm install` was already pulling the patched version regardless; this just keeps the declared floor from claiming an unpatched minimum.
+
+### Still worth doing (not app bugs, but real gaps)
+- The in-memory `rateLimit()` (`lib/rateLimit.js`) doesn't share state across serverless instances on Vercel — each cold start resets its counters, so it under-enforces there. It's honestly commented as a "lightweight application-level safety net" already; for a production deployment on Vercel, pair it with the platform's own rate limiting or a shared store (e.g. Upstash Redis).
+- The `Content-Security-Policy` header in `next.config.js` currently ships as `Content-Security-Policy-Report-Only` — intentional per its own comment (browse with dev tools open first, then rename it once you see zero violations), but it means nothing is actually enforced by CSP yet. Don't forget the rename before calling the site launched.
+- The AFA registration field names (`name`/`idNumber`/`dateOfBirth` vs. the docs' own prose which says `fullName`/`ghanaCard`/`dob`) and the exact response shape of `/result-check-service/request` are the two remaining items that can only be confirmed with a real Techlink test-key transaction — no further static review can settle these.
+
+
+## v1.2.8 — Deployment-readiness pass: full syntax/import/schema verification + one more real bug
+
+This pass went beyond manual code reading: every `.js` file in `pages/`, `components/`, and `lib/` (87 files) was actually parsed with the TypeScript compiler's own parser (JSX-aware), every `import` was resolved to a real file and checked against that file's real exports, every `process.env.*` reference was cross-checked against `.env.example`, and every Supabase `.insert()`/`.update()`/`.eq()` field used in `lib/store.js`, `lib/customers.js`, `lib/feedback.js`, `lib/auditLog.js`, and `lib/reviews.js` was cross-checked against the columns actually created in `supabase/schema.sql`.
+
+**Results:**
+- 0 syntax errors across all 87 files.
+- 0 broken imports, 0 imports of a name that isn't actually exported (the same bug class as the pre-v1.2.4 `rateLimit` import bug — confirmed nowhere else in the codebase).
+- 0 environment-variable name drift between code and `.env.example` (the only code-side reference not in `.env.example` is `NODE_ENV`, which Next.js sets automatically and isn't something you configure).
+- 0 database column mismatches — every field the code reads or writes on `orders`, `customers`, `feedback`, `audit_log`, and `reviews` exists in `supabase/schema.sql`.
+
+**One more real bug found and fixed**: `OrderReceipt` (`components/ui.js`) — the confirmation screen shown immediately after a successful checkout — showed the same "Thank you! Your order has been processed." message with a green checkmark for *every* successful payment, including a queued, non-instant order (MTN Master, reachable via Single/Bulk/Excel on `/mtn-data`). This is the same false-delivery-confidence problem that `lib/orderProcessing.js` was fixed to stop emailing/texting about in v1.2.6/v1.2.7 — but this particular screen, the very first thing a customer sees, was never covered by that fix. `OrderList` (same file) already correctly branched on `fulfillmentStatus === "queued_with_provider"` for the order-history view; `OrderReceipt` now does the same — an amber clock icon, "Order received!" instead of "Thank you!", and copy matching the wording already used in `notifyCustomerOrderQueued` (`lib/notifications.js`), so the receipt and the follow-up email never contradict each other.
+
+### Verification method note
+No `npm install`/`next build` was run (no network access in this environment, same limitation noted in every earlier release). What changed this pass is that the syntax/import/schema checks above are no longer "read the code carefully" — they're mechanical, using the TypeScript compiler API and a real schema diff, which catches classes of error (typo'd imports, drifted env var names, missing DB columns) that manual review can miss. This narrows, but does not eliminate, the need for one real `npm install && next build` plus a live Techlink/Paystack test-key run before go-live.
+
+
+## v1.2.9 — The two bugs from live testing, both confirmed and fixed. No Supabase changes needed.
+
+Two real production incidents were reported from live testing:
+1. A customer saw "Thank you, order delivered" immediately, but the data bundle actually took ~1 hour to arrive.
+2. A customer was charged by Paystack, but their airtime never arrived, because the Techlink *business* wallet (yours, not the customer's) had insufficient balance to fulfill it.
+
+**Incident 1 is the same bug already fixed in v1.2.8** (`OrderReceipt` unconditionally showing "Thank you!"/processed for queued MTN Master orders) — that fix was already in the v1.2.8 package. If this was seen on a live deployment, it means the live GitHub copy predates v1.2.8; this package includes that fix.
+
+**Incident 2 was a separate, previously-unfixed bug**, now fixed here:
+
+- **Root cause**: `lib/payment.js`'s Paystack callback only called `onDone()` (show the receipt) when `result.status === "success"`. Every other outcome — including a payment that succeeded but where the immediate Techlink fulfillment call failed (insufficient wallet balance, bad meter number, provider timeout, etc.) — fell into `onError()`, which showed a bare red toast like *"Payment processing."* with **no order reference and no acknowledgment that the charge had gone through.** The backend retry logic itself (`lib/store.js`: automatic retry up to `MAX_FULFILLMENT_ATTEMPTS`, then promotion to `manual_review` with an admin alert) was already correct and unaffected — the money wasn't lost and the order genuinely was queued for another attempt. But the customer, staring at what looked like a plain error, had no way to know that, and no reference number to ask support about.
+- **Fix, `lib/payment.js`**: route to `onDone()` whenever the API response includes an `order` object at all (which only happens once Paystack has actually confirmed the charge), rather than gating on the exact status string. A genuine payment failure (declined card, amount/currency mismatch) still has no `order` in the response and still correctly shows an error.
+- **Fix, `components/ui.js` (`OrderReceipt`)**: added a third bucket alongside "fulfilled" (green check) and "queued_with_provider" (v1.2.8's amber clock) — anything else (`processing`, `failed`, `manual_review`, `ready`) now shows "Payment received!" with an honest "we're completing your order now, you don't need to pay again, contact support with this reference if it doesn't arrive" message. The order reference itself was already always shown in the receipt row, so it's now paired with copy that actually tells the customer what's going on.
+- **Supabase / schema**: **no changes needed.** This was purely a frontend response-routing and copy bug — no new columns, no new tables, nothing to run in the SQL editor for this fix.
+
+### Recommendation (not a bug, optional follow-up)
+There's currently no *proactive* alert when the Techlink wallet balance gets low — the admin only finds out reactively, once orders start failing and (after retries exhaust) a manual-review email goes out. `GET /wallet/balance` is already wired up (`lib/techlink.js`, used by the admin dashboard's balance display) and `/api/jobs/fulfill` already runs every 5 minutes — a low-balance check piggybacked onto that same cron run, alerting once balance drops under a configurable threshold, would catch this class of incident before a single customer is affected rather than after. Happy to build this if you want it — it would need one new small Supabase table (or a couple of env vars) to avoid re-alerting every 5 minutes while the balance stays low.
+
+### Full re-verification after this fix
+All 87 `.js` files across `pages/`, `components/`, `lib/` re-parsed with the TypeScript compiler (0 errors) and all imports re-resolved against real exports (0 problems) after these changes, same method as the v1.2.8 pass.
+
+
+## v1.3.0 — Proactive Techlink low-balance alert, and clearer non-delivered wording
+
+### ⚠️ Supabase change required for this release
+Run this once, in the Supabase SQL editor, before deploying v1.3.0 (also included in `supabase/migration_v1_3_0.sql`, and folded into `supabase/schema.sql` for fresh projects):
+
+```sql
+create table if not exists app_settings (
+  key text primary key,
+  value text,
+  updated_at timestamptz not null default now()
+);
+alter table app_settings enable row level security;
+```
+
+This is a small, generic key/value table — no data migration, no changes to any existing table, nothing else needed.
+
+### 1. Proactive Techlink wallet balance alert
+The v1.2.9 fix made sure a customer is never misled when a low Techlink wallet balance causes a fulfillment failure — but the admin still only found out *after* that happened (reactively, once an order exhausted its retries and got promoted to `manual_review`). This adds the proactive half: `checkTechlinkWalletBalance()` (`lib/orderProcessing.js`) now runs on every `/api/jobs/fulfill` invocation (piggybacking on the existing 5-minute cron — no second scheduled job added) and emails + SMS's the admin (`notifyAdminLowBalance`, `lib/notifications.js`, reusing the existing `ADMIN_ALERT_EMAIL`/`ADMIN_SMS_TO` config) as soon as the balance drops under `TECHLINK_LOW_BALANCE_THRESHOLD` (default GHS 200).
+
+- The new `app_settings` table (above) exists specifically to remember *when* the alert was last sent, so the 5-minute cron doesn't re-alert every single run while the balance stays low — `TECHLINK_LOW_BALANCE_ALERT_COOLDOWN_HOURS` (default 6) controls that window, and the marker is automatically cleared once the balance recovers above threshold, so the *next* dip alerts immediately rather than possibly being suppressed by a stale cooldown.
+- The admin dashboard's existing low-balance banner (`pages/admin/index.js`) had its threshold hardcoded to `200` separately — it now reads `NEXT_PUBLIC_TECHLINK_LOW_BALANCE_THRESHOLD` (same default), so the on-screen banner and the proactive alert agree and only need to be changed in one place (two env var entries, same number).
+- Both new checks fail closed and silent: a Techlink/Resend/Brevo/Supabase hiccup while checking or sending never fails the fulfillment run itself — it's logged and the run continues.
+- New env vars (all with working defaults — nothing is required to keep the app running as before): `TECHLINK_LOW_BALANCE_THRESHOLD`, `NEXT_PUBLIC_TECHLINK_LOW_BALANCE_THRESHOLD`, `TECHLINK_LOW_BALANCE_ALERT_COOLDOWN_HOURS`.
+
+### 2. Clearer non-delivered wording on the post-checkout receipt
+Per direct feedback: v1.2.9's "Payment received!"/"Order received!" headings for a queued or still-processing order were an improvement over the old unconditional "Thank you!", but still read as ambiguous — close enough to "done" that a customer skimming it could still walk away thinking their order was delivered. `OrderReceipt` (`components/ui.js`) now uses one unambiguous heading for every non-delivered state — **"Order received — being processed"** — paired with copy that explicitly opens with "Your payment was successful" before explaining it isn't delivered yet. "Thank you!" is now reserved exclusively for `fulfillmentStatus === "fulfilled"` — a genuinely completed, confirmed delivery.
+
+### Verification
+All 88 files (87 + the new `lib/appSettings.js`) re-parsed with the TypeScript compiler (0 syntax errors), all imports re-resolved against real exports (0 problems), and every `process.env.*` reference cross-checked against `.env.example` (0 drift, same as every prior pass).
+
+
+## v1.3.1 — Safer fulfillment: no blind retries, honest bulk handling, working escalation
+
+### ⚠️ Supabase change required for this release
+Paste **`supabase/schema.sql`** into Supabase → SQL Editor → Run. It is idempotent (fresh project or upgrade; never touches data). Minimum for an existing v1.3.0 database: `supabase/migration_v1_3_1.sql`. What it adds: `orders.queued_alert_sent_at` and two partial indexes (and, for anyone jumping from before v1.3.0, the `app_settings` table).
+
+### Bugs fixed
+1. **Possible double delivery / double wallet debit (most important).** Any error from Techlink — including a timeout or dropped connection *after* Techlink had already accepted the order — marked the order retryable, and the worker resubmitted it up to 5 times. `lib/techlink.js` now has a request timeout (`TECHLINK_TIMEOUT_MS`, default 20 s) and classes timeouts, dropped connections and 5xx responses as **ambiguous** (`TechlinkAmbiguousError`). An ambiguous order goes straight to `manual_review` (`fail_reason = provider_outcome_unknown`) and is never auto-retried; clear rejections (4xx, `success:false`, e.g. insufficient balance) still retry automatically.
+2. **Urgent escalation could never fire.** The notify/escalate loop only saw an order on the single cron run that moved it into `manual_review` (≈0 minutes elapsed, so the 30-minute urgent threshold was never reached). It now also re-evaluates every un-escalated `manual_review` order on each run (`listManualReviewAwaitingEscalation`); every notification is still guarded by its own `*_notified_at` column, so nothing sends twice. **Expect urgent alerts for orders already sitting in manual review when you deploy.**
+3. **Low-balance alert could silence itself.** Email failure skipped the SMS, and the cooldown started even when nothing was delivered. Channels are now independent and the cooldown starts only after at least one channel delivered.
+4. **Wallet check ran last** in the cron, so an earlier failure or slow loop skipped it. It now runs first.
+5. **Queued bulk orders starved the queue check.** Bulk queued orders without a provider `orderId` cannot auto-resolve, but filled every run's oldest-first batch. They are now excluded from the auto-check batch.
+6. `/api/orders/verify` returned `status: "success"` for an order held in `manual_review`; it now returns 202 "processing".
+
+### New behaviour
+- **Bulk batches (data and airtime) are no longer marked delivered on a bare 2xx.** The Techlink docs we have show no example response for the bulk endpoints (the Postman page prints "No response body" for many endpoints that certainly return data, so this is a missing example, not proof of an empty response) — the real shape is **unknown**. `assessBulkResult` looks for per-row evidence using best-guess field names: an explicit failure signal → order held in `manual_review` (`bulk_partial_failure`; a retry would resubmit the whole batch, so the note says to verify recipients first); one success entry per row → delivered; nothing recognisable to check → **queued** until you confirm it with "Mark fulfilled manually". Set `BULK_AUTO_CONFIRM=true` to restore the old trust-the-2xx behaviour.
+- **Stale queued-order alert.** Any queued order waiting longer than `QUEUED_ALERT_MINUTES` (default 180) alerts the admin once (email and SMS, channels independent); the claim is released if no channel delivered, so it retries next run.
+
+### AFA registration field names
+Techlink's docs disagree: the prose and the request-body definition say `fullName` / `ghanaCard` / `dob`; only the generated curl example says `name` / `idNumber` / `dateOfBirth` (the app used only the latter). `registerAfa` now sends both spellings. Confirm with one `tlg_test_` call (validated and priced, no wallet debit) and then keep whichever the response accepts.
+
+### New env vars (all optional)
+`TECHLINK_TIMEOUT_MS`, `QUEUED_ALERT_MINUTES`, `BULK_AUTO_CONFIRM` (see `.env.example`).
+
+### Verification
+All 90 `.js` files re-parsed (0 syntax errors), all relative imports and named exports re-resolved (0 problems), every `process.env.*` reference checked against `.env.example` (0 drift). The fulfillment path was exercised with a mocked store and Techlink (single ok / network drop / 400 rejection / bulk empty / bulk confirmed / bulk partial failure / MTN Master bulk, with and without `BULK_AUTO_CONFIRM`), and the alert paths with mocked Resend/Brevo (unconfigured / one channel down / both down). Not exercised against a live Supabase or live Techlink — do one end-to-end test with a `tlg_test_` key before relying on it.

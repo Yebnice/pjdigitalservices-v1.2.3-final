@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, isLikelyAirtelTigoNumber, NetworkBadge, OrderReceipt } from "./ui";
 import { payAndFulfil } from "../lib/payment";
+import { withPaystackFee } from "../lib/pricing";
 import { TIERS, NETWORK_PAGES } from "../lib/agentProducts";
 
 /* ---------- shared helpers ---------- */
@@ -205,8 +206,13 @@ function EvdSingleForm({ networkId, email, setEmail, loading, setLoading, onDone
       </Field>
       <EmailField email={email} setEmail={setEmail} />
       <NoRefundNotice />
+      {Number(amount) > 0 && (
+        <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
+          Includes a GHS {(withPaystackFee(Number(amount)) - Number(amount)).toFixed(2)} Paystack processing fee.
+        </p>
+      )}
       <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
-        Pay GHS {amount || "0.00"} with Paystack
+        Pay GHS {(amount ? withPaystackFee(Number(amount)) : 0).toFixed(2)} with Paystack
       </PrimaryButton>
     </div>
   );
@@ -257,7 +263,7 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
         />
       </Field>
       <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
-        {rows.length} valid line{rows.length === 1 ? "" : "s"} detected. Estimated total: GHS {total.toFixed(2)} — confirmed exactly at payment.
+        {rows.length} valid line{rows.length === 1 ? "" : "s"} detected. Estimated total: GHS {withPaystackFee(total).toFixed(2)} (includes the Paystack processing fee) — confirmed exactly at payment.
       </p>
       <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>
       <NoRefundNotice>Double-check every number on the list — wrong numbers in a bulk order aren't refunded either.</NoRefundNotice>
@@ -332,7 +338,7 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
         <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
           {parsing
             ? "Reading file..."
-            : `${fileName}: ${rows.length} valid line${rows.length === 1 ? "" : "s"} detected. Estimated total: GHS ${total.toFixed(2)}.`}
+            : `${fileName}: ${rows.length} valid line${rows.length === 1 ? "" : "s"} detected. Estimated total: GHS ${withPaystackFee(total).toFixed(2)} (includes the Paystack processing fee).`}
         </p>
       )}
       <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>

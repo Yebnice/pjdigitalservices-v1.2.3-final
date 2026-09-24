@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, OrderReceipt } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
+import { withPaystackFee } from "../lib/pricing";
 
 const REGIONS = [
   "Greater Accra", "Ashanti", "Western", "Western North", "Central", "Eastern",
@@ -67,7 +68,7 @@ export default function AfaPage() {
         <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>AFA registration</h1>
         <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 4 }}>
           Register a farmer under the AFA programme.{" "}
-          {fee != null ? `Registration fee: GHS ${fee.toFixed(2)}.` : "Fee is confirmed at checkout."}
+          {fee != null ? `Registration fee: GHS ${withPaystackFee(fee).toFixed(2)} (includes payment processing fee).` : "Fee is confirmed at checkout."}
         </p>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -101,7 +102,7 @@ export default function AfaPage() {
         </Field>
         <EmailField email={email} setEmail={setEmail} />
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
-          {fee != null ? `Pay GHS ${fee.toFixed(2)} & submit registration` : "Submit registration"}
+          {fee != null ? `Pay GHS ${withPaystackFee(fee).toFixed(2)} & submit registration` : "Submit registration"}
         </PrimaryButton>
       </div>
       <Toast toast={toast} />

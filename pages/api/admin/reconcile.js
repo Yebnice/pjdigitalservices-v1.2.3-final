@@ -46,7 +46,7 @@ function parseAmount(raw) {
 async function summarizeWithGemini(summary) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
-  const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const prompt = `You are helping a small Ghana-based digital-services business reconcile their Paystack payments against their own order records. You are given ALREADY-COMPUTED, exact results — never recompute, re-check, or dispute the numbers, only explain them plainly. Write a short (4-8 sentence) plain-English summary for a non-technical business owner, in plain text with no markdown. Be direct about anything that needs their attention, and reassuring if everything matches. Here is the computed reconciliation result as JSON:\n${JSON.stringify(summary)}`;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   try {
@@ -107,7 +107,13 @@ export default async function handler(req, res) {
         paystackOnly.push(p);
         continue;
       }
-      const amountOk = p.amount == null || Math.abs(p.amount - Number(order.amount)) < 0.01;
+      // Compare against checkoutAmount (what Paystack actually charged,
+      // product price + fee markup), not the bare product `amount` — the
+      // Paystack export's "Amount" column is always the amount charged to
+      // the card/wallet. Fall back to `amount` for orders that predate the
+      // checkoutAmount field.
+      const expectedAmount = Number(order.checkoutAmount ?? order.amount);
+      const amountOk = p.amount == null || Math.abs(p.amount - expectedAmount) < 0.01;
       const statusOk = !p.status || p.status === "reversed"
         ? order.status !== "success"
         : (p.status === "success") === (order.status === "success");
@@ -117,7 +123,7 @@ export default async function handler(req, res) {
         mismatched.push({
           reference: p.reference,
           paystackAmount: p.amount,
-          appAmount: Number(order.amount),
+          appAmount: expectedAmount,
           paystackStatus: p.status,
           appStatus: order.status,
         });
@@ -129,7 +135,7 @@ export default async function handler(req, res) {
     // for the period, which is noted in the response for the admin to see.
     const appOnly = orders
       .filter((o) => o.status === "success" && !paystackRefs.has(o.reference))
-      .map((o) => ({ reference: o.reference, amount: Number(o.amount), orderType: o.orderType }));
+      .map((o) => ({ reference: o.reference, amount: Number(o.checkoutAmount ?? o.amount), orderType: o.orderType }));
 
     const result = {
       counts: {

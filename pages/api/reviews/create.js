@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     // Only a real purchaser, matched by their own order reference AND the
     // email they checked out with, can leave a review — this is what
     // keeps reviews trustworthy instead of open to anyone typing anything.
-    const order = await findCustomerOrder(String(orderReference).trim(), String(email).trim());
+    const order = await findCustomerOrder(String(orderReference).trim(), String(email).trim().toLowerCase());
     if (!order) return res.status(404).json({ error: "We couldn't find an order with that reference and email" });
     if (order.status !== "success") return res.status(400).json({ error: "Only completed orders can be reviewed" });
     if (await hasReviewForOrder(order.reference)) return res.status(400).json({ error: "This order has already been reviewed" });

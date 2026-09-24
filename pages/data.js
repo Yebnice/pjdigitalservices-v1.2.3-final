@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NETWORKS, NoRefundNotice, OrderReceipt, isLikelyAirtelTigoNumber } from "../components/ui";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NETWORKS, BeforeYouBuyNotice, OrderReceipt, isLikelyAirtelTigoNumber } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
+import { withPaystackFee } from "../lib/pricing";
 
 // Techlink's bundle catalogue is live and network/phone-specific (see
 // lib/techlink.js listDataBundles) — there is deliberately no hardcoded
@@ -113,7 +114,7 @@ export default function DataPage() {
             That doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053) — AirtelTigo bundles can only be delivered to AirtelTigo lines, and wrong numbers aren't refunded.
           </p>
         )}
-        <NoRefundNotice />
+        <BeforeYouBuyNotice />
 
         {loadError && (
           <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>
@@ -156,7 +157,7 @@ export default function DataPage() {
         <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>
         <div style={{ maxWidth: 300 }}>
           <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
-            {selected ? `Pay GHS ${Number(selected.price ?? selected.amount).toFixed(2)} with Paystack` : "Select a bundle"}
+            {selected ? `Pay GHS ${withPaystackFee(Number(selected.price ?? selected.amount)).toFixed(2)} with Paystack` : "Select a bundle"}
           </PrimaryButton>
         </div>
       </div>

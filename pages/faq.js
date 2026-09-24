@@ -18,12 +18,19 @@ const FAQS = [
   {
     category: "Data bundles",
     items: [
-      { q: "How do I buy a data bundle?", a: "Choose your network, pick a bundle, enter the recipient's number, and pay. Delivery starts as soon as payment is confirmed." },
+      { q: "How do I buy a data bundle?", a: "For Quick Data Top-up, choose your network, select the bundle, enter the recipient's number, review the details, and pay. Quick Data Top-up is instant after payment confirmation." },
       { q: "Can I buy data for someone else's number?", a: "Yes — any valid Ghana number on the network you're buying for." },
-      { q: "How quickly is data delivered?", a: "Bundles from the standard live catalogue (the \"Quick data top-up\" page) are usually delivered in 10–30 seconds, up to 2 minutes at busy times. If nothing arrives after 5 minutes, check your dashboard." },
+      { q: "How quickly is Quick Data Top-up delivered?", a: "Quick Data Top-up is an instant service. After Paystack confirms your payment, the selected bundle is sent automatically. If it does not arrive, check My Orders and contact support before placing another order." },
       { q: "Why does MTN Master take so long?", a: "MTN Master is the cheapest MTN data tier, but it is genuinely not instant — typically 30 minutes to a few hours, and it can run longer when the queue is busy. MTN Express costs more but is usually delivered much sooner. Both options are shown clearly on the MTN Data page so you can choose." },
       { q: "What happens if a data purchase fails?", a: "If a delivery fails, the order is investigated. Where it is safe to retry, an authorised retry may be performed. If the provider outcome is uncertain, the order is placed under manual review to help prevent duplicate delivery. Contact us through the Feedback page with your order reference if you need assistance." },
       { q: "Is there a minimum or maximum bundle size?", a: "Sizes are set by the networks — whatever's listed on the relevant page is what's available. There's no extra limit on our side." },
+    ],
+  },
+  {
+    category: "Airtime",
+    items: [
+      { q: "Is Airtime delivered instantly?", a: "Yes — MTN, Telecel and AirtelTigo airtime top-ups are instant after Paystack confirms payment. Enter the recipient number and amount, review carefully, then pay. If an instant top-up does not arrive, check My Orders and contact support before placing another order." },
+      { q: "How do I buy Airtime?", a: "Open Buy Airtime, select the network, enter the recipient number and amount, review the details, and complete payment through Paystack." },
     ],
   },
   {
@@ -42,6 +49,7 @@ const FAQS = [
       { q: "What payment methods can I use?", a: "Card, mobile money, or bank transfer — all through Paystack's secure checkout." },
       { q: "Can I get a refund for a wrong number?", a: "No — please double-check the number before paying. Wrong numbers, duplicate orders, and lines with an outstanding balance can't be refunded, in line with the networks' own rules." },
       { q: "How do I check my order status?", a: "Use the My Orders or Track Order page with the order reference and the checkout email — no account is required." },
+      { q: "What should I check before buying data or airtime?", a: "Make sure you don't owe any amount on the line you're topping up — an outstanding balance means the bundle won't be delivered, and the order isn't refunded. Turbonet and Broadband SIMs aren't eligible for data bundles. Don't place duplicate orders — duplicates aren't refunded. And double-check the phone number before paying — a wrong number can't be refunded either." },
       { q: "Something went wrong with my order — what do I do?", a: "Go to the Feedback page and include your order reference. We'll look into it." },
       { q: "Someone contacted me asking for my password or a code — is that really you?", a: "No. We will never call, text, email, or WhatsApp you asking for your password, PIN, mobile money PIN, or a one-time code. If anyone claiming to be PjDigitalServices asks for these, it's a scam — don't share anything, and report it through the Feedback page." },
     ],

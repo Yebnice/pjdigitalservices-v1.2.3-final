@@ -1,4 +1,4 @@
-import { constantTimePasswordMatch, createAdminSession } from "../../../lib/adminAuth";
+import { authenticateAdmin, createAdminSession } from "../../../lib/adminAuth";
 import { recordAuditEvent } from "../../../lib/auditLog";
 
 const attempts = new Map();
@@ -19,10 +19,11 @@ export default async function handler(req, res) {
   const state = attempts.get(key);
   if (state.count >= MAX_ATTEMPTS) return res.status(429).json({ error: "Too many login attempts. Try again later." });
   state.count += 1;
-  if (!constantTimePasswordMatch(req.body?.password)) return res.status(401).json({ error: "Wrong password." });
+  const identity = authenticateAdmin(req.body?.username, req.body?.password);
+  if (!identity) return res.status(401).json({ error: "Invalid admin credentials." });
   attempts.delete(key);
   try {
-    createAdminSession(res);
+    createAdminSession(res, identity);
   } catch (err) {
     // Fails closed by design when ADMIN_SESSION_SECRET is missing/too short —
     // but report it as a clean JSON error instead of crashing the request,
@@ -31,6 +32,6 @@ export default async function handler(req, res) {
     console.error("Admin login: could not create session —", err.message);
     return res.status(500).json({ error: "Server misconfigured: ADMIN_SESSION_SECRET is missing or invalid. Set a random string of 32+ characters in your environment variables and redeploy." });
   }
-  await recordAuditEvent({ action: "admin_login", note: `Signed in from IP ${key}` });
+  await recordAuditEvent({ action: "admin_login", note: `Admin ${identity.username} signed in from IP ${key}` });
   return res.status(200).json({ ok: true });
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Check, X, Bolt, Droplet, GraduationCap } from "lucide-react";
+import { Loader2, Check, X, Bolt, Droplet, GraduationCap, Clock } from "lucide-react";
 
 export const NETWORKS = {
   mtn: { label: "MTN", color: "var(--gold)", initial: "M", logo: "/icons/networks/mtn.png" },
@@ -137,6 +137,25 @@ export function NoRefundNotice({ children }) {
   );
 }
 
+// The full set of purchase rules — previously only shown on the MTN
+// Master/Express/AT/Telecel tier pages (via their "Delivery & selling
+// rules" popover); the plain Airtime and Quick Data Top-up pages only ever
+// showed the wrong-number line above, missing the outstanding-balance,
+// Turbonet/Broadband, and duplicate-order rules entirely.
+export function BeforeYouBuyNotice() {
+  return (
+    <div className="card" style={{ padding: 14, background: "var(--surface-raised)" }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Before you buy</div>
+      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "var(--muted-dim)", lineHeight: 1.6 }}>
+        <li>Ensure you do not owe any amount on your line before purchasing.</li>
+        <li>Turbonet and Broadband SIMs are not eligible.</li>
+        <li>Please do not place duplicate orders. Duplicate purchases are non-refundable.</li>
+        <li>Double-check the phone number before confirming your purchase. Orders sent to the wrong number are non-refundable.</li>
+      </ul>
+    </div>
+  );
+}
+
 export function Field({ label, children }) {
   return (
     <div className="field">
@@ -249,20 +268,53 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
   if (!order) return null;
   const label = ORDER_TYPE_LABELS[order.orderType] || "Order";
   const when = order.createdAt ? new Date(order.createdAt) : new Date();
-  const displayAmount = Number(order.amount ?? amount ?? 0);
+  // BUG FIX: this screen used to show the same "Thank you! Your order has
+  // been processed." green-checkmark state for EVERY successful checkout,
+  // including a queued, non-instant order (e.g. MTN Master — see
+  // TIERS.mtnMaster.instant in lib/agentProducts.js), the exact same false
+  // "delivered" impression that lib/orderProcessing.js was fixed to stop
+  // emailing/texting about. This screen wasn't covered by that fix, even
+  // though it's the very first thing the customer sees. OrderList below
+  // already branches on fulfillmentStatus for the order-history view —
+  // this brings the same honesty to the post-checkout receipt.
+  const isQueued = order.fulfillmentStatus === "queued_with_provider";
+  // Everything that isn't a confirmed delivery and isn't the known-delayed
+  // "queued_with_provider" tier — "processing", "failed", "manual_review",
+  // "ready" — now also reaches this screen after the lib/payment.js fix
+  // above (payment succeeded, fulfillment is still being retried/reviewed
+  // in the background). Bucket all of those as "pending" with an honest,
+  // generic message: NEVER claim delivery, and never guess at a specific
+  // ETA the way the queued-tier copy does, since these states cover
+  // everything from "will auto-retry in a minute" to "needs an admin to
+  // top up the Techlink wallet first."
+  const isFulfilled = order.fulfillmentStatus === "fulfilled";
+  // What the customer actually paid is checkoutAmount (product price + the
+  // Paystack processing fee) — prefer that over the bare product `amount`,
+  // falling back to the `amount` prop (from the checkout call) for orders
+  // that predate the checkoutAmount field.
+  const totalPaid = Number(order.checkoutAmount ?? amount ?? order.amount ?? 0);
+  const productPrice = Number(order.amount ?? 0);
+  const feePaid = order.paystackFeeAmount != null ? Number(order.paystackFeeAmount) : (order.checkoutAmount != null ? Math.round((totalPaid - productPrice) * 100) / 100 : null);
+  const showFeeBreakdown = feePaid != null && feePaid > 0;
   const showRecipient = order.phone && order.phone !== "—" && !String(order.phone).includes("recipient");
   return (
     <div className="card" style={{ padding: "32px 28px", textAlign: "center", maxWidth: 420, margin: "0 auto" }}>
       <div
         style={{
-          width: 56, height: 56, borderRadius: "50%", background: "var(--green)",
+          width: 56, height: 56, borderRadius: "50%", background: isFulfilled ? "var(--green)" : "var(--gold)",
           display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
         }}
       >
-        <Check size={30} color="#fff" />
+        {isFulfilled ? <Check size={30} color="#fff" /> : <Clock size={28} color="#fff" />}
       </div>
-      <h1 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 4px" }}>Thank you!</h1>
-      <p style={{ color: "var(--muted)", fontSize: 14, margin: "0 0 24px" }}>Your order has been processed.</p>
+      <h1 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 4px" }}>{isFulfilled ? "Thank you!" : "Order received — being processed"}</h1>
+      <p style={{ color: "var(--muted)", fontSize: 14, margin: "0 0 24px" }}>
+        {isFulfilled
+          ? "Your order has been processed."
+          : isQueued
+            ? "Your payment was successful. This option isn't instant — typically 30 minutes to a few hours (sometimes longer if the queue is busy). This is normal, not an error."
+            : "Your payment was successful and your order is being processed now — this can take a few minutes. You do not need to pay again."}
+      </p>
       <div
         style={{
           textAlign: "left", display: "flex", flexDirection: "column", gap: 10,
@@ -273,11 +325,23 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
         <ReceiptRow label="Order number" value={order.reference} />
         <ReceiptRow label="Product" value={label} />
         {showRecipient && <ReceiptRow label="Recipient" value={order.phone} />}
-        <ReceiptRow label="Amount" value={`GHS ${displayAmount.toFixed(2)}`} />
+        {showFeeBreakdown ? (
+          <>
+            <ReceiptRow label="Product price" value={`GHS ${productPrice.toFixed(2)}`} />
+            <ReceiptRow label="Payment processing fee" value={`GHS ${feePaid.toFixed(2)}`} />
+            <ReceiptRow label="Total paid" value={`GHS ${totalPaid.toFixed(2)}`} />
+          </>
+        ) : (
+          <ReceiptRow label="Amount" value={`GHS ${totalPaid.toFixed(2)}`} />
+        )}
         <ReceiptRow label="Date & time" value={when.toLocaleString()} />
       </div>
       <p style={{ fontSize: 12, color: "var(--muted-dim)", marginBottom: 20 }}>
-        A confirmation has been emailed to you. Keep the order number above for reference.
+        {isFulfilled
+          ? "A confirmation has been emailed to you. Keep the order number above for reference."
+          : isQueued
+            ? "A confirmation email is on its way — we'll email you again once it's actually delivered. Keep the order number above for reference."
+            : "If it hasn't arrived within a couple of hours, contact us via the Feedback page with the order number above — no need to pay again."}
       </p>
       <PrimaryButton onClick={onNewOrder}>Make another purchase</PrimaryButton>
     </div>
@@ -307,17 +371,20 @@ export function OrderList({ items }) {
               </div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>GHS {Number(o.amount).toFixed(2)}</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>GHS {Number(o.checkoutAmount ?? o.amount).toFixed(2)}</div>
               <div
                 style={{
                   fontSize: 12,
-                  color: o.status === "success" ? "var(--green)" : o.status === "failed" ? "var(--red)" : "var(--muted)",
+                  color: o.status === "success" ? "var(--green)" : o.status === "failed" ? "var(--red)" : o.fulfillmentStatus === "queued_with_provider" ? "var(--gold)" : "var(--muted)",
                 }}
               >
-                {o.status === "success" ? "Delivered" : o.status === "failed" ? "Failed" : "Pending"}
+                {o.status === "success" ? "Delivered" : o.status === "failed" ? "Failed" : o.fulfillmentStatus === "queued_with_provider" ? "Queued for delivery" : "Pending"}
               </div>
             </div>
           </div>
+          {o.fulfillmentStatus === "queued_with_provider" && (
+            <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>Typically 30 minutes to a few hours for this option — not an error.</div>
+          )}
           {o.status === "failed" && o.failReason && (
             <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>Reason: {FAIL_REASON_LABELS[o.failReason] || o.failReason}</div>
           )}

@@ -21,16 +21,20 @@ where the order matters.
   (server-side only) can read or write.
 
 **1.2 Run the schema**
-- SQL Editor → paste the full contents of `supabase/schema.sql` → Run.
+- SQL Editor → paste the full contents of `supabase/schema.sql` → Run. **This one file is all you need, for a fresh project or an upgrade** — it is idempotent (only adds what's missing, never touches data). Upgrading from v1.3.0 and want the minimum? Run `supabase/migration_v1_3_1.sql` instead.
   This version has been corrected to include all columns the app code
   actually uses (the previous package was missing four manual-review
   columns that would have caused runtime errors — now fixed).
 - If you're upgrading an **existing** database that already ran an older
   schema, you don't need the migration files anymore for a fresh
   install — but if you're patching an existing production DB, run
-  `supabase/migration_v1_2.sql` and `supabase/migration_v1_2_2.sql` too;
-  both use `add column if not exists`, so they're safe to run even if
-  some columns already exist.
+  `supabase/migration_v1_2.sql`, `supabase/migration_v1_2_2.sql`, and
+  `supabase/migration_v1_3_0.sql` too; all use `add column if not exists`
+  / `create table if not exists`, so they're safe to run even if some
+  columns/tables already exist. (Simplest option: just re-run the full,
+  current `supabase/schema.sql` — everything in it is idempotent, so it
+  picks up anything new, like v1.3.0's `app_settings` table, without
+  touching your existing data.)
 
 **1.3 Sanity-check**
 - Table Editor → confirm `orders`, `customers`, and `feedback` exist and
@@ -63,7 +67,7 @@ Preview if you want staging to work too):
 | `CRON_SECRET` | Yes | Random string — protects `/api/jobs/fulfill` |
 | `NEXT_PUBLIC_SITE_URL` | Yes | Your production URL, e.g. `https://pjdigitalservices.com` |
 | `GEMINI_API_KEY` | Optional | Enables the live AI agent in chat; omit and the chatbot still works in FAQ-only mode |
-| `GEMINI_MODEL` | Optional | Defaults to `gemini-flash-latest` if unset |
+| `GEMINI_MODEL` | Optional | Defaults to `gemini-2.5-flash` if unset |
 | `RESEND_API_KEY`, `NOTIFICATION_FROM_EMAIL`, `ADMIN_ALERT_EMAIL` | Optional | Stale-order email alerts |
 | `BREVO_API_KEY`, `BREVO_SMS_SENDER` | Optional | SMS escalation leg — see section 3 |
 | `MAX_FULFILLMENT_ATTEMPTS`, `FULFILLMENT_STALE_MINUTES`, `URGENT_REVIEW_MINUTES`, `FULFILLMENT_BATCH_SIZE` | Optional | Tuning knobs, sensible defaults exist in code |
@@ -219,3 +223,13 @@ so a failure on one never blocks the other.
    you've confirmed with Techlink that resubmitting a transaction
    reference is safe/idempotent — this is flagged as an open question in
    the project's own changelog, not something I've verified.
+
+
+## v1.2.6 required deployment settings
+
+Set `CRON_SECRET` to a random 32+ character secret so the fulfillment cron can authenticate. Configure `PAYSTACK_FEE_RATE` to the merchant rate actually applicable to your Paystack account; do not assume a hard-coded fee is current without checking your merchant pricing. The default PjDigitalServices business margin is 1%. Keep `DEFAULT_BUSINESS_MARGIN_PERCENT=1` unless you intentionally want a different global margin, or use `SERVICE_MARKUP_RULES_JSON` for service/network-specific overrides. The Vercel cron is defined in `vercel.json`; no Cloudflare configuration is required.
+
+
+### Admin hardening
+
+The rebuilt package supports optional named admin accounts through `ADMIN_USERS_JSON`; legacy `ADMIN_PASSWORD` remains supported when that variable is left empty. Use unique named accounts when staff access is introduced. Two-factor authentication is still a separate deployment hardening item and is not claimed as implemented in this release.

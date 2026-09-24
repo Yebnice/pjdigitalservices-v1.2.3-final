@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Field, EmailField, PrimaryButton, Toast, BILL_PROVIDERS, NoRefundNotice, NetworkBadge, OrderReceipt } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
+import { withPaystackFee } from "../lib/pricing";
 
 export default function BillsPage() {
   const [provider, setProvider] = useState("ecg");
@@ -141,7 +142,7 @@ export default function BillsPage() {
             </Field>
             <EmailField email={email} setEmail={setEmail} />
             <PrimaryButton disabled={!ecgValid} loading={loading} onClick={submit}>
-              Pay GHS {amount || "0.00"} with Paystack
+              Pay GHS {(amount ? withPaystackFee(Number(amount)) : 0).toFixed(2)} with Paystack
             </PrimaryButton>
             <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
               Look up the meter first to confirm whose account you're topping up.
@@ -173,7 +174,7 @@ export default function BillsPage() {
             <EmailField email={email} setEmail={setEmail} />
             <PrimaryButton disabled={!waterValid} loading={loading} onClick={submit}>
               {waterBill && waterBill !== "error"
-                ? `Pay GHS ${Number(waterBill.balance ?? waterBill.amountDue ?? waterBill.amount).toFixed(2)} with Paystack`
+                ? `Pay GHS ${withPaystackFee(Number(waterBill.balance ?? waterBill.amountDue ?? waterBill.amount)).toFixed(2)} with Paystack`
                 : "Check your bill first"}
             </PrimaryButton>
             <NoRefundNotice />

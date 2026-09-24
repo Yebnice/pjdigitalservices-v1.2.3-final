@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NoRefundNotice, OrderReceipt, isLikelyAirtelTigoNumber } from "../components/ui";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, BeforeYouBuyNotice, OrderReceipt, isLikelyAirtelTigoNumber } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
+import { withPaystackFee } from "../lib/pricing";
 
 export default function AirtimePage() {
   const [network, setNetwork] = useState("mtn");
@@ -63,13 +64,13 @@ export default function AirtimePage() {
             That doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053) — wrong numbers aren't refunded.
           </p>
         )}
-        <NoRefundNotice />
+        <BeforeYouBuyNotice />
         <Field label="Amount (GHS)">
           <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10.00" type="number" />
         </Field>
         <EmailField email={email} setEmail={setEmail} />
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
-          Pay GHS {amount || "0.00"} with Paystack
+          Pay GHS {(amount ? withPaystackFee(Number(amount)) : 0).toFixed(2)} with Paystack
         </PrimaryButton>
       </div>
       <Toast toast={toast} />

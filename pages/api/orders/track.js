@@ -1,5 +1,6 @@
 import { rateLimit } from "../../../lib/rateLimit";
 import { findCustomerOrder, toPublicOrder } from "../../../lib/store";
+import { checkQueuedOrder } from "../../../lib/orderProcessing";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -13,8 +14,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const order = await findCustomerOrder(reference, email);
+    let order = await findCustomerOrder(reference, email);
     if (!order) return res.status(404).json({ error: "No matching order found. Check the reference and email and try again." });
+    // This project has no cron job, so a "queued with provider" order is
+    // only ever re-checked when someone actually looks at it — here, by
+    // the customer tracking their own order.
+    if (order.fulfillmentStatus === "queued_with_provider") {
+      order = await checkQueuedOrder(reference);
+    }
     return res.status(200).json({ orders: [toPublicOrder(order)] });
   } catch (err) {
     console.error("Order tracking error", err);
