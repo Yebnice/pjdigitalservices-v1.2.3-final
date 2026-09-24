@@ -1,6 +1,7 @@
 import { listProducts } from "../../../lib/techlink";
 import { TIERS } from "../../../lib/agentProducts";
 import { rateLimit } from "../../../lib/rateLimit";
+import { getOrderPricing } from "../../../lib/pricing";
 
 // Lets the bundle picker check, before the customer ever taps a tile,
 // which sizes Techlink's live catalogue actually has right now — so a
@@ -23,8 +24,34 @@ export default async function handler(req, res) {
     // both shapes defensively in case that ever changes.
     const products = Array.isArray(catalogue) ? catalogue : (catalogue.products || catalogue.data || []);
     const sizes = products
-      .map((p) => ({ size: Number(p.size), price: Number(p.price ?? p.amount) }))
-      .filter((p) => p.size > 0);
+      .map((p) => {
+        const providerPrice = Number(p.price ?? p.amount);
+        if (!Number.isFinite(providerPrice) || providerPrice <= 0 || !Number.isFinite(Number(p.size)) || Number(p.size) <= 0) {
+          return null;
+        }
+        const single = getOrderPricing({
+          providerCost: providerPrice,
+          customerBaseAmount: providerPrice,
+          orderType: "tierData",
+          network: tier.network,
+        });
+        const bulk = getOrderPricing({
+          providerCost: providerPrice,
+          customerBaseAmount: providerPrice,
+          orderType: "tierBulkData",
+          network: tier.network,
+        });
+        return {
+          size: Number(p.size),
+          // Public catalogue values are customer-facing only. Never expose
+          // Techlink provider cost or PjDigitalServices margin fields here.
+          price: single.customerProductAmount,
+          checkoutPrice: single.checkoutAmount,
+          bulkPrice: bulk.customerProductAmount,
+          bulkCheckoutPrice: bulk.checkoutAmount,
+        };
+      })
+      .filter(Boolean);
     return res.status(200).json({ sizes });
   } catch (err) {
     // If Techlink is briefly unreachable, don't break the picker for the
