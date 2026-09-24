@@ -365,7 +365,7 @@ export default function TierShop({ networkKey }) {
   const [liveSizes, setLiveSizes] = useState(null);
 
   useEffect(() => {
-    setEmail(window.localStorage.getItem("pj_email") || "");
+    setEmail(window.sessionStorage.getItem("pj_email") || "");
   }, []);
 
   useEffect(() => {
@@ -393,7 +393,7 @@ export default function TierShop({ networkKey }) {
 
   function finish(order, paidAmount) {
     setLoading(false);
-    if (email) window.localStorage.setItem("pj_email", email);
+    if (email) window.sessionStorage.setItem("pj_email", email);
     setReceipt({ order, amount: paidAmount });
   }
   function fail(msg) {
