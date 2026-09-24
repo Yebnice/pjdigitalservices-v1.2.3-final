@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, OrderReceipt, isLikelyAirtelTigoNumber } from "../components/ui";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
 import { withPaystackFee } from "../lib/pricing";
 
@@ -11,13 +11,16 @@ export default function AirtimePage() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [receipt, setReceipt] = useState(null);
+  const [networkConfirmed, setNetworkConfirmed] = useState(false);
 
   useEffect(() => {
     setEmail(window.sessionStorage.getItem("pj_email") || "");
     setPhone(window.sessionStorage.getItem("pj_phone") || "");
   }, []);
 
-  const valid = phone.length >= 10 && Number(amount) > 0 && email.includes("@");
+  const likelyNetwork = getLikelyNetwork(phone);
+  const networkMismatch = Boolean(likelyNetwork && likelyNetwork !== network);
+  const valid = phone.length >= 10 && Number(amount) > 0 && email.includes("@") && (!networkMismatch || networkConfirmed);
 
   function submit() {
     setLoading(true);
@@ -55,15 +58,11 @@ export default function AirtimePage() {
         <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 4 }}>Pay by card, mobile money or bank — instant delivery, all networks.</p>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        <Field label="Network"><NetworkPicker value={network} onChange={setNetwork} /></Field>
+        <Field label="Network"><NetworkPicker value={network} onChange={(value) => { setNetwork(value); setNetworkConfirmed(false); }} /></Field>
         <Field label="Recipient phone number">
-          <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" />
+          <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder="024 000 0000" />
         </Field>
-        {network === "airteltigo" && phone.length >= 3 && !isLikelyAirtelTigoNumber(phone) && (
-          <p style={{ fontSize: 12, color: "var(--red)", margin: 0 }}>
-            That doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053) — wrong numbers aren't refunded.
-          </p>
-        )}
+        <NetworkMismatchNotice network={network} phone={phone} acknowledged={networkConfirmed} onAcknowledge={setNetworkConfirmed} />
         <Field label="Amount (GHS)">
           <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10.00" type="number" />
         </Field>
