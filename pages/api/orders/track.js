@@ -16,9 +16,8 @@ export default async function handler(req, res) {
   try {
     let order = await findCustomerOrder(reference, email);
     if (!order) return res.status(404).json({ error: "No matching order found. Check the reference and email and try again." });
-    // This project has no cron job, so a "queued with provider" order is
-    // only ever re-checked when someone actually looks at it — here, by
-    // the customer tracking their own order.
+    // The scheduled background worker re-checks queued provider orders, and
+    // this customer lookup is a safe lazy backstop when someone opens it.
     if (order.fulfillmentStatus === "queued_with_provider") {
       order = await checkQueuedOrder(reference);
     }
