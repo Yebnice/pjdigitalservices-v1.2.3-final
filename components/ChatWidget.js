@@ -166,8 +166,8 @@ export default function ChatWidget() {
                 {m.role === "assistant" && <div className="chat-mini-avatar" aria-hidden="true">👩🏾‍💼</div>}
                 <div className={`chat-msg ${m.role === "assistant" ? "bot" : "user"}`}>
                   {m.role === "assistant"
-                    ? String(m.content || "").split(/(https?:\\/\\/\\S+)/g).map((part, j) =>
-                        /^https?:\\/\\/\\S+$/.test(part)
+                    ? String(m.content || "").split(/(https?:\/\/\S+)/g).map((part, j) =>
+                        /^https?:\/\/\S+$/.test(part)
                           ? <a key={j} href={part} target="_blank" rel="noreferrer" style={{ textDecoration: "underline" }}>Open WhatsApp</a>
                           : <span key={j}>{part}</span>
                       )
