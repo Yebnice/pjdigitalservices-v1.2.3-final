@@ -35,7 +35,7 @@ export default function DashboardPage() {
     if (customer === null) {
       try {
         setReference(window.localStorage.getItem("pj_last_reference") || "");
-        setEmail(window.localStorage.getItem("pj_email") || "");
+        setEmail(window.sessionStorage.getItem("pj_email") || "");
       } catch {}
     }
   }, [customer]);
@@ -56,7 +56,11 @@ export default function DashboardPage() {
   async function loadOne() {
     setLoading(true); setError("");
     try {
-      const r = await fetch(`/api/orders/track?reference=${encodeURIComponent(reference)}&email=${encodeURIComponent(email)}`);
+      const r = await fetch("/api/orders/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reference, email }),
+      });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Could not load your order");
       const visible = customerVisibleOrders(d.orders);
