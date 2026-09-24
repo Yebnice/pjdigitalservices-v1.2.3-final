@@ -3,7 +3,7 @@ import { findCustomerCase } from "../../../lib/feedback";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
-  const rl = rateLimit(req, { limit: 10, windowMs: 60_000, keySuffix: "feedback-track" });
+  const rl = await rateLimit(req, { limit: 10, windowMs: 60_000, keySuffix: "feedback-track" });
   if (!rl.allowed) return res.status(429).setHeader("Retry-After", rl.retryAfter).json({ error: "Too many requests. Please wait a moment." });
   try {
     const caseReference = String(req.query.caseReference || "").trim();
