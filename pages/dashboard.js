@@ -60,7 +60,7 @@ export default function DashboardPage() {
     finally { setLoading(false); }
   }
 
-  const processing = (orders || []).filter((o) => ["pending", "payment_verified"].includes(o.status) || ["ready", "processing", "manual_review"].includes(o.fulfillmentStatus));
+  const processing = (orders || []).filter((o) => ["payment_verified"].includes(o.status) || ["ready", "processing", "manual_review", "queued_with_provider"].includes(o.fulfillmentStatus));
 
   if (customer === undefined) return null;
 
@@ -73,7 +73,7 @@ export default function DashboardPage() {
         </div>
         {loading && <p style={{ color: "var(--muted)", fontSize: 14 }}>Loading…</p>}
         {error && <p style={{ color: "var(--red)", fontSize: 13 }}>{error}</p>}
-        {processing.length > 0 && <div className="card" style={{ padding: 12, marginBottom: 16, fontSize: 13, borderColor: "var(--gold)" }}>One or more orders are still processing. Refresh later to see the latest status.</div>}
+        {processing.length > 0 && <div className="card" style={{ padding: 12, marginBottom: 16, fontSize: 13, borderColor: "var(--gold)" }}>One or more paid orders are still being processed. Refresh later to see the latest status.</div>}
         {orders && <OrderList items={orders} />}
       </div>
     );
@@ -92,7 +92,7 @@ export default function DashboardPage() {
       <button className="primary-btn" onClick={loadOne} disabled={!reference || !email.includes("@") || loading}>{loading ? "Checking…" : "Check order"}</button>
       {error && <p style={{ color: "var(--red)", fontSize: 13 }}>{error}</p>}
       {orders && <>
-        {processing.length > 0 && <div className="card" style={{ padding: 12, margin: "16px 0", fontSize: 13, borderColor: "var(--gold)" }}>Your order is still being processed. We are sorry for the delay. Please do not place a duplicate order; refresh this page later to see the latest status.</div>}
+        {processing.length > 0 && <div className="card" style={{ padding: 12, margin: "16px 0", fontSize: 13, borderColor: "var(--gold)" }}>Your paid order is still being processed. We are sorry for the delay. Please do not place a duplicate order; refresh this page later to see the latest status.</div>}
         <OrderList items={orders} />
       </>}
       {!reference && (
