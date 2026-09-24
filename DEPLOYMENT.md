@@ -242,7 +242,7 @@ Set `CRON_SECRET` to a random 32+ character secret so the fulfillment cron can a
 The rebuilt package supports optional named admin accounts through `ADMIN_USERS_JSON`; legacy `ADMIN_PASSWORD` remains supported when that variable is left empty. Use unique named accounts when staff access is introduced. Two-factor authentication is still a separate deployment hardening item and is not claimed as implemented in this release.
 
 
-## v1.3.5 security and deployment hardening
+## v1.3.6 security and deployment hardening
 
 Before deploying the hardened build:
 
