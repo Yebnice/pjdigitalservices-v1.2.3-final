@@ -11,10 +11,15 @@ function redactSensitiveText(text) {
 
 function sanitizeMessages(messages) {
   if (!Array.isArray(messages)) return [];
-  return messages.slice(-8).map((m) => ({
-    role: m?.role === "assistant" ? "assistant" : "user",
-    content: redactSensitiveText(m?.content),
-  })).filter((m) => m.content);
+  // Assistant turns come from the browser and therefore are untrusted.
+  // Do not feed client-injected "assistant" instructions back to Gemini.
+  return messages.slice(-8)
+    .filter((m) => m?.role !== "assistant")
+    .map((m) => ({
+      role: "user",
+      content: redactSensitiveText(m?.content),
+    }))
+    .filter((m) => m.content);
 }
 
 async function callGemini(model, messages, system) {
