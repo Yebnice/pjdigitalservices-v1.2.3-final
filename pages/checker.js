@@ -30,8 +30,8 @@ export default function CheckerPage() {
   const [prices, setPrices] = useState(null);
 
   useEffect(() => {
-    setEmail(window.localStorage.getItem("pj_email") || "");
-    setPhone(window.localStorage.getItem("pj_phone") || "");
+    setEmail(window.sessionStorage.getItem("pj_email") || "");
+    setPhone(window.sessionStorage.getItem("pj_phone") || "");
     fetch("/api/techlink/checker-prices")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => data && setPrices(data))
@@ -57,8 +57,8 @@ export default function CheckerPage() {
           : { mode: "lookup", type: type.toLowerCase(), indexNumber, examYear, candidateName },
       onDone: (order, paidAmount) => {
         setLoading(false);
-        window.localStorage.setItem("pj_email", email);
-        if (phone) window.localStorage.setItem("pj_phone", phone);
+        window.sessionStorage.setItem("pj_email", email);
+        if (phone) window.sessionStorage.setItem("pj_phone", phone);
         setReceipt({ order, amount: paidAmount });
       },
       onError: (msg) => {
