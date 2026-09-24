@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NETWORKS, BeforeYouBuyNotice, OrderReceipt, isLikelyAirtelTigoNumber } from "../components/ui";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NETWORKS, OrderReceipt, isLikelyAirtelTigoNumber } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
 import { withPaystackFee } from "../lib/pricing";
 
@@ -114,7 +114,6 @@ export default function DataPage() {
             That doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053) — AirtelTigo bundles can only be delivered to AirtelTigo lines, and wrong numbers aren't refunded.
           </p>
         )}
-        <BeforeYouBuyNotice />
 
         {loadError && (
           <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>
