@@ -350,7 +350,8 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
 }
 
 export function OrderList({ items }) {
-  if (!items || items.length === 0) {
+  const visibleItems = (items || []).filter((o) => o?.failReason !== "payment_abandoned");
+  if (visibleItems.length === 0) {
     return (
       <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
         No orders yet.
@@ -360,7 +361,7 @@ export function OrderList({ items }) {
   const labelFor = ORDER_TYPE_LABELS;
   return (
     <div className="card" style={{ overflow: "hidden" }}>
-      {items.map((o) => (
+      {visibleItems.map((o) => (
         <div className="tx-row" key={o.reference} style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
