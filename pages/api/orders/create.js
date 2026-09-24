@@ -34,8 +34,6 @@ export default async function handler(req, res) {
           reference: existing.reference,
           amount: existing.checkoutAmount,
           productAmount: existing.customerProductAmount ?? existing.amount,
-          providerCost: existing.amount,
-          markupAmount: existing.businessMarkupAmount ?? 0,
           feeAmount: existing.paystackFeeAmount ?? 0,
           reused: true,
         });
@@ -97,7 +95,7 @@ export default async function handler(req, res) {
     if (isBulk && Array.isArray(rows) && rows.length > MAX_BULK_ROWS) {
       return res.status(400).json({ error: `Bulk orders are limited to ${MAX_BULK_ROWS} lines per order` });
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) return res.status(400).json({ error: "Enter a valid email address" });
+    if (!/^\S+@\S+\.\S+$/.test(String(email))) return res.status(400).json({ error: "Enter a valid email address" });
     if (!isBulk && !phone) {
       return res.status(400).json({ error: "Phone number is required" });
     }
@@ -324,8 +322,6 @@ export default async function handler(req, res) {
       reference: order.reference,
       amount: order.checkoutAmount,
       productAmount: order.customerProductAmount ?? order.amount,
-      providerCost: order.providerCost,
-      markupAmount: order.businessMarkupAmount ?? 0,
       feeAmount: order.paystackFeeAmount,
       reused: false,
     });
