@@ -4,7 +4,7 @@ import { notifyAdminNewFeedback } from "../../../lib/notifications";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  const rl = rateLimit(req, { limit: 5, windowMs: 60_000, keySuffix: "feedback" });
+  const rl = await rateLimit(req, { limit: 5, windowMs: 60_000, keySuffix: "feedback" });
   if (!rl.allowed) return res.status(429).setHeader("Retry-After", rl.retryAfter).json({ error: "Too many requests. Please wait a moment and try again." });
   try {
     const {
