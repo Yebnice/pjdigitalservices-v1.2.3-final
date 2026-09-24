@@ -1,4 +1,4 @@
-import { resendCustomerVerification } from "../../../lib/customers";
+import { resendCustomerVerification, revokeCustomerVerificationToken } from "../../../lib/customers";
 import { notifyCustomerVerifyEmail } from "../../../lib/notifications";
 import { rateLimit } from "../../../lib/rateLimit";
 
@@ -30,9 +30,11 @@ export default async function handler(req, res) {
           token: result.verificationToken,
         });
       } catch (err) {
-        // The old token remains replaced by the new one only if the email
-        // provider accepts the request. On provider failure, remove the
-        // newly issued token so it cannot be used without a delivered email.
+        try {
+          await revokeCustomerVerificationToken(result.verificationToken);
+        } catch (revokeErr) {
+          console.error("Could not revoke failed verification token", revokeErr);
+        }
         console.error("Verification resend email failed", email, err);
       }
     }
