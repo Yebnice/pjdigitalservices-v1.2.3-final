@@ -90,57 +90,36 @@ bundles themselves on social media. Advertising your own storefront is a
 different thing and presumably fine — if you're unsure where that line is,
 worth confirming with Techlink directly.
 
-## On pricing — what's live vs what's fixed
+## On pricing — live provider data vs customer-facing pricing
 
-You shared real screenshots of the agent site, and they confirmed something
-important: **data bundle prices are not fixed** — MTN's own catalogue alone
-has ~30 different SKUs split across No Expiry / Hourly / Night / Daily /
-Weekly / Monthly, and AirtelTigo's is a completely different set (BigTime,
-Fuse Voice and Data, Sika Kokoo, XXL Family Pack). AT and Telecel each have
-their own separate pricing too, and the docs are explicit that this catalog
-comes from the provider live so "nothing drifts out of sync."
+The app uses Techlink's live catalogue for products whose availability or price
+changes at the provider. Plain Quick Data Top-up uses the live
+`GET /data/bundles` catalogue, while agent data products use
+`GET /products?category=...` at order time.
 
-Given that, I did **not** hardcode your screenshots into the app — copying
-today's prices into code would make them wrong the moment Techlink updates
-their catalogue. Instead, `/data` calls `GET /data/bundles` live, every
-time, through `pages/api/techlink/data-bundles.js`. Once your API key is
-set, whatever a customer sees is whatever Techlink is actually charging you
-right now — always correct, no maintenance.
+Customer-facing pricing is calculated on the server. Airtime, bulk Airtime,
+and Quick Data Top-up have **0% PjDigitalServices business margin**. Other
+services use the configured business margin policy (default 1%) unless an
+explicit service rule overrides it. The Paystack processing fee is added
+separately to the checkout total.
 
-The same live-lookup approach is used for:
-- **AFA fee** — pulled from `GET /products/afa-price` (your screenshot showed GHS 12.00 today; the app doesn't hardcode that number, it asks Techlink)
-- **Water bill amount** — resolved from `POST /korba/validate`, not typed by the customer
-- **TV subscription amount** — resolved from smartcard validation, not typed by the customer
-- **Result checker prices** — pulled from `GET /products/checker-prices` and `GET /result-check-service/prices`
+Techlink's Airtime wallet fee is an internal provider cost charged to the
+business wallet. The app may read it server-side for cost accounting, but it is
+not exposed through a public app endpoint and is not added as a customer-facing
+business margin.
 
-The only prices a customer types themselves are airtime top-up amount and
-ECG top-up amount, because those are genuinely open-ended (you decide how
-much airtime or electricity you want) — Techlink's docs confirm both are
-priced by amount, not by catalogue.
+For agent data products, the public live catalogue proxy now returns only
+customer-facing prices and checkout totals. It does not expose Techlink's
+provider cost or the app's internal markup.
 
-**Pricing policy — Airtime and Quick Data Top-up have no business margin.** The docs state the
-airtime service fee (currently 2%, live at `GET /products/airtime-fee`,
-proxied here at `/api/techlink/airtime-fee`) is charged to **your own**
-Techlink wallet, not the customer — "the wallet is debited with the total."
-Since your customer pays you exactly the face value they asked for via
-Paystack, and Techlink then takes face value **plus** 2% from your wallet,
-plain Airtime orders recover the configured Paystack fee without the 1% business margin; Quick Data Top-up follows the same no-margin policy
-into what you charge. Data bundles, water, TV and AFA don't have this
-issue — their prices already come straight from Techlink's own catalogue.
-Simplest fix if you want one: charge the customer face value × 1.02 (or
-round up) instead of the exact amount they typed — that's a one-line change
-in `pages/airtime.js` and `pages/api/orders/create.js` if you want it; I
-left it as pure pass-through for now rather than guessing your margin
-strategy for you.
+For water and TV, the app validates the account/smartcard with Techlink before
+resolving the amount used for checkout. ECG and Airtime remain amount-entry
+services because the customer chooses the top-up amount.
 
-**On water and TV validation** — I flagged this as ambiguous earlier, but a
-closer re-read of the docs resolved most of it: water bill validation is
-confirmed as `POST /korba/validate`, and TV smartcard validation is
-confirmed as `POST /provider/validate`. The one remaining thing worth a
-quick live test: that shared `/provider/validate` path takes a `"service"`
-field for GWCL water validation but a `"billType"` field for TV validation,
-per the docs' own examples — a small naming quirk on a shared endpoint,
-not real uncertainty about which endpoint to call.
+The Techlink AFA documentation contains two request examples with different
+field names. The app follows the formal request-body specification
+(`fullName`, `ghanaCard`, `dob`, etc.) rather than sending both shapes.
+A live Techlink test-mode request remains the final verification gate for AFA.
 
 ## Customer dashboard
 
