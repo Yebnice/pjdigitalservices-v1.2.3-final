@@ -164,7 +164,15 @@ export default function ChatWidget() {
             {messages.map((m, i) => (
               <div key={i} className={`chat-row ${m.role === "assistant" ? "bot-row" : "user-row"}`}>
                 {m.role === "assistant" && <div className="chat-mini-avatar" aria-hidden="true">👩🏾‍💼</div>}
-                <div className={`chat-msg ${m.role === "assistant" ? "bot" : "user"}`}>{m.content}</div>
+                <div className={`chat-msg ${m.role === "assistant" ? "bot" : "user"}`}>
+                  {m.role === "assistant"
+                    ? String(m.content || "").split(/(https?:\\/\\/\\S+)/g).map((part, j) =>
+                        /^https?:\\/\\/\\S+$/.test(part)
+                          ? <a key={j} href={part} target="_blank" rel="noreferrer" style={{ textDecoration: "underline" }}>Open WhatsApp</a>
+                          : <span key={j}>{part}</span>
+                      )
+                    : m.content}
+                </div>
                 {m.role === "user" && <div className="chat-mini-avatar user-avatar"><UserRound size={11} /></div>}
               </div>
             ))}
