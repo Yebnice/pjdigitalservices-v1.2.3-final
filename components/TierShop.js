@@ -49,9 +49,11 @@ function downloadSampleCsv(kind) {
   URL.revokeObjectURL(url);
 }
 
-function estimateBulkTotal(kind, rows, tier) {
+function estimateBulkTotal(kind, rows, tier, liveSizes) {
   if (kind === "airtime") return rows.reduce((s, r) => s + r.value, 0);
   return rows.reduce((s, r) => {
+    const live = Array.isArray(liveSizes) ? liveSizes.find((x) => x.size === r.value) : null;
+    if (live) return s + Number(live.bulkPrice ?? live.price ?? 0);
     const b = tier?.bundles.find((x) => x.size === r.value);
     return s + (b ? b.price : 0);
   }, 0);
@@ -59,9 +61,11 @@ function estimateBulkTotal(kind, rows, tier) {
 
 function mergeBundles(tier, liveSizes) {
   return tier.bundles.map((b) => {
-    if (!liveSizes) return { ...b, available: true };
+    if (!liveSizes) return { ...b, available: true, checkoutPrice: null };
     const live = liveSizes.find((s) => s.size === b.size);
-    return live ? { ...b, price: live.price, available: true } : { ...b, available: false };
+    return live
+      ? { ...b, price: live.price, checkoutPrice: live.checkoutPrice, available: true }
+      : { ...b, available: false };
   });
 }
 
@@ -86,7 +90,7 @@ function BundleGrid({ tier, sizeSelected, onSelect, liveSizes }) {
         >
           <span className="heading-font" style={{ fontSize: 18, fontWeight: 600 }}>{b.size}GB</span>
           <span style={{ fontSize: 16, fontWeight: 700, color: "var(--price)", marginTop: 4 }}>
-            {b.available ? `GHS ${b.price.toFixed(2)}` : "Unavailable"}
+            {b.available ? `${liveSizes ? "GHS" : "Est. GHS"} ${b.price.toFixed(2)}` : "Unavailable"}
           </span>
         </button>
       ))}
@@ -166,8 +170,17 @@ function TierSingleForm({ tierKey, tier, networkId, email, setEmail, loading, se
       <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>
       <NoRefundNotice />
       <div style={{ maxWidth: 300 }}>
+        {selected?.checkoutPrice != null && (
+          <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
+            Paystack processing fee included in the total below.
+          </p>
+        )}
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
-          {selected ? `Pay GHS ${selected.price.toFixed(2)} with Paystack` : "Select a bundle"}
+          {selected?.checkoutPrice != null
+            ? `Pay GHS ${selected.checkoutPrice.toFixed(2)} with Paystack`
+            : selected
+              ? "Continue to Paystack"
+              : "Select a bundle"}
         </PrimaryButton>
       </div>
     </div>
@@ -220,11 +233,11 @@ function EvdSingleForm({ networkId, email, setEmail, loading, setLoading, onDone
 
 /* ---------- bulk ---------- */
 
-function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, setLoading, onDone, onError }) {
+function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, setLoading, onDone, onError, liveSizes }) {
   const [text, setText] = useState("");
   const rows = parseBulkText(text);
   const valid = rows.length > 0 && email.includes("@");
-  const total = estimateBulkTotal(kind, rows, tier);
+  const total = estimateBulkTotal(kind, rows, tier, liveSizes);
 
   function submit() {
     setLoading(true);
@@ -263,7 +276,7 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
         />
       </Field>
       <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
-        {rows.length} valid line{rows.length === 1 ? "" : "s"} detected. Estimated total: GHS {withPaystackFee(total).toFixed(2)} (includes the Paystack processing fee) — confirmed exactly at payment.
+        {rows.length} valid line{rows.length === 1 ? "" : "s"} detected. Estimated total: GHS {withPaystackFee(total).toFixed(2)} (includes the Paystack processing fee). The final total is confirmed exactly at payment.
       </p>
       <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>
       <NoRefundNotice>Double-check every number on the list — wrong numbers in a bulk order aren't refunded either.</NoRefundNotice>
@@ -278,12 +291,12 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
 
 /* ---------- excel ---------- */
 
-function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, setLoading, onDone, onError }) {
+function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, setLoading, onDone, onError, liveSizes }) {
   const [rows, setRows] = useState([]);
   const [fileName, setFileName] = useState("");
   const [parsing, setParsing] = useState(false);
   const valid = rows.length > 0 && email.includes("@");
-  const total = estimateBulkTotal(kind, rows, tier);
+  const total = estimateBulkTotal(kind, rows, tier, liveSizes);
 
   async function handleFile(e) {
     const file = e.target.files?.[0];
@@ -338,7 +351,7 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
         <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
           {parsing
             ? "Reading file..."
-            : `${fileName}: ${rows.length} valid line${rows.length === 1 ? "" : "s"} detected. Estimated total: GHS ${withPaystackFee(total).toFixed(2)} (includes the Paystack processing fee).`}
+            : `${fileName}: ${rows.length} valid line${rows.length === 1 ? "" : "s"} detected. Estimated total: GHS ${withPaystackFee(total).toFixed(2)} (includes the Paystack processing fee). The final total is confirmed exactly at payment.`}
         </p>
       )}
       <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>
