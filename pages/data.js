@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NETWORKS, OrderReceipt, isLikelyAirtelTigoNumber } from "../components/ui";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NETWORKS, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
 import { withPaystackFee } from "../lib/pricing";
 
@@ -28,6 +28,7 @@ export default function DataPage() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [receipt, setReceipt] = useState(null);
+  const [networkConfirmed, setNetworkConfirmed] = useState(false);
 
   useEffect(() => {
     setEmail(window.sessionStorage.getItem("pj_email") || "");
@@ -39,6 +40,7 @@ export default function DataPage() {
     setLoadError("");
     setBundles(null);
     setBundleId(null);
+    setNetworkConfirmed(false);
     fetch(`/api/techlink/data-bundles?network=${network}&phone=${encodeURIComponent(phone)}`)
       .then((r) => r.json())
       .then((d) => {
@@ -57,7 +59,9 @@ export default function DataPage() {
   }
 
   const selected = (bundles || []).find((b) => (b.id || b.bundleId) === bundleId);
-  const valid = phone.length >= 10 && selected && email.includes("@");
+  const likelyNetwork = getLikelyNetwork(phone);
+  const networkMismatch = Boolean(likelyNetwork && likelyNetwork !== network);
+  const valid = phone.length >= 10 && selected && email.includes("@") && (!networkMismatch || networkConfirmed);
   const grouped = bundles ? groupBundles(bundles) : {};
 
   function submit() {
