@@ -117,7 +117,7 @@ export default function ChatWidget() {
         setMessages((m) => [...m, { role: "assistant", content: d.error || "Could not submit the complaint." }]);
         return;
       }
-      setMessages((m) => [...m, { role: "assistant", content: `Your complaint has been submitted. Support case: ${d.feedback?.caseReference}. Please keep this reference for follow-up.` }]);
+      setMessages((m) => [...m, { role: "assistant", content: `Your issue has been submitted and escalated to our support team. Support case: ${d.feedback?.caseReference}. Please keep this reference for follow-up.` }]);
       setComplaintMode(false);
       setComplaint(EMPTY_COMPLAINT);
     } catch {
