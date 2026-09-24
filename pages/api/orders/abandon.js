@@ -5,7 +5,7 @@ import { rateLimit } from "../../../lib/rateLimit";
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const rl = rateLimit(req, { limit: 8, windowMs: 60_000, keySuffix: "order-abandon" });
+  const rl = await rateLimit(req, { limit: 8, windowMs: 60_000, keySuffix: "order-abandon" });
   if (!rl.allowed) {
     return res.status(429).setHeader("Retry-After", rl.retryAfter).json({
       error: "Too many requests. Please wait a moment.",
