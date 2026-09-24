@@ -51,13 +51,12 @@ export default async function handler(req, res) {
 
   // Catalog/pricing failures (a bundle that's no longer available, a
   // provider lookup that can't resolve an amount, etc.) happen before an
-  // order ever exists, so previously they vanished with no record at all —
-  // the admin dashboard's Orders list had nothing to show for a customer
-  // who hit exactly this wall. Logging them as a "failed" order (amount 0,
-  // no charge ever happened) gives them a reference and makes them visible,
-  // the same way a failed payment already is. Plain input mistakes (bad
-  // email format, missing phone) are NOT logged here — those aren't real
-  // transaction attempts, just typos, and would only add noise.
+  // order ever exists, so the admin can still retain an internal diagnostic
+  // record. These pre-payment records use amount 0 and never become
+  // fulfillment candidates. Their internal reference is deliberately not
+  // returned to the customer because no payment was attempted. Plain input
+  // mistakes (bad email format, missing phone) are NOT logged here — those
+  // aren't real transaction attempts, just typos, and would only add noise.
   async function logFailedAttempt(reason, { orderType, network, phone, email }) {
     const reference = `TL${Date.now().toString(36).toUpperCase()}${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
     try {
@@ -139,7 +138,7 @@ export default async function handler(req, res) {
       const bundle = bundles.find((b) => (b.id || b.bundleId) === bundleId);
       if (!bundle) {
         const reference = await logFailedAttempt("bundle_unavailable", { orderType, network, phone, email });
-        return res.status(400).json({ error: "That bundle is no longer available — refresh and pick again", reference });
+        return res.status(400).json({ error: "That bundle is no longer available — refresh and pick again" });
       }
       amount = Number(bundle.price ?? bundle.amount);
 
@@ -179,7 +178,7 @@ export default async function handler(req, res) {
       amount = resolvedWaterAmount;
       if (!amount || amount <= 0) {
         const reference = await logFailedAttempt("water_amount_unresolved", { orderType, network: "water", phone, email });
-        return res.status(400).json({ error: "Could not resolve a bill amount for that account", reference });
+        return res.status(400).json({ error: "Could not resolve a bill amount for that account" });
       }
       extra.billAccountName = validation.accountName || validation.customerName || null;
 
@@ -193,7 +192,7 @@ export default async function handler(req, res) {
       amount = Number(validation.balance ?? validation.amountDue ?? validation.amount);
       if (!amount || amount <= 0) {
         const reference = await logFailedAttempt("tv_amount_unresolved", { orderType, network: tvDetails?.service, phone, email });
-        return res.status(400).json({ error: "Could not resolve an amount due for that smartcard", reference });
+        return res.status(400).json({ error: "Could not resolve an amount due for that smartcard" });
       }
       extra.tvDetails = { ...tvDetails, customerName: validation.customerName || null, package: validation.packageName || validation.package || null };
 
@@ -214,7 +213,7 @@ export default async function handler(req, res) {
       }
       if (!amount || amount <= 0) {
         const reference = await logFailedAttempt("checker_price_unresolved", { orderType, network: checkerDetails?.type, phone, email });
-        return res.status(400).json({ error: "Could not resolve a price for that checker", reference });
+        return res.status(400).json({ error: "Could not resolve a price for that checker" });
       }
       extra.checkerDetails = checkerDetails;
 
@@ -234,7 +233,7 @@ export default async function handler(req, res) {
       const product = products.find((p) => Number(p.size) === Number(size));
       if (!product) {
         const reference = await logFailedAttempt("tier_size_unavailable", { orderType, network: tier.network, phone, email });
-        return res.status(400).json({ error: "That bundle size is no longer available", reference });
+        return res.status(400).json({ error: "That bundle size is no longer available" });
       }
       amount = Number(product.price ?? product.amount);
       extra.tierDetails = { tierKey, category: tier.category, size: Number(size), name: product.name };
@@ -251,7 +250,7 @@ export default async function handler(req, res) {
         const product = products.find((p) => Number(p.size) === Number(r.size));
         if (!product || !r.phone) {
           const reference = await logFailedAttempt("tier_bulk_row_unavailable", { orderType, network: tier.network, phone: r.phone, email });
-          return res.status(400).json({ error: `Could not price the line for ${r.phone || "an entry"} — check the size matches an available bundle`, reference });
+          return res.status(400).json({ error: `Could not price the line for ${r.phone || "an entry"} — check the size matches an available bundle` });
         }
         if (!/^[+0-9][0-9\s-]{7,20}$/.test(String(r.phone))) {
           return res.status(400).json({ error: `Invalid phone number in bulk line: ${r.phone}` });
