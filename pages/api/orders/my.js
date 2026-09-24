@@ -1,6 +1,6 @@
 import { getAuthedCustomerId } from "../../../lib/customerAuth";
 import { findCustomerById } from "../../../lib/customers";
-import { listOrdersByEmail } from "../../../lib/store";
+import { listOrdersByEmail, toPublicOrder } from "../../../lib/store";
 import { checkQueuedOrder } from "../../../lib/orderProcessing";
 import { rateLimit } from "../../../lib/rateLimit";
 
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     // Same lazy verify-on-view as order tracking — re-check any queued
     // order the moment someone actually looks at their order list.
     orders = await Promise.all(orders.map((o) => (o.fulfillmentStatus === "queued_with_provider" ? checkQueuedOrder(o.reference) : o)));
-    return res.status(200).json({ orders });
+    return res.status(200).json({ orders: orders.map(toPublicOrder) });
   } catch (err) {
     console.error("List my orders error", err);
     return res.status(500).json({ error: "Could not load your orders" });
