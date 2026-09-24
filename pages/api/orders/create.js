@@ -29,7 +29,8 @@ export default async function handler(req, res) {
   }
   if (idempotencyKey) {
     try {
-      const existing = await getOrderByIdempotencyKey(idempotencyKey);
+      const requestedEmail = String(req.body?.email || "").trim().toLowerCase();
+      const existing = requestedEmail ? await getOrderByIdempotencyKey(idempotencyKey, requestedEmail) : null;
       if (existing) {
         return res.status(200).json({
           reference: existing.reference,
