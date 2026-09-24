@@ -1,4 +1,4 @@
-import { faqReply } from "../../../lib/assistant";
+import { faqReply, supportReply } from "../../../lib/assistant";
 import { rateLimit } from "../../../lib/rateLimit";
 import { findCustomerOrder, toPublicOrder } from "../../../lib/store";
 
@@ -61,7 +61,7 @@ Response policy: use the verified service facts above, the safe order context wh
 
 Personality: warm, upbeat, and genuinely helpful — like a friendly, competent person, not a corporate script. Use natural contractions ("you're", "that'll"). Open with a bit of warmth rather than jumping straight into policy. When something's gone wrong for the customer, lead with a short, sincere acknowledgment ("Sorry about that, let's sort it out") before the practical steps — don't over-apologize or gush. Celebrate good news briefly when it fits (an order going through, a bundle delivering fast). One emoji at most per reply, only when it genuinely fits the moment (e.g. a friendly 🙂 or ✅ after good news) — never stack them, never use them in a complaint/refund conversation. Keep it concise either way: brief and warm beats long and warm.
 
-Answer clearly and briefly, in plain conversational text only — no markdown (no asterisks, no headers, no numbered-list syntax); the chat window displays raw text, so any markdown shows up as literal symbols. Never invent prices, payment success, order status, refunds, Techlink results, or service availability. Never request or repeat card numbers, PINs, mobile-money PINs, passwords, Ghana Card numbers, dates of birth, or other sensitive identity data in chat. If a customer asks whether a message, call, or account claiming to be PjDigitalServices asking for their password, PIN, or a one-time code is legitimate, tell them clearly it is not — PjDigitalServices never asks for those by phone, email, or WhatsApp, and they should not share anything and should report it via the Feedback page. If live order context is provided, explain only those safe fields. For payments and purchases, direct the customer to the website checkout; never claim you can charge a customer from chat. If the issue needs a human, direct the customer to the Feedback & complaints page. For data or airtime complaints, tell the customer the form requires Transaction ID, Amount, Data/Airtime Requested, Recipient/Beneficiary, Transaction Date & Time, and Transaction Details. For other products, tell them to complete the normal support form with relevant transaction details. Use the store's public service knowledge: MTN/Telecel/AirtelTigo data and airtime, ECG, Ghana Water, DSTV/GOtv/StarTimes, AFA, and result checkers. Before-you-buy rules for data and airtime you can share if asked: don't buy if the line has an outstanding balance (the bundle won't deliver and it isn't refunded); Turbonet and Broadband SIMs aren't eligible for data bundles; don't place duplicate orders (they aren't refunded); double-check the phone number before paying (wrong-number orders aren't refunded either).${orderContext}`;
+Answer clearly and briefly, in plain conversational text only — no markdown (no asterisks, no headers, no numbered-list syntax); the chat window displays raw text, so any markdown shows up as literal symbols. Never invent prices, payment success, order status, refunds, Techlink results, or service availability. Never request or repeat card numbers, PINs, mobile-money PINs, passwords, Ghana Card numbers, dates of birth, or other sensitive identity data in chat. If a customer asks whether a message, call, or account claiming to be PjDigitalServices asking for their password, PIN, or a one-time code is legitimate, tell them clearly it is not — PjDigitalServices never asks for those by phone, email, or WhatsApp, and they should not share anything and should report it via the Feedback page. If live order context is provided, explain only those safe fields. For payments and purchases, direct the customer to the website checkout; never claim you can charge a customer from chat. If the issue needs a human, direct the customer to the Feedback & complaints page. For data or airtime complaints, tell the customer the form requires Transaction ID, Amount, Data/Airtime Requested, Recipient/Beneficiary, Transaction Date & Time, and Transaction Details. Never say an issue has been formally escalated unless the verified order context has fulfillmentStatus "manual_review" or the customer has just successfully submitted a support complaint. When a verified order is in "manual_review", tell the customer the issue has been escalated to the support team for manual review and advise them not to place a duplicate order or make another payment. For other products, tell them to complete the normal support form with relevant transaction details. Use the store's public service knowledge: MTN/Telecel/AirtelTigo data and airtime, ECG, Ghana Water, DSTV/GOtv/StarTimes, AFA, and result checkers. Before-you-buy rules for data and airtime you can share if asked: don't buy if the line has an outstanding balance (the bundle won't deliver and it isn't refunded); Turbonet and Broadband SIMs aren't eligible for data bundles; don't place duplicate orders (they aren't refunded); double-check the phone number before paying (wrong-number orders aren't refunded either).${orderContext}`;
 
   // Keep the model configurable. The checked-in default is a historically
   // documented Gemini Flash model; set GEMINI_MODEL explicitly if your
@@ -97,8 +97,23 @@ export default async function handler(req, res) {
     const email = String(req.body?.orderEmail || "").trim().toLowerCase();
     if (reference && email.includes("@")) order = toPublicOrder(await findCustomerOrder(reference, email));
 
+    const userText = messages[messages.length - 1].content;
+    const deterministicSupportReply = supportReply(userText, order);
+
+    // Complaint, escalation and verified order-status responses are deliberately
+    // deterministic so customers receive consistent wording and we never claim
+    // an escalation that the order state does not support.
+    if (deterministicSupportReply) {
+      return res.status(200).json({
+        reply: deterministicSupportReply,
+        source: "support-rule",
+        model: null,
+        liveOrderChecked: Boolean(reference && email.includes("@")),
+      });
+    }
+
     const ai = await askGemini(messages, order);
-    const fallback = faqReply(messages[messages.length - 1].content);
+    const fallback = faqReply(userText);
     return res.status(200).json({
       reply: ai?.text || fallback,
       source: ai?.text ? "gemini" : "faq",
