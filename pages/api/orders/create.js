@@ -4,6 +4,7 @@ import {
   listDataBundles,
   getAfaPrice,
   validateWaterMeter,
+  validateGwclMeter,
   validateTvSmartcard,
   getCheckerPrices,
   getResultCheckServicePrices,
@@ -111,9 +112,20 @@ export default async function handler(req, res) {
       if (!network) return res.status(400).json({ error: "Network is required" });
       amount = Number(airtimeAmount);
       if (!amount || amount <= 0) return res.status(400).json({ error: "Invalid amount" });
-      const airtimeFeeData = await getAirtimeFee();
-      const airtimeFeeRate = Number(airtimeFeeData.rate ?? airtimeFeeData.percent / 100 ?? 0);
-      if (!Number.isFinite(airtimeFeeRate) || airtimeFeeRate < 0 || airtimeFeeRate > 1) return res.status(500).json({ error: "Could not determine the provider airtime fee" });
+      // Techlink's airtime wallet-fee endpoint is useful for internal
+      // cost accounting, but it is not required to price the customer:
+      // Airtime has 0% PjDigitalServices business margin. Do not make a
+      // working Airtime purchase depend on a separate fee-information call.
+      let airtimeFeeRate = 0;
+      try {
+        const airtimeFeeData = await getAirtimeFee();
+        const resolvedRate = Number(airtimeFeeData.rate ?? airtimeFeeData.percent / 100 ?? 0);
+        if (Number.isFinite(resolvedRate) && resolvedRate >= 0 && resolvedRate <= 1) {
+          airtimeFeeRate = resolvedRate;
+        }
+      } catch (feeErr) {
+        console.warn("Airtime fee lookup unavailable; continuing checkout with provider cost fallback:", feeErr.message);
+      }
       providerCost = Math.round(amount * (1 + airtimeFeeRate) * 100) / 100;
 
     } else if (orderType === "data") {
@@ -148,12 +160,23 @@ export default async function handler(req, res) {
       if (!meterNumber) return res.status(400).json({ error: "Account number is required" });
       // Water is a fixed bill amount, resolved from Techlink's validation —
       // never from a number the customer typed in themselves.
-      const validation = await validateWaterMeter({ account: meterNumber });
-      // Techlink's docs show /korba/validate returns "balance" (as a
-      // string, e.g. "124.50") for the amount owed — not "amountDue". This
-      // was the actual reason every water bill payment failed to resolve
-      // an amount, regardless of the account's real balance.
-      amount = Number(validation.balance ?? validation.amountDue ?? validation.amount);
+      let validation = await validateWaterMeter({ account: meterNumber });
+      let resolvedWaterAmount = Number(validation.balance ?? validation.amountDue ?? validation.amount);
+      // Techlink also documents /provider/validate with service=GWCL as a
+      // fallback validator for Ghana Water accounts. Use it when the primary
+      // /korba/validate response does not resolve an amount.
+      if (!resolvedWaterAmount || resolvedWaterAmount <= 0) {
+        try {
+          const fallback = await validateGwclMeter({ account: meterNumber, phone });
+          if (fallback) {
+            validation = { ...validation, ...fallback };
+            resolvedWaterAmount = Number(fallback.balance ?? fallback.amountDue ?? fallback.amount);
+          }
+        } catch (fallbackErr) {
+          console.warn("GWCL fallback validation failed:", fallbackErr.message);
+        }
+      }
+      amount = resolvedWaterAmount;
       if (!amount || amount <= 0) {
         const reference = await logFailedAttempt("water_amount_unresolved", { orderType, network: "water", phone, email });
         return res.status(400).json({ error: "Could not resolve a bill amount for that account", reference });
@@ -256,9 +279,19 @@ export default async function handler(req, res) {
         resolvedRows.push({ phone: String(r.phone).trim(), amount: rowAmount });
       }
       amount = resolvedRows.reduce((sum, r) => sum + r.amount, 0);
-      const airtimeFeeData = await getAirtimeFee();
-      const airtimeFeeRate = Number(airtimeFeeData.rate ?? airtimeFeeData.percent / 100 ?? 0);
-      if (!Number.isFinite(airtimeFeeRate) || airtimeFeeRate < 0 || airtimeFeeRate > 1) return res.status(500).json({ error: "Could not determine the provider airtime fee" });
+      // Bulk Airtime also has 0% business margin. The separate provider
+      // fee lookup is best-effort because it is not required to charge the
+      // customer or submit the Airtime batch.
+      let airtimeFeeRate = 0;
+      try {
+        const airtimeFeeData = await getAirtimeFee();
+        const resolvedRate = Number(airtimeFeeData.rate ?? airtimeFeeData.percent / 100 ?? 0);
+        if (Number.isFinite(resolvedRate) && resolvedRate >= 0 && resolvedRate <= 1) {
+          airtimeFeeRate = resolvedRate;
+        }
+      } catch (feeErr) {
+        console.warn("Bulk Airtime fee lookup unavailable; continuing with provider cost fallback:", feeErr.message);
+      }
       providerCost = Math.round(amount * (1 + airtimeFeeRate) * 100) / 100;
       extra.tierDetails = { rows: resolvedRows, airtimeProviderFeeRate: airtimeFeeRate };
 
