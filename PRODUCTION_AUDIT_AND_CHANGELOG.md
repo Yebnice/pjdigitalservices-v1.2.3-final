@@ -331,3 +331,27 @@ Techlink's docs disagree: the prose and the request-body definition say `fullNam
 
 ### Verification
 All 90 `.js` files re-parsed (0 syntax errors), all relative imports and named exports re-resolved (0 problems), every `process.env.*` reference checked against `.env.example` (0 drift). The fulfillment path was exercised with a mocked store and Techlink (single ok / network drop / 400 rejection / bulk empty / bulk confirmed / bulk partial failure / MTN Master bulk, with and without `BULK_AUTO_CONFIRM`), and the alert paths with mocked Resend/Brevo (unconfigured / one channel down / both down). Not exercised against a live Supabase or live Techlink — do one end-to-end test with a `tlg_test_` key before relying on it.
+
+## v1.3.5 Hardened / release-quality pass — September 24, 2026
+
+Confirmed and implemented:
+- Distributed Upstash rate limiting across API routes, with async `await` contract checks.
+- Fixed-only pricing rules now override the default percentage margin.
+- AFA registration data encrypted at rest for new orders with AES-256-GCM; fulfilled AFA payloads are cleared.
+- Role-enforced admin operations.
+- Order/support tracking moved from URL query strings to POST bodies.
+- Customer contact prefill moved from persistent localStorage to sessionStorage.
+- Paystack callback recovery preserves the order reference and retries verification.
+- Production CSP enforcement.
+- Techlink contract alignment verified against the supplied Business API V1 document, including Airtime, Data, ECG, Water, TV, Result Checkers, Agent Data Products, AFA, bulk orders and provider order verification.
+- AFA request payload narrowed to the formally documented `fullName`, `ghanaCard`, and `dob` fields.
+- Bulk Data/Airtime request bodies aligned with the documented examples.
+- Added automated regression tests for pricing, AFA encryption, rate limiting and Techlink request contracts.
+- CI now runs tests plus production contract checks before the Next.js build.
+
+Evidence still required before calling the release fully production-ready:
+- CI must complete `npm test` and `npm run build` successfully.
+- A real/controlled end-to-end transaction must confirm payment → fulfillment → customer result.
+- The production `AFA_ENCRYPTION_KEY` must be configured and migration `supabase/migration_v1_3_5.sql` applied.
+- GitHub Actions, Supabase Vault and Vercel must hold the same `CRON_SECRET`; the new Vercel value must be deployed before the Supabase scheduler can be re-tested.
+- A committed `package-lock.json` is still recommended once a machine/CI environment with npm registry access can generate it safely.
