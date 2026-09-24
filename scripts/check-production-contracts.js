@@ -57,6 +57,15 @@ for (const file of ["pages/data.js","pages/airtime.js","pages/tv.js","pages/afa.
   }
 }
 
+
+const webhookQueue = read("lib/paystackWebhookQueue.js");
+if (webhookQueue.includes("available_at: terminal")) {
+  failures.push("lib/paystackWebhookQueue.js: retry scheduling references undefined terminal state");
+}
+if (!webhookQueue.includes("Date.now() + delayMinutes * 60_000")) {
+  failures.push("lib/paystackWebhookQueue.js: retry delay calculation is missing");
+}
+
 if (failures.length) {
   console.error("Production contract check failed:");
   for (const failure of failures) console.error(failure);
