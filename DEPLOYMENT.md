@@ -86,27 +86,34 @@ Preview if you want staging to work too):
 
 **2.5 Schedule the fulfillment worker**
 `/api/jobs/fulfill` has to be called regularly or orders will sit in
-`ready` state indefinitely. Two easy options on Vercel:
+`ready` state indefinitely.
 
-- **Vercel Cron** (simplest): add a `vercel.json` with:
-  ```json
-  {
-    "crons": [{ "path": "/api/jobs/fulfill", "schedule": "*/2 * * * *" }]
-  }
-  ```
-  Vercel Cron calls this with its own auth, so you'd adapt the route to
-  check Vercel's cron signature instead of/in addition to the Bearer
-  token — or simpler, keep the existing `Authorization: Bearer
-  <CRON_SECRET>` check and use an external scheduler (below) if you'd
-  rather not touch the auth code.
-- **External scheduler** (no code change needed): a service like
-  cron-job.org, GitHub Actions on a schedule, or your own server, hitting:
-  ```
-  POST https://<your-domain>/api/jobs/fulfill
-  Authorization: Bearer <CRON_SECRET>
-  ```
-  every 1–5 minutes.
+**Configured default: GitHub Actions**
+The repository now contains `.github/workflows/background-worker.yml`.
+It calls `POST https://pjdigitalservices.online/api/jobs/fulfill` every
+5 minutes (offset by 2 minutes past the hour) and authenticates with
+`CRON_SECRET`.
 
+In GitHub → Settings → Secrets and variables → Actions, create:
+
+`CRON_SECRET`
+
+using exactly the same value configured in Vercel.
+
+GitHub's scheduled workflows have operational caveats: the shortest
+supported interval is 5 minutes, scheduled jobs can be delayed during
+high-load periods, and scheduled workflows in public repositories are
+disabled after 60 days without repository activity. Keep an eye on the
+Actions tab, and for mission-critical payment processing consider a
+dedicated external scheduler as a second safety path.
+
+**Alternative: external scheduler**
+A service such as cron-job.org or your own server can call:
+```
+POST https://<your-domain>/api/jobs/fulfill
+Authorization: Bearer <CRON_SECRET>
+```
+every 1–5 minutes.
 **2.6 Custom domain**
 - Project Settings → Domains → add `pjdigitalservices.online` (and, if you
   want `www` too, add `www.pjdigitalservices.online` — Vercel will offer to
@@ -227,7 +234,7 @@ so a failure on one never blocks the other.
 
 ## v1.2.6 required deployment settings
 
-Set `CRON_SECRET` to a random 32+ character secret so the fulfillment cron can authenticate. Configure `PAYSTACK_FEE_RATE` to the merchant rate actually applicable to your Paystack account; do not assume a hard-coded fee is current without checking your merchant pricing. The default PjDigitalServices business margin is 1%. Keep `DEFAULT_BUSINESS_MARGIN_PERCENT=1` unless you intentionally want a different global margin, or use `SERVICE_MARKUP_RULES_JSON` for service/network-specific overrides. The Vercel cron is defined in `vercel.json`; no Cloudflare configuration is required.
+Set `CRON_SECRET` to a random 32+ character secret so the fulfillment cron can authenticate. Configure `PAYSTACK_FEE_RATE` to the merchant rate actually applicable to your Paystack account; do not assume a hard-coded fee is current without checking your merchant pricing. The default PjDigitalServices business margin is 1%. Keep `DEFAULT_BUSINESS_MARGIN_PERCENT=1` unless you intentionally want a different global margin, or use `SERVICE_MARKUP_RULES_JSON` for service/network-specific overrides. The repository does not depend on Vercel Cron. Background processing is configured through the GitHub Actions workflow above; no Cloudflare configuration is required.
 
 
 ### Admin hardening
