@@ -139,7 +139,7 @@ export default function ChatWidget() {
         <div className="chat-panel">
           <div className="chat-header">
             <div className="chat-agent">
-              <div className="chat-avatar"><Sparkles size={16} /></div>
+              <div className="chat-avatar" aria-label="Annette avatar" role="img">👩🏾‍💼</div>
               <div style={{ minWidth: 0 }}>
                 <div className="chat-agent-name">Annette <span className="chat-agent-role">· Support</span></div>
                 <div className="chat-status-row">
@@ -163,7 +163,7 @@ export default function ChatWidget() {
           <div className="chat-messages">
             {messages.map((m, i) => (
               <div key={i} className={`chat-row ${m.role === "assistant" ? "bot-row" : "user-row"}`}>
-                {m.role === "assistant" && <div className="chat-mini-avatar"><Sparkles size={11} /></div>}
+                {m.role === "assistant" && <div className="chat-mini-avatar" aria-hidden="true">👩🏾‍💼</div>}
                 <div className={`chat-msg ${m.role === "assistant" ? "bot" : "user"}`}>{m.content}</div>
                 {m.role === "user" && <div className="chat-mini-avatar user-avatar"><UserRound size={11} /></div>}
               </div>
