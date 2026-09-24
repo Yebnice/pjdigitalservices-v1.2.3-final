@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, BeforeYouBuyNotice, OrderReceipt, isLikelyAirtelTigoNumber } from "../components/ui";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, OrderReceipt, isLikelyAirtelTigoNumber } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
 import { withPaystackFee } from "../lib/pricing";
 
@@ -64,7 +64,6 @@ export default function AirtimePage() {
             That doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053) — wrong numbers aren't refunded.
           </p>
         )}
-        <BeforeYouBuyNotice />
         <Field label="Amount (GHS)">
           <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10.00" type="number" />
         </Field>
