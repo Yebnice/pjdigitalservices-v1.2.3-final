@@ -13,6 +13,8 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [done, setDone] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
 
   const valid =
     name.trim().length > 1 &&
@@ -50,8 +52,29 @@ export default function RegisterPage() {
           We've sent a verification link to <strong>{email}</strong>. Click it to activate your account,
           then come back and log in.
         </p>
-        <div style={{ marginTop: 20 }}>
+        <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 10 }}>
           <PrimaryButton onClick={() => router.push("/login")}>Go to login</PrimaryButton>
+          <button
+            type="button"
+            disabled={resending}
+            onClick={() => {
+              setResending(true);
+              setResendMessage("");
+              fetch("/api/auth/resend-verification", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email }),
+              })
+                .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+                .then(({ d }) => setResendMessage(d.message || "If an unverified account exists, a new verification link has been sent."))
+                .catch(() => setResendMessage("We could not process that request right now. Please try again shortly."))
+                .finally(() => setResending(false));
+            }}
+            style={{ background: "none", border: 0, padding: 8, color: "var(--muted)", cursor: resending ? "wait" : "pointer" }}
+          >
+            {resending ? "Sending…" : "Didn't receive the email? Send again"}
+          </button>
+          {resendMessage && <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>{resendMessage}</p>}
         </div>
       </div>
     );
