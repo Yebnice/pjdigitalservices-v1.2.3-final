@@ -1,10 +1,10 @@
-import { isAdminAuthed } from "../../../lib/adminAuth";
+import { requireAdminRole } from "../../../lib/adminAuth";
 import { checkQueuedOrder } from "../../../lib/orderProcessing";
 import { recordAuditEvent } from "../../../lib/auditLog";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  if (!isAdminAuthed(req)) return res.status(401).json({ error: "Unauthorized" });
+  if (!requireAdminRole(req, res, ["operator"])) return;
   try {
     const { reference } = req.body || {};
     if (!reference) return res.status(400).json({ error: "reference is required" });
