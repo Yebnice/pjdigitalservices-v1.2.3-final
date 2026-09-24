@@ -23,8 +23,8 @@ export default function TvPage() {
   const [validating, setValidating] = useState(false);
 
   useEffect(() => {
-    setEmail(window.localStorage.getItem("pj_email") || "");
-    setPhone(window.localStorage.getItem("pj_phone") || "");
+    setEmail(window.sessionStorage.getItem("pj_email") || "");
+    setPhone(window.sessionStorage.getItem("pj_phone") || "");
   }, []);
 
   useEffect(() => {
@@ -58,8 +58,8 @@ export default function TvPage() {
       tvDetails: { service },
       onDone: (order, paidAmount) => {
         setLoading(false);
-        window.localStorage.setItem("pj_email", email);
-        window.localStorage.setItem("pj_phone", phone);
+        window.sessionStorage.setItem("pj_email", email);
+        window.sessionStorage.setItem("pj_phone", phone);
         setReceipt({ order, amount: paidAmount });
       },
       onError: (msg) => {
