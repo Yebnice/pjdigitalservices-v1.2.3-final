@@ -3,7 +3,7 @@ import { validateWaterMeter } from "../../../lib/techlink";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  const rl = rateLimit(req, { limit: 20, windowMs: 60_000, keySuffix: "techlink-water-validate" });
+  const rl = await rateLimit(req, { limit: 20, windowMs: 60_000, keySuffix: "techlink-water-validate" });
   if (!rl.allowed) return res.status(429).setHeader("Retry-After", rl.retryAfter).json({ error: "Too many requests. Please try again shortly." });
 
   const { account } = req.body;
