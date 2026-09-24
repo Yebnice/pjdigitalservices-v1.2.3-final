@@ -9,7 +9,7 @@ import { rateLimit } from "../../../lib/rateLimit";
 // Only exposes size + price, never raw Techlink response shape or keys.
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
-  const rl = rateLimit(req, { limit: 30, windowMs: 60_000, keySuffix: "tier-products" });
+  const rl = await rateLimit(req, { limit: 30, windowMs: 60_000, keySuffix: "tier-products" });
   if (!rl.allowed) return res.status(429).json({ error: "Too many requests" });
 
   const tierKey = String(req.query.tierKey || "");
