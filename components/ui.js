@@ -114,16 +114,74 @@ export function NetworkPicker({ value, onChange, palette = NETWORKS }) {
   );
 }
 
-// Confirmed from Techlink's own AT iShare selling-rules panel: only these
-// prefixes are AirtelTigo numbers. A wrong number is NOT refundable per
-// their rules, so catching an obviously-wrong prefix before checkout
-// protects you from an unrecoverable loss.
-export const AIRTELTIGO_PREFIXES = ["026", "056", "027", "057", "023", "053"];
+// Common Ghana mobile-network prefix ranges used as a customer-safety
+// hint before checkout. These are NOT treated as proof of the current
+// network because Ghana supports Mobile Number Portability (MNP).
+export const NETWORK_PREFIXES = {
+  mtn: ["024", "025", "053", "054", "055", "059"],
+  telecel: ["020", "050"],
+  airteltigo: ["026", "027", "056", "057"],
+};
+
+export const AIRTELTIGO_PREFIXES = NETWORK_PREFIXES.airteltigo;
+
+function normalizeGhanaPhone(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  return digits.startsWith("233") ? "0" + digits.slice(3) : digits;
+}
+
+export function getLikelyNetwork(phone) {
+  const local = normalizeGhanaPhone(phone);
+  if (!local) return null;
+
+  for (const [network, prefixes] of Object.entries(NETWORK_PREFIXES)) {
+    if (prefixes.some((prefix) => local.startsWith(prefix))) return network;
+  }
+  return null;
+}
 
 export function isLikelyAirtelTigoNumber(phone) {
-  const digits = (phone || "").replace(/\D/g, "");
-  const local = digits.startsWith("233") ? "0" + digits.slice(3) : digits; // handle +233 entry
-  return AIRTELTIGO_PREFIXES.some((p) => local.startsWith(p));
+  return getLikelyNetwork(phone) === "airteltigo";
+}
+
+// A safety nudge for a network/number mismatch. We deliberately do not
+// auto-switch or hard-block because a Ghanaian number may have been ported
+// to another operator while keeping the same number.
+export function NetworkMismatchNotice({ network, phone, acknowledged, onAcknowledge }) {
+  const likely = getLikelyNetwork(phone);
+  if (!likely || likely === network) return null;
+
+  const selectedLabel = NETWORKS[network]?.label || network;
+  const likelyLabel = NETWORKS[likely]?.label || likely;
+
+  return (
+    <div
+      style={{
+        border: "1px solid var(--red)",
+        borderRadius: 8,
+        padding: "10px 12px",
+        background: "rgba(200, 50, 50, 0.06)",
+        fontSize: 12,
+        lineHeight: 1.5,
+      }}
+    >
+      <div style={{ color: "var(--red)", fontWeight: 700, marginBottom: 4 }}>
+        Check the recipient's network
+      </div>
+      <div style={{ marginBottom: 7 }}>
+        This number starts with a prefix commonly associated with {likelyLabel}, but you selected {selectedLabel}. Please confirm the recipient's current network before paying. Ported numbers can keep their original prefix.
+      </div>
+      <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={Boolean(acknowledged)}
+          onChange={(e) => onAcknowledge?.(e.target.checked)}
+          style={{ marginTop: 2 }}
+        />
+        <span>I confirm that this recipient is currently on {selectedLabel}.</span>
+      </label>
+    </div>
+  );
 }
 
 // Shown near the phone/account field on every purchase page — Techlink's
