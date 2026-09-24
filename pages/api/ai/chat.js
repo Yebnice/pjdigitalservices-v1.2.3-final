@@ -45,6 +45,7 @@ async function callGemini(model, messages, system) {
           })),
           generationConfig: {
             maxOutputTokens: 450,
+            thinkingConfig: { thinkingLevel: "low" },
           },
         }),
       });
