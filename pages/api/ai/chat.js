@@ -113,7 +113,7 @@ export default async function handler(req, res) {
     }
 
     const ai = await askGemini(messages, order);
-    const fallback = faqReply(userText);
+    const fallback = faqReply(userText, messages);
     return res.status(200).json({
       reply: ai?.text || fallback,
       source: ai?.text ? "gemini" : "faq",
@@ -122,6 +122,6 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error("AI chat error", err);
-    return res.status(200).json({ reply: faqReply(req.body?.messages?.at?.(-1)?.content || ""), source: "faq", model: null });
+    return res.status(200).json({ reply: faqReply(req.body?.messages?.at?.(-1)?.content || "", req.body?.messages || []), source: "faq", model: null });
   }
 }
