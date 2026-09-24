@@ -6,7 +6,7 @@ import { getAirtimeFee } from "../../../lib/techlink";
 // see the README note on airtime margin for why this matters to you.
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
-  const rl = rateLimit(req, { limit: 20, windowMs: 60_000, keySuffix: "techlink-airtime-fee" });
+  const rl = await rateLimit(req, { limit: 20, windowMs: 60_000, keySuffix: "techlink-airtime-fee" });
   if (!rl.allowed) return res.status(429).setHeader("Retry-After", rl.retryAfter).json({ error: "Too many requests. Please try again shortly." });
 
   try {
