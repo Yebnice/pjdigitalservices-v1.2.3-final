@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Run automated regression tests
+        run: npm test
+
       - name: Check distributed rate-limit usage
         run: npm run check:rate-limit
 
