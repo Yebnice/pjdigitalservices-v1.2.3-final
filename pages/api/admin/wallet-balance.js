@@ -1,4 +1,4 @@
-import { isAdminAuthed } from "../../../lib/adminAuth";
+import { requireAdminRole } from "../../../lib/adminAuth";
 import { getWalletBalance } from "../../../lib/techlink";
 
 // Every order this app fulfills debits the business's own Techlink wallet
@@ -12,7 +12,7 @@ import { getWalletBalance } from "../../../lib/techlink";
 // this reads defensively across the field names Techlink uses elsewhere
 // for balances ("balance", "walletBalance", "newBalance").
 export default async function handler(req, res) {
-  if (!isAdminAuthed(req)) return res.status(401).json({ error: "Unauthorized" });
+  if (!requireAdminRole(req, res, ["operator"])) return;
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   try {
