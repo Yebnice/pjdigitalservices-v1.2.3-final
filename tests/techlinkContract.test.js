@@ -1,10 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
-import { buyAirtime, purchaseDataBulk, purchaseAirtimeBulk, registerAfa } from "../lib/techlink.js";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+
+let buyAirtime;
+let purchaseDataBulk;
+let purchaseAirtimeBulk;
+let registerAfa;
+
+beforeAll(async () => {
+  vi.stubEnv("TECHLINK_API_KEY", "tlg_test_contract");
+  vi.stubEnv("TECHLINK_API_BASE_URL", "https://api.techlinkgh.com/api/v1");
+  vi.resetModules();
+  ({ buyAirtime, purchaseDataBulk, purchaseAirtimeBulk, registerAfa } = await import("../lib/techlink.js"));
+});
 
 describe("Techlink request contracts", () => {
   it("uses documented airtime fields and network codes", async () => {
-    process.env.TECHLINK_API_KEY = "tlg_test_contract";
-    process.env.TECHLINK_API_BASE_URL = "https://api.techlinkgh.com/api/v1";
     global.fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true, orderId: "TEST" }), {
         status: 201,
@@ -24,7 +33,6 @@ describe("Techlink request contracts", () => {
   });
 
   it("uses the documented AFA field names", async () => {
-    process.env.TECHLINK_API_KEY = "tlg_test_contract";
     global.fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true, testMode: true }), {
         status: 201,
