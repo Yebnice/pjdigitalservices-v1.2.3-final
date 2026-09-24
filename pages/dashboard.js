@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { OrderList } from "../components/ui";
 
+function customerVisibleOrders(items) {
+  return (items || []).filter((o) => o?.failReason !== "payment_abandoned");
+}
+
 export default function DashboardPage() {
   const [customer, setCustomer] = useState(undefined); // undefined = checking, null = guest
   const [reference, setReference] = useState("");
@@ -44,7 +48,7 @@ export default function DashboardPage() {
       const r = await fetch("/api/orders/my");
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Could not load your orders");
-      setOrders(d.orders);
+      setOrders(customerVisibleOrders(d.orders));
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   }
@@ -55,7 +59,17 @@ export default function DashboardPage() {
       const r = await fetch(`/api/orders/track?reference=${encodeURIComponent(reference)}&email=${encodeURIComponent(email)}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Could not load your order");
-      setOrders(d.orders);
+      const visible = customerVisibleOrders(d.orders);
+      const abandoned = (d.orders || []).find((o) => o?.failReason === "payment_abandoned");
+      if (abandoned && visible.length === 0) {
+        try {
+          window.localStorage.removeItem("pj_last_reference");
+        } catch {}
+        setReference("");
+        setOrders(null);
+      } else {
+        setOrders(visible);
+      }
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   }
@@ -97,7 +111,7 @@ export default function DashboardPage() {
       </>}
       {!reference && (
         <p style={{ fontSize: 13, color: "var(--muted-dim)", marginTop: 16 }}>
-          After checkout, your last order reference is saved on this device. You can also find the reference in your payment confirmation.{" "}
+          After a successful payment, your last order reference is saved on this device. You can also find the reference in your payment confirmation.{" "}
           <Link href="/track" style={{ color: "var(--price)" }}>Track an order</Link>, or{" "}
           <Link href="/login" style={{ color: "var(--price)" }}>log in</Link> to see all your orders at once.
         </p>
