@@ -223,7 +223,15 @@ function EvdSingleForm({ networkId, email, setEmail, loading, setLoading, onDone
 function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, setLoading, onDone, onError }) {
   const [text, setText] = useState("");
   const rows = parseBulkText(text);
-  const valid = rows.length > 0 && email.includes("@");
+  // The two single-order forms (TierSingleForm, EvdSingleForm above) block
+  // submission on an AirtelTigo prefix mismatch — this form and ExcelForm
+  // below never had that check, client or server-side. A customer running
+  // a bulk/Excel AT iShare, AT BigTime, or AT EVD order with MTN/Telecel
+  // numbers in the list got no warning at all: payment would go through,
+  // then those rows would almost certainly fail delivery at Techlink with
+  // no heads-up beforehand. Same rule as the single forms, applied per row.
+  const badAtRows = networkId === "airteltigo" ? rows.filter((r) => !isLikelyAirtelTigoNumber(r.phone)) : [];
+  const valid = rows.length > 0 && email.includes("@") && badAtRows.length === 0;
   const total = estimateBulkTotal(kind, rows, tier);
 
   function submit() {
@@ -265,6 +273,11 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
       <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
         {rows.length} valid line{rows.length === 1 ? "" : "s"} detected. Estimated total: GHS {withPaystackFee(total).toFixed(2)} (includes the Paystack processing fee) — confirmed exactly at payment.
       </p>
+      {badAtRows.length > 0 && (
+        <p style={{ fontSize: 12, color: "var(--red)", margin: 0 }}>
+          {badAtRows.length} line{badAtRows.length === 1 ? "" : "s"} don't look like AirtelTigo numbers (026, 056, 027, 057, 023, 053) — fix them before paying: {badAtRows.slice(0, 5).map((r) => r.phone).join(", ")}{badAtRows.length > 5 ? "…" : ""}
+        </p>
+      )}
       <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>
       <NoRefundNotice>Double-check every number on the list — wrong numbers in a bulk order aren't refunded either.</NoRefundNotice>
       <div style={{ maxWidth: 300 }}>
@@ -282,7 +295,9 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
   const [rows, setRows] = useState([]);
   const [fileName, setFileName] = useState("");
   const [parsing, setParsing] = useState(false);
-  const valid = rows.length > 0 && email.includes("@");
+  // Same AirtelTigo-prefix gap as BulkForm above, for uploaded files.
+  const badAtRows = networkId === "airteltigo" ? rows.filter((r) => !isLikelyAirtelTigoNumber(r.phone)) : [];
+  const valid = rows.length > 0 && email.includes("@") && badAtRows.length === 0;
   const total = estimateBulkTotal(kind, rows, tier);
 
   async function handleFile(e) {
@@ -339,6 +354,11 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
           {parsing
             ? "Reading file..."
             : `${fileName}: ${rows.length} valid line${rows.length === 1 ? "" : "s"} detected. Estimated total: GHS ${withPaystackFee(total).toFixed(2)} (includes the Paystack processing fee).`}
+        </p>
+      )}
+      {badAtRows.length > 0 && (
+        <p style={{ fontSize: 12, color: "var(--red)", margin: 0 }}>
+          {badAtRows.length} line{badAtRows.length === 1 ? "" : "s"} don't look like AirtelTigo numbers (026, 056, 027, 057, 023, 053) — fix them before paying: {badAtRows.slice(0, 5).map((r) => r.phone).join(", ")}{badAtRows.length > 5 ? "…" : ""}
         </p>
       )}
       <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>

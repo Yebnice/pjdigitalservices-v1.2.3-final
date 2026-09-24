@@ -118,13 +118,13 @@ ECG top-up amount, because those are genuinely open-ended (you decide how
 much airtime or electricity you want) — Techlink's docs confirm both are
 priced by amount, not by catalogue.
 
-**Worth knowing — airtime has no built-in margin.** The docs state the
+**Pricing policy — Airtime and Quick Data Top-up have no business margin.** The docs state the
 airtime service fee (currently 2%, live at `GET /products/airtime-fee`,
 proxied here at `/api/techlink/airtime-fee`) is charged to **your own**
 Techlink wallet, not the customer — "the wallet is debited with the total."
 Since your customer pays you exactly the face value they asked for via
 Paystack, and Techlink then takes face value **plus** 2% from your wallet,
-airtime orders lose you a small amount by default unless you build a markup
+plain Airtime orders recover the configured Paystack fee without the 1% business margin; Quick Data Top-up follows the same no-margin policy
 into what you charge. Data bundles, water, TV and AFA don't have this
 issue — their prices already come straight from Techlink's own catalogue.
 Simplest fix if you want one: charge the customer face value × 1.02 (or
@@ -311,7 +311,7 @@ This version includes the production fixes identified during the security/archit
 - Paystack webhooks verify the signature/payment and acknowledge quickly; the actual Techlink fulfillment is handled by the browser callback or `/api/jobs/fulfill`. Paystack's current webhook guidance specifically recommends returning HTTP 200 promptly and notes failed webhooks are retried.
 - Added a protected fulfillment worker endpoint using `CRON_SECRET`. Configure an external scheduler or your hosting platform's cron facility to call `POST /api/jobs/fulfill` with `Authorization: Bearer $CRON_SECRET`.
 - Added basic API rate limiting for order creation, tracking, feedback and AI chat. For a multi-instance deployment, also use your host/WAF or a distributed rate limiter.
-- Added an optional AI support route. With `GEMINI_API_KEY` set, the chat uses `GEMINI_MODEL` (default `gemini-flash-latest`); without a key it automatically falls back to the built-in FAQ assistant. Live order context is only fetched when the customer supplies both reference and checkout email.
+- Added an optional AI support route. With `GEMINI_API_KEY` set, the chat uses `GEMINI_MODEL` (default `gemini-2.5-flash`); without a key it automatically falls back to the built-in FAQ assistant. Live order context is only fetched when the customer supplies both reference and checkout email.
 - The AI is support-only: it cannot charge customers, cannot bypass Paystack, and is instructed not to request or repeat card/PIN/Ghana Card details.
 
 ### Required deployment steps
@@ -473,3 +473,8 @@ once the website itself is live and working.
 
 ## Support complaint transaction requirements (v1.2.2)
 For data and airtime complaints, the support form and chatbot require Transaction ID, Amount, Data/Airtime Requested, Recipient/Beneficiary, Transaction Date & Time, Transaction Details, and the complaint description. For other products, the normal support form is used with transaction details relevant to the service.
+
+
+### v1.2.6 hardening notes
+
+The fulfillment worker automatically checks provider-queued orders on schedule and no Cloudflare service is required. Pricing is split into provider cost (including documented provider-side charges where available), a default PjDigitalServices business margin of 1%, optional service-specific markup overrides, and a 1.95% Paystack gross transaction fee. Set `DEFAULT_BUSINESS_MARGIN_PERCENT` or `SERVICE_MARKUP_RULES_JSON` only when you intentionally want different margins. The order-create API enforces idempotency and bulk limits.

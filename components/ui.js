@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Loader2, Check, X, Bolt, Droplet, GraduationCap, Clock } from "lucide-react";
+import { TIERS } from "../lib/agentProducts";
 
 export const NETWORKS = {
   mtn: { label: "MTN", color: "var(--gold)", initial: "M", logo: "/icons/networks/mtn.png" },
@@ -118,13 +119,10 @@ export function NetworkPicker({ value, onChange, palette = NETWORKS }) {
 // prefixes are AirtelTigo numbers. A wrong number is NOT refundable per
 // their rules, so catching an obviously-wrong prefix before checkout
 // protects you from an unrecoverable loss.
-export const AIRTELTIGO_PREFIXES = ["026", "056", "027", "057", "023", "053"];
-
-export function isLikelyAirtelTigoNumber(phone) {
-  const digits = (phone || "").replace(/\D/g, "");
-  const local = digits.startsWith("233") ? "0" + digits.slice(3) : digits; // handle +233 entry
-  return AIRTELTIGO_PREFIXES.some((p) => local.startsWith(p));
-}
+// Moved to lib/phoneValidation.js so it can also be used server-side (see
+// pages/api/orders/create.js) — re-exported here so every existing import
+// of these two names from "./ui" or "../components/ui" keeps working.
+export { AIRTELTIGO_PREFIXES, isLikelyAirtelTigoNumber } from "../lib/phoneValidation";
 
 // Shown near the phone/account field on every purchase page — Techlink's
 // documented rule is that a wrong number is not refunded, so this needs to
@@ -278,6 +276,15 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
   // already branches on fulfillmentStatus for the order-history view —
   // this brings the same honesty to the post-checkout receipt.
   const isQueued = order.fulfillmentStatus === "queued_with_provider";
+  // Same "queued" state, up to three different reasons — see the matching
+  // comment on notifyCustomerOrderQueued in lib/notifications.js. A single
+  // delayed-tier order (MTN Master) has a real, known ETA; an unconfirmed
+  // bulk batch is a manual check with no fixed ETA; a bulk/Excel MTN Master
+  // order is both at once, so it gets both pieces of information rather
+  // than losing one to the other.
+  const isBulkQueued = isQueued && (order.orderType === "tierBulkData" || order.orderType === "tierBulkAirtime");
+  const queuedTier = TIERS[order.tierDetails?.tierKey];
+  const isDelayedTierQueued = isQueued && queuedTier?.instant === false;
   // Everything that isn't a confirmed delivery and isn't the known-delayed
   // "queued_with_provider" tier — "processing", "failed", "manual_review",
   // "ready" — now also reaches this screen after the lib/payment.js fix
@@ -297,6 +304,14 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
   const feePaid = order.paystackFeeAmount != null ? Number(order.paystackFeeAmount) : (order.checkoutAmount != null ? Math.round((totalPaid - productPrice) * 100) / 100 : null);
   const showFeeBreakdown = feePaid != null && feePaid > 0;
   const showRecipient = order.phone && order.phone !== "—" && !String(order.phone).includes("recipient");
+  // Result-checker vouchers/lookups are the one product where the payoff IS
+  // the data in the response (serial + PIN), not a confirmation that
+  // something happened on a phone line elsewhere — see the matching
+  // comments on sanitizePublicResult (lib/store.js) and
+  // notifyCustomerOrderFulfilled (lib/notifications.js). Surfaced here too
+  // since this receipt is the first thing the customer sees, and it's the
+  // one place they don't have to go check email for it.
+  const checkers = isFulfilled && Array.isArray(order.result?.checkers) ? order.result.checkers : [];
   return (
     <div className="card" style={{ padding: "32px 28px", textAlign: "center", maxWidth: 420, margin: "0 auto" }}>
       <div
@@ -311,10 +326,30 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
       <p style={{ color: "var(--muted)", fontSize: 14, margin: "0 0 24px" }}>
         {isFulfilled
           ? "Your order has been processed."
-          : isQueued
-            ? "Your payment was successful. This option isn't instant — typically 30 minutes to a few hours (sometimes longer if the queue is busy). This is normal, not an error."
-            : "Your payment was successful and your order is being processed now — this can take a few minutes. You do not need to pay again."}
+          : isBulkQueued && isDelayedTierQueued
+            ? `Your payment was successful. This is a bulk ${queuedTier.label} order, so two things apply: ${queuedTier.label} bundles are our non-instant tier (typically 30 minutes to a few hours per delivery), and for bulk batches we also confirm every recipient with the provider before marking it complete. Most batches are confirmed the same day.`
+            : isBulkQueued
+              ? "Your payment was successful. Because this is a bulk order, we're confirming with the provider that every recipient was delivered before we mark it complete — that's a manual check, not a fixed timer, so there's no set ETA. Most batches are confirmed the same day."
+              : isQueued
+                ? "Your payment was successful. This option isn't instant — typically 30 minutes to a few hours (sometimes longer if the queue is busy). This is normal, not an error."
+                : "Your payment was successful and your order is being processed now — this can take a few minutes. You do not need to pay again."}
       </p>
+      {checkers.length > 0 && (
+        <div
+          style={{
+            textAlign: "left", background: "var(--bg-subtle, rgba(0,0,0,0.03))", border: "1px solid var(--border)",
+            borderRadius: 8, padding: "14px 16px", marginBottom: 20, display: "flex", flexDirection: "column", gap: 8,
+          }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{checkers.length === 1 ? "Your voucher" : `Your ${checkers.length} vouchers`}</div>
+          {checkers.map((c, i) => (
+            <div key={i} style={{ fontSize: 13 }}>
+              {checkers.length > 1 ? `${i + 1}. ` : ""}{c.type} — Serial: <strong>{c.serialNumber || "—"}</strong> &nbsp; PIN: <strong>{c.pin || "—"}</strong>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: "var(--muted-dim)" }}>Also emailed to you — save this somewhere safe.</div>
+        </div>
+      )}
       <div
         style={{
           textAlign: "left", display: "flex", flexDirection: "column", gap: 10,
@@ -339,9 +374,11 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
       <p style={{ fontSize: 12, color: "var(--muted-dim)", marginBottom: 20 }}>
         {isFulfilled
           ? "A confirmation has been emailed to you. Keep the order number above for reference."
-          : isQueued
-            ? "A confirmation email is on its way — we'll email you again once it's actually delivered. Keep the order number above for reference."
-            : "If it hasn't arrived within a couple of hours, contact us via the Feedback page with the order number above — no need to pay again."}
+          : isBulkQueued
+            ? "A confirmation email is on its way — we'll email you the moment it's confirmed delivered. Keep the order number above for reference; no need to follow up unless it's been a while."
+            : isQueued
+              ? "A confirmation email is on its way — we'll email you again once it's actually delivered. Keep the order number above for reference."
+              : "If it hasn't arrived within a couple of hours, contact us via the Feedback page with the order number above — no need to pay again."}
       </p>
       <PrimaryButton onClick={onNewOrder}>Make another purchase</PrimaryButton>
     </div>
@@ -382,9 +419,18 @@ export function OrderList({ items }) {
               </div>
             </div>
           </div>
-          {o.fulfillmentStatus === "queued_with_provider" && (
-            <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>Typically 30 minutes to a few hours for this option — not an error.</div>
-          )}
+          {o.fulfillmentStatus === "queued_with_provider" && (() => {
+            const isBulk = o.orderType === "tierBulkData" || o.orderType === "tierBulkAirtime";
+            const tier = TIERS[o.tierDetails?.tierKey];
+            const isDelayedTier = tier?.instant === false;
+            const note =
+              isBulk && isDelayedTier
+                ? `Bulk ${tier.label} order — non-instant tier plus a manual batch check. No fixed ETA, but no action needed from you.`
+                : isBulk
+                  ? "Bulk order — confirming delivery with the provider now. No fixed ETA, but no action needed from you."
+                  : "Typically 30 minutes to a few hours for this option — not an error.";
+            return <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>{note}</div>;
+          })()}
           {o.status === "failed" && o.failReason && (
             <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>Reason: {FAIL_REASON_LABELS[o.failReason] || o.failReason}</div>
           )}

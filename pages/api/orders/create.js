@@ -11,6 +11,7 @@ import {
   getAirtimeFee,
 } from "../../../lib/techlink";
 import { TIERS } from "../../../lib/agentProducts";
+import { isLikelyAirtelTigoNumber } from "../../../lib/phoneValidation";
 import { rateLimit } from "../../../lib/rateLimit";
 import { getOrderPricing } from "../../../lib/pricing";
 
@@ -111,6 +112,9 @@ export default async function handler(req, res) {
 
     if (orderType === "airtime") {
       if (!network) return res.status(400).json({ error: "Network is required" });
+      if (network === "airteltigo" && !isLikelyAirtelTigoNumber(phone)) {
+        return res.status(400).json({ error: "That doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053) — wrong-number purchases aren't refundable, so double-check before paying." });
+      }
       amount = Number(airtimeAmount);
       if (!amount || amount <= 0) return res.status(400).json({ error: "Invalid amount" });
       const airtimeFeeData = await getAirtimeFee();
@@ -120,6 +124,9 @@ export default async function handler(req, res) {
 
     } else if (orderType === "data") {
       if (!network) return res.status(400).json({ error: "Network is required" });
+      if (network === "airteltigo" && !isLikelyAirtelTigoNumber(phone)) {
+        return res.status(400).json({ error: "That doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053) — wrong-number purchases aren't refundable, so double-check before paying." });
+      }
       if (!bundleId) return res.status(400).json({ error: "Select a bundle" });
       // Re-fetch the live catalogue to find the authoritative price for
       // this bundleId — the price shown to the customer must have come
@@ -202,6 +209,9 @@ export default async function handler(req, res) {
       if (!tier) return res.status(400).json({ error: "Unknown product tier" });
       if (!size) return res.status(400).json({ error: "Select a bundle size" });
       resolvedNetwork = tier.network; // never trust a client-sent network for a tier order — the tier decides it
+      if (resolvedNetwork === "airteltigo" && !isLikelyAirtelTigoNumber(phone)) {
+        return res.status(400).json({ error: "That doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053) — wrong-number purchases aren't refundable, so double-check before paying." });
+      }
       // Authoritative price + exact product name come from Techlink's own
       // catalogue right now — never from the browser or the local reference file.
       const catalogue = await listProducts(tier.category);
@@ -235,6 +245,9 @@ export default async function handler(req, res) {
         if (!/^[+0-9][0-9\s-]{7,20}$/.test(String(r.phone))) {
           return res.status(400).json({ error: `Invalid phone number in bulk line: ${r.phone}` });
         }
+        if (tier.network === "airteltigo" && !isLikelyAirtelTigoNumber(r.phone)) {
+          return res.status(400).json({ error: `Line for ${r.phone} doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053) — wrong-number purchases aren't refundable, so fix it before paying.` });
+        }
         const rowPrice = Number(product.price ?? product.amount);
         if (!Number.isFinite(rowPrice) || rowPrice <= 0) return res.status(400).json({ error: `Invalid price for ${r.phone}` });
         resolvedRows.push({ phone: String(r.phone).trim(), size: Number(r.size), name: product.name, price: rowPrice });
@@ -253,6 +266,9 @@ export default async function handler(req, res) {
         }
         if (!/^[+0-9][0-9\s-]{7,20}$/.test(String(r.phone))) {
           return res.status(400).json({ error: `Invalid phone number in bulk line: ${r.phone}` });
+        }
+        if (network === "airteltigo" && !isLikelyAirtelTigoNumber(r.phone)) {
+          return res.status(400).json({ error: `Line for ${r.phone} doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053) — wrong-number purchases aren't refundable, so fix it before paying.` });
         }
         if (rowAmount > MAX_BULK_LINE_GHS) return res.status(400).json({ error: `Each bulk airtime line is limited to GHS ${MAX_BULK_LINE_GHS.toFixed(2)}` });
         resolvedRows.push({ phone: String(r.phone).trim(), amount: rowAmount });
