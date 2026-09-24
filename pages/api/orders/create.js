@@ -280,13 +280,18 @@ export default async function handler(req, res) {
     // `amount` is the customer-facing service/base amount used by the
     // fulfillment call. `providerCost` is the estimated wallet cost after
     // documented provider-side charges (notably Techlink airtime fees).
-    // Customer-facing price then adds business markup and the Paystack fee.
-    // What Techlink actually charges the business is represented by
-    // `providerCost`. The customer is charged enough at checkout that,
-    // after the 1.95% Paystack fee is deducted, PjDigitalServices still
-    // receives `providerCost + business margin`. Fulfillment itself uses
-    // `amount` for the provider request, never checkoutAmount — see lib/techlink.js.
-    const pricing = getOrderPricing({ providerCost, orderType, network: resolvedNetwork || orderType });
+    // Customer-facing pricing applies the product-specific business margin
+    // and the Paystack processing fee. For plain Airtime and Quick Data, the
+    // business margin is 0% and Techlink's wallet-side Airtime fee is kept as
+    // a provider cost rather than passed through to the customer.
+    // Fulfillment itself uses `amount` for the provider request, never
+    // checkoutAmount — see lib/techlink.js.
+    const pricing = getOrderPricing({
+      providerCost,
+      customerBaseAmount: amount,
+      orderType,
+      network: resolvedNetwork || orderType,
+    });
     const checkoutAmount = pricing.checkoutAmount;
 
     const order = await createOrder({
