@@ -165,6 +165,7 @@ alter table customers add column if not exists password_hash text;
 alter table customers add column if not exists email_verified boolean not null default false;
 alter table customers add column if not exists verification_token text;
 alter table customers add column if not exists verification_expires_at timestamptz;
+alter table customers add column if not exists verification_sent_at timestamptz;
 alter table customers add column if not exists reset_token text;
 alter table customers add column if not exists reset_expires_at timestamptz;
 
