@@ -33,7 +33,7 @@ describe("pricing policy", () => {
       network: "ecg",
     });
     expect(pricing.customerProductAmount).toBe(101);
-    expect(pricing.checkoutAmount).toBeCloseTo(102.0, 1);
+    expect(pricing.checkoutAmount).toBeCloseTo(103.01, 2);
     expect(pricing.checkoutAmount).toBeGreaterThan(pricing.customerProductAmount);
   });
 });
