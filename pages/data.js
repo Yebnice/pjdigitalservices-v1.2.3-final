@@ -30,8 +30,8 @@ export default function DataPage() {
   const [receipt, setReceipt] = useState(null);
 
   useEffect(() => {
-    setEmail(window.localStorage.getItem("pj_email") || "");
-    setPhone(window.localStorage.getItem("pj_phone") || "");
+    setEmail(window.sessionStorage.getItem("pj_email") || "");
+    setPhone(window.sessionStorage.getItem("pj_phone") || "");
   }, []);
 
   function loadBundles() {
@@ -70,8 +70,8 @@ export default function DataPage() {
       bundleId: selected.id || selected.bundleId,
       onDone: (order, paidAmount) => {
         setLoading(false);
-        window.localStorage.setItem("pj_email", email);
-        window.localStorage.setItem("pj_phone", phone);
+        window.sessionStorage.setItem("pj_email", email);
+        window.sessionStorage.setItem("pj_phone", phone);
         setReceipt({ order, amount: paidAmount });
       },
       onError: (msg) => {
