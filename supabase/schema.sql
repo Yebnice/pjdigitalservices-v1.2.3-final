@@ -1,5 +1,5 @@
 -- PjDigitalServices production database schema.
--- Version: v1.3.2
+-- Version: v1.3.3
 --
 -- SOURCE OF TRUTH:
 -- This file matches the current application code on the main branch.
@@ -15,6 +15,47 @@
 -- no public table policies are created here.
 
 create extension if not exists pgcrypto;
+
+
+-- ============================================================
+-- PAYSTACK WEBHOOK QUEUE
+-- ============================================================
+
+create table if not exists paystack_webhook_events (
+  id            uuid primary key default gen_random_uuid(),
+  event_key     text not null unique,
+  event_type    text not null,
+  reference     text not null,
+  payload       jsonb not null,
+  status        text not null default 'pending',
+  attempts      integer not null default 0,
+  received_at   timestamptz not null default now(),
+  available_at  timestamptz not null default now(),
+  locked_at     timestamptz,
+  processed_at  timestamptz,
+  last_error    text
+);
+
+alter table paystack_webhook_events add column if not exists event_key text;
+alter table paystack_webhook_events add column if not exists event_type text;
+alter table paystack_webhook_events add column if not exists reference text;
+alter table paystack_webhook_events add column if not exists payload jsonb;
+alter table paystack_webhook_events add column if not exists status text default 'pending';
+alter table paystack_webhook_events add column if not exists attempts integer default 0;
+alter table paystack_webhook_events add column if not exists received_at timestamptz default now();
+alter table paystack_webhook_events add column if not exists available_at timestamptz default now();
+alter table paystack_webhook_events add column if not exists locked_at timestamptz;
+alter table paystack_webhook_events add column if not exists processed_at timestamptz;
+alter table paystack_webhook_events add column if not exists last_error text;
+
+create unique index if not exists paystack_webhook_event_reference_uq
+  on paystack_webhook_events (event_type, reference);
+
+create index if not exists paystack_webhook_pending_idx
+  on paystack_webhook_events (status, available_at, received_at)
+  where status = 'pending';
+
+alter table paystack_webhook_events enable row level security;
 
 
 -- ============================================================
