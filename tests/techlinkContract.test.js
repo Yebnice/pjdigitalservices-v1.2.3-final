@@ -64,7 +64,6 @@ describe("Techlink request contracts", () => {
   });
 
   it("sends bulk-data rows without undocumented paymentMethod fields", async () => {
-    process.env.TECHLINK_API_KEY = "tlg_test_contract";
     global.fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true }), {
         status: 200,
