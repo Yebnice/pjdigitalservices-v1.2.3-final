@@ -14,7 +14,11 @@ export default function FeedbackPage() {
   const [loading, setLoading] = useState(false); const [status, setStatus] = useState(null); const [caseReference, setCaseReference] = useState(""); const [caseLookup, setCaseLookup] = useState(null);
   const isDataOrAirtime = serviceType === "data" || serviceType === "airtime";
 
-  useEffect(() => { try { setEmail(window.localStorage.getItem("pj_email") || ""); setPhone(window.localStorage.getItem("pj_phone") || ""); setOrderReference(window.localStorage.getItem("pj_last_reference") || ""); } catch {} }, []);
+  useEffect(() => { try {
+  setEmail(window.sessionStorage.getItem("pj_email") || "");
+  setPhone(window.sessionStorage.getItem("pj_phone") || "");
+  setOrderReference(window.localStorage.getItem("pj_last_reference") || "");
+} catch {} }, []);
 
   const valid = Boolean(name.trim() && (email.trim() || phone.trim()) && serviceType && message.trim().length >= 5 && transactionId.trim() && transactionAmount !== "" && transactionAt && transactionDetails.trim() && (!isDataOrAirtime || (requestedData.trim() && beneficiary.trim())));
 
@@ -49,7 +53,11 @@ export default function FeedbackPage() {
       <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>Submit complaint</PrimaryButton>
       {status && <p style={{ fontSize: 13, color: status.type === "success" ? "var(--green)" : "var(--red)" }}>{status.text}</p>}
       <div className="card" style={{ padding: 14, marginTop: 8 }}><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Required evidence for data &amp; airtime complaints</div><div style={{ fontSize: 12, color: "var(--muted)" }}>Transaction ID, amount, data/airtime requested, recipient or beneficiary, transaction date and time, transaction details, and your complaint. For other products, complete the form with the transaction details relevant to that service.</div></div>
-      <div className="card" style={{ padding: 14, marginTop: 8 }}><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Check an existing support case</div><div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Use the case reference and the same email or phone used for the complaint.</div><input className="input" value={caseReference} onChange={e=>setCaseReference(e.target.value)} placeholder="SUP-20260915-XXXXX" style={{ marginBottom: 8 }} /><div style={{ display: "flex", gap: 8 }}><input className="input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" type="email" /><input className="input" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="or phone" /></div><button className="nav-item" style={{ width: "auto", padding: "7px 10px", marginTop: 8 }} onClick={async ()=>{const r=await fetch(`/api/feedback/track?caseReference=${encodeURIComponent(caseReference)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}`); const d=await r.json(); setCaseLookup(r.ok?d.case:{error:d.error||"Not found"});}}>Check case</button>{caseLookup && <div style={{fontSize:13,marginTop:10}}>{caseLookup.error?<span style={{color:"var(--red)"}}>{caseLookup.error}</span>:<span>Case <strong>{caseLookup.caseReference}</strong> is <strong>{String(caseLookup.status).replace("_"," ")}</strong>{caseLookup.orderReference?` · Order ${caseLookup.orderReference}`:""}.</span>}</div>}</div>
+      <div className="card" style={{ padding: 14, marginTop: 8 }}><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Check an existing support case</div><div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Use the case reference and the same email or phone used for the complaint.</div><input className="input" value={caseReference} onChange={e=>setCaseReference(e.target.value)} placeholder="SUP-20260915-XXXXX" style={{ marginBottom: 8 }} /><div style={{ display: "flex", gap: 8 }}><input className="input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" type="email" /><input className="input" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="or phone" /></div><button className="nav-item" style={{ width: "auto", padding: "7px 10px", marginTop: 8 }} onClick={async ()=>{const r=await fetch("/api/feedback/track", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ caseReference, email, phone }),
+}); const d=await r.json(); setCaseLookup(r.ok?d.case:{error:d.error||"Not found"});}}>Check case</button>{caseLookup && <div style={{fontSize:13,marginTop:10}}>{caseLookup.error?<span style={{color:"var(--red)"}}>{caseLookup.error}</span>:<span>Case <strong>{caseLookup.caseReference}</strong> is <strong>{String(caseLookup.status).replace("_"," ")}</strong>{caseLookup.orderReference?` · Order ${caseLookup.orderReference}`:""}.</span>}</div>}</div>
     </div>
   </div>;
 }
