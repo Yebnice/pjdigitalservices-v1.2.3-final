@@ -1,0 +1,31 @@
+name: Package source snapshot
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout PR source
+        uses: actions/checkout@v4
+
+      - name: Create clean source ZIP
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          zip -r "PjDigitalServices-v${VERSION}-source.zip" .             -x ".git/*"                ".github/workflows/package-source.yml"                "node_modules/*"                ".next/*"
+
+      - name: Upload source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: PjDigitalServices-v1.3.6-source
+          path: "PjDigitalServices-v*.zip"
+          if-no-files-found: error
+          retention-days: 7
