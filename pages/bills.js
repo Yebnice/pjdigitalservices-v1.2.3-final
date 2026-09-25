@@ -134,7 +134,7 @@ export default function BillsPage() {
           <>
             <Field label="Meter number">
               <div style={{ display: "flex", gap: 8 }}>
-                <input className="input" style={{ flex: 1 }} value={meterNumber} onChange={(e) => setMeterNumber(e.target.value)} placeholder="e.g. 0210444711" />
+                <input className="input" style={{ flex: 1 }} value={meterNumber} onChange={(e) => { setMeterNumber(e.target.value); setEcgLookup(null); }} placeholder="e.g. 0210444711" />
                 <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={lookupEcg} disabled={meterNumber.length < 4 || phone.length < 10 || lookingUp}>
                   {lookingUp ? "..." : "Look up"}
                 </button>
@@ -148,7 +148,7 @@ export default function BillsPage() {
               </div>
             )}
             <Field label="Phone number">
-              <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" />
+              <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setEcgLookup(null); setWaterBill(null); }} placeholder="024 000 0000" />
             </Field>
             <Field label="Amount to top up (GHS)">
               <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="50.00" type="number" />
@@ -168,7 +168,7 @@ export default function BillsPage() {
           <>
             <Field label="Ghana Water account / meter number">
               <div style={{ display: "flex", gap: 8 }}>
-                <input className="input" style={{ flex: 1 }} value={meterNumber} onChange={(e) => setMeterNumber(e.target.value)} placeholder="e.g. 0500123456" />
+                <input className="input" style={{ flex: 1 }} value={meterNumber} onChange={(e) => { setMeterNumber(e.target.value); setWaterBill(null); }} placeholder="e.g. 0500123456" />
                 <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={checkWaterBill} disabled={meterNumber.length < 4 || checkingBill}>
                   {checkingBill ? "..." : "Check bill"}
                 </button>
