@@ -66,7 +66,7 @@ Current external facts were checked against official documentation for Next.js, 
 ### 7. AI customer support
 - Reworked the chatbot into a hybrid assistant.
 - No AI key: built-in FAQ mode still works.
-- With `GEMINI_API_KEY`: the server uses the Gemini API with `GEMINI_MODEL` (default `gemini-3.8-flash`, Google's GA Flash-tier model released September 2, 2026). Support-chat replies request Google's LOW thinking level, since Annette answers short support questions rather than doing deep multi-step reasoning.
+- With `GEMINI_API_KEY`: the server uses the Gemini API with `GEMINI_MODEL` (default `gemini-3.8-flash`, Google's GA Flash-tier model released September 2, 2026). Support-chat replies use Gemini's `medium` thinking level by default, which matches Google's current Gemini 3.8 Flash default/recommended setting for quality-focused tasks.
 - Added secure order lookup inside chat only when both order reference and checkout email are supplied.
 - The AI is prohibited from charging customers, bypassing Paystack, inventing live prices/statuses, or requesting/repeating PINs and sensitive identity information.
 - Added a secure “Track my order” flow inside the chat widget.
