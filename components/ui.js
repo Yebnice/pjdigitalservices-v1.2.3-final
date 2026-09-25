@@ -408,6 +408,13 @@ export function OrderList({ items }) {
             </div>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: 14, fontWeight: 600 }}>GHS {Number(o.checkoutAmount ?? o.amount).toFixed(2)}</div>
+              {o.customerProductAmount != null && (
+                <div style={{ fontSize: 11, color: "var(--muted-dim)", marginTop: 2 }}>
+                  Product GHS {Number(o.customerProductAmount).toFixed(2)}
+                  {" · "}Margin GHS {Number(o.businessMarkupAmount ?? 0).toFixed(2)}
+                  {" · "}Fee GHS {Number(o.paystackFeeAmount ?? 0).toFixed(2)}
+                </div>
+              )}
               <div
                 style={{
                   fontSize: 12,
