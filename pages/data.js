@@ -103,11 +103,11 @@ export default function DataPage() {
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <Field label="Network">
-          <NetworkPicker value={network} onChange={(n) => { setNetwork(n); setBundles(null); setBundleId(null); }} />
+          <NetworkPicker value={network} onChange={(n) => { setNetwork(n); setBundles(null); setBundleId(null); setNetworkConfirmed(false); }} />
         </Field>
         <Field label="Recipient phone number">
           <div style={{ display: "flex", gap: 8, maxWidth: 320 }}>
-            <input className="input" style={{ flex: 1 }} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" />
+            <input className="input" style={{ flex: 1 }} value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder="024 000 0000" />
             <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={loadBundles} disabled={phone.length < 10 || loadingBundles}>
               {loadingBundles ? "..." : "Load bundles"}
             </button>
