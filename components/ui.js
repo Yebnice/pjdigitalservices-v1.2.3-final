@@ -1,3 +1,4 @@
+import { AIRTELTIGO_PREFIXES, getLikelyNetwork, isLikelyAirtelTigoNumber } from "../lib/networkValidation";
 import { useEffect, useState } from "react";
 import { Loader2, Check, X, Bolt, Droplet, GraduationCap, Clock } from "lucide-react";
 
@@ -106,47 +107,11 @@ export function NetworkPicker({ value, onChange, palette = NETWORKS }) {
           onClick={() => onChange(id)}
           style={value === id ? { borderColor: n.color } : undefined}
         >
-          <NetworkBadge id={id} palette={palette} size={18} />
-          {n.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+          <NetworkBadg// Network prefix helpers live in lib/networkValidation.js so they can be
+// tested without importing this JSX component module.
 
-// Common Ghana mobile-network prefix ranges used as a customer-safety
-// hint before checkout. These are NOT treated as proof of the current
-// network because Ghana supports Mobile Number Portability (MNP).
-export const NETWORK_PREFIXES = {
-  mtn: ["024", "025", "053", "054", "055", "059"],
-  telecel: ["020", "050"],
-  airteltigo: ["026", "027", "056", "057"],
-};
+export { AIRTELTIGO_PREFIXES, getLikelyNetwork, isLikelyAirtelTigoNumber };
 
-export const AIRTELTIGO_PREFIXES = NETWORK_PREFIXES.airteltigo;
-
-function normalizeGhanaPhone(phone) {
-  const digits = String(phone || "").replace(/\D/g, "");
-  return digits.startsWith("233") ? "0" + digits.slice(3) : digits;
-}
-
-export function getLikelyNetwork(phone) {
-  const local = normalizeGhanaPhone(phone);
-  if (!local) return null;
-
-  for (const [network, prefixes] of Object.entries(NETWORK_PREFIXES)) {
-    if (prefixes.some((prefix) => local.startsWith(prefix))) return network;
-  }
-  return null;
-}
-
-export function isLikelyAirtelTigoNumber(phone) {
-  return getLikelyNetwork(phone) === "airteltigo";
-}
-
-// A safety nudge for a network/number mismatch. We deliberately do not
-// auto-switch or hard-block because a Ghanaian number may have been ported
-// to another operator while keeping the same number.
 export function NetworkMismatchNotice({ network, phone, acknowledged, onAcknowledge }) {
   const likely = getLikelyNetwork(phone);
   if (!likely || likely === network) return null;
@@ -179,6 +144,11 @@ export function NetworkMismatchNotice({ network, phone, acknowledged, onAcknowle
           style={{ marginTop: 2 }}
         />
         <span>I confirm that this recipient is currently on {selectedLabel}.</span>
+      </label>
+    </div>
+  );
+}
+pan>I confirm that this recipient is currently on {selectedLabel}.</span>
       </label>
     </div>
   );
