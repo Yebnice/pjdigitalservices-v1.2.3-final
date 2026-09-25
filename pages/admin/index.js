@@ -137,9 +137,15 @@ function OverviewTab({ orders, feedback, manualReview, walletBalance }) {
   const paidInRange = inRange.filter((o) => ["payment_verified", "success"].includes(o.status));
   const fulfilledInRange = inRange.filter((o) => o.fulfillmentStatus === "fulfilled");
 
-  const revenue = successInRange.reduce((s, o) => s + Number(o.amount || 0), 0);
+  // Product revenue is the customer-facing product price after any business
+  // margin, but before the Paystack processing fee. Keep the fee separate so
+  // the dashboard makes the 1% business margin auditable instead of hiding it
+  // inside a raw provider/service amount.
+  const revenue = successInRange.reduce((s, o) => s + Number(o.customerProductAmount ?? o.amount ?? 0), 0);
+  const businessMargin = successInRange.reduce((s, o) => s + Number(o.businessMarkupAmount ?? 0), 0);
   const fees = successInRange.reduce((s, o) => s + Number(o.paystackFeeAmount || 0), 0);
-  const avgOrder = successInRange.length ? (successInRange.reduce((s, o) => s + Number(o.checkoutAmount ?? o.amount ?? 0), 0) / successInRange.length) : 0;
+  const customerPayments = successInRange.reduce((s, o) => s + Number(o.checkoutAmount ?? o.customerProductAmount ?? o.amount ?? 0), 0);
+  const avgOrder = successInRange.length ? (customerPayments / successInRange.length) : 0;
   // fulfillmentStatus is the authoritative state here — "failed" can happen
   // whether the order-level `status` is "failed" (a payment-side reject) or
   // still "payment_verified" (payment went through but fulfillment didn't).
@@ -158,7 +164,7 @@ function OverviewTab({ orders, feedback, manualReview, walletBalance }) {
     .filter((o) => new Date(o.createdAt) >= trendStart)
     .forEach((o) => {
       const k = dayKey(o.createdAt);
-      dayBuckets[k] = (dayBuckets[k] || 0) + Number(o.amount || 0);
+      dayBuckets[k] = (dayBuckets[k] || 0) + Number(o.customerProductAmount ?? o.amount ?? 0);
     });
   const trendPoints = [];
   for (let i = trendDays - 1; i >= 0; i--) {
@@ -189,12 +195,14 @@ function OverviewTab({ orders, feedback, manualReview, walletBalance }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 16 }}>
-        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Revenue</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {revenue.toFixed(2)}</div></div>
+        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Product sales</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {revenue.toFixed(2)}</div></div>
+        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Business margin</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {businessMargin.toFixed(2)}</div></div>
+        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Customer payments</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {customerPayments.toFixed(2)}</div></div>
         <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Orders</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>{inRange.length}</div></div>
         <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Payment success</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600, color: paymentSuccessRate < 90 && inRange.length > 0 ? "#dc2626" : undefined }}>{inRange.length ? `${paymentSuccessRate}%` : "—"}</div></div>
         <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Fulfillment success</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600, color: fulfillmentSuccessRate < 90 && paidInRange.length > 0 ? "#dc2626" : undefined }}>{paidInRange.length ? `${fulfillmentSuccessRate}%` : "—"}</div></div>
         <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Avg order value</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {avgOrder.toFixed(2)}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Fees recovered</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {fees.toFixed(2)}</div></div>
+        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Paystack fees recovered</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {fees.toFixed(2)}</div></div>
       </div>
 
       {(failedInRange > 0 || pendingInRange > 0) && (
@@ -479,12 +487,12 @@ export default function AdminPage() {
   if (!auth) return <PasswordGate onUnlock={({ role: nextRole }) => { setRole(nextRole); setAuth(true); }} />;
 
   const successfulOrders = orders.filter((o) => o.status === "success");
-  // "Total sales" is deliberately the net product revenue (`amount`), not
-  // what customers were charged at checkout — the Paystack fee markup is a
-  // pass-through cost recovery, not real income, so it's broken out
-  // separately below rather than inflating the headline sales number.
-  const totalSales = successfulOrders.reduce((s, o) => s + Number(o.amount), 0);
+  // Keep product sales, business margin, Paystack fee recovery and the actual
+  // customer cash collected as separate audited figures.
+  const totalSales = successfulOrders.reduce((s, o) => s + Number(o.customerProductAmount ?? o.amount ?? 0), 0);
+  const totalBusinessMargin = successfulOrders.reduce((s, o) => s + Number(o.businessMarkupAmount ?? 0), 0);
   const totalFeesCollected = successfulOrders.reduce((s, o) => s + Number(o.paystackFeeAmount ?? 0), 0);
+  const totalCustomerPayments = successfulOrders.reduce((s, o) => s + Number(o.checkoutAmount ?? o.customerProductAmount ?? o.amount ?? 0), 0);
 
   const q = orderSearch.trim().toLowerCase();
   const filteredOrders = q
@@ -520,7 +528,9 @@ export default function AdminPage() {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 24 }}>
-        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Total sales</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>GHS {totalSales.toFixed(2)}</div></div>
+        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Product sales</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>GHS {totalSales.toFixed(2)}</div></div>
+        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Business margin</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>GHS {totalBusinessMargin.toFixed(2)}</div></div>
+        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Customer payments</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>GHS {totalCustomerPayments.toFixed(2)}</div></div>
         <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Paystack fees recovered</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>GHS {totalFeesCollected.toFixed(2)}</div></div>
         <div className="stat-card">
           <div style={{ fontSize: 14, color: "var(--muted)" }}>Techlink wallet</div>
