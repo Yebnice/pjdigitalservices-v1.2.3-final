@@ -1,5 +1,14 @@
 # PjDigitalServices — Production Audit & Hardening Changelog
 
+## v1.3.9 final production fact-check — September 25, 2026
+
+- Corrected an admin reconciliation privacy mismatch: optional Gemini summaries now receive only aggregate reconciliation counts and an instruction to explain those totals; transaction references and per-transaction details are not sent to Gemini.
+- Corrected a role dead end in the admin dashboard: viewer accounts no longer call the operator-only Techlink wallet endpoint and therefore do not receive a misleading wallet-access error.
+- Added CI secret-leakage scanning with safe handling for documented placeholders and test fixtures.
+- Added regression coverage for admin RBAC, distributed login throttling, reconciliation redaction, and viewer wallet behavior.
+- Bumped the application release version to v1.3.9.
+- Final verification on the fact-check branch: 11 test files, all regression tests passed; rate-limit and production-contract checks passed; secret scan passed; Next.js production build passed.
+
 ## v1.3.6 full workflow/document audit — September 24, 2026
 
 - Audited the payment -> order -> Techlink fulfillment -> background-worker path against the supplied Techlink Business API V1 document.
