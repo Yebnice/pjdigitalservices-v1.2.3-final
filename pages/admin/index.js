@@ -180,7 +180,7 @@ function OverviewTab({ orders, feedback, manualReview, walletBalance }) {
   successInRange.forEach((o) => {
     const label = productLabel(o);
     if (!productMap[label]) productMap[label] = { label, revenue: 0, count: 0 };
-    productMap[label].revenue += Number(o.amount || 0);
+    productMap[label].revenue += Number(o.customerProductAmount ?? o.amount ?? 0);
     productMap[label].count += 1;
   });
   const topProducts = Object.values(productMap).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
