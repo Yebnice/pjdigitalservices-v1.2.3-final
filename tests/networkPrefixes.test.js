@@ -5,6 +5,7 @@ describe("Ghana network prefix hints", () => {
   it("recognizes common MTN prefixes", () => {
     expect(getLikelyNetwork("024 123 4567")).toBe("mtn");
     expect(getLikelyNetwork("0541234567")).toBe("mtn");
+    expect(getLikelyNetwork("+233 55 123 4567")).toBe("mtn");
     expect(getLikelyNetwork("+233551234567")).toBe("mtn");
   });
 
