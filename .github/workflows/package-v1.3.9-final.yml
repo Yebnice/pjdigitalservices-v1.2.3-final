@@ -1,0 +1,25 @@
+name: Package current main source
+
+on:
+  push:
+    branches: ["package-v1.3.9-final"]
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create source ZIP
+        run: |
+          zip -r "PjDigitalServices-v1.3.9-final-fact-checked.zip" .             -x ".git/*"                ".github/workflows/package-v1.3.9-final.yml"                "node_modules/*"                ".next/*"
+
+      - name: Upload source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: PjDigitalServices-v1.3.9-final-fact-checked
+          path: PjDigitalServices-v1.3.9-final-fact-checked.zip
+          retention-days: 7
