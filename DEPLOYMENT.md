@@ -67,7 +67,7 @@ Preview if you want staging to work too):
 | `CRON_SECRET` | Yes | Random string — protects `/api/jobs/fulfill` |
 | `NEXT_PUBLIC_SITE_URL` | Yes | Your production URL, e.g. `https://pjdigitalservices.com` |
 | `GEMINI_API_KEY` | Optional | Enables the live AI agent in chat; omit and the chatbot still works in FAQ-only mode |
-| `GEMINI_MODEL` | Optional | Defaults to `gemini-2.5-flash` if unset |
+| `GEMINI_MODEL` | Optional | Defaults to `gemini-3.8-flash` if unset |
 | `RESEND_API_KEY`, `NOTIFICATION_FROM_EMAIL`, `ADMIN_ALERT_EMAIL` | Optional | Stale-order email alerts |
 | `BREVO_API_KEY`, `BREVO_SMS_SENDER` | Optional | SMS escalation leg — see section 3 |
 | `MAX_FULFILLMENT_ATTEMPTS`, `FULFILLMENT_STALE_MINUTES`, `URGENT_REVIEW_MINUTES`, `FULFILLMENT_BATCH_SIZE` | Optional | Tuning knobs, sensible defaults exist in code |
