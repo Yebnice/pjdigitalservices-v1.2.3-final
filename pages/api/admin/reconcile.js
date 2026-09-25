@@ -69,9 +69,9 @@ async function summarizeWithGemini(summary) {
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  if (!requireAdminRole(req, res, ["operator"])) return;
+  const actor = requireAdminRole(req, res, ["operator"]);\n  if (!actor) return;
   try {
-    const { csv } = req.body || {};
+    const { csv, generateAiSummary = false } = req.body || {};
     if (!csv || typeof csv !== "string") return res.status(400).json({ error: "Paste or upload the Paystack CSV export first" });
 
     const rows = parseCsv(csv);
@@ -152,7 +152,7 @@ export default async function handler(req, res) {
       note: "\"App-only\" entries are only meaningful if the uploaded file covers the full date range and includes every successful transaction for that period.",
     };
 
-    result.summary = await summarizeWithGemini(result);
+    result.summary = generateAiSummary ? await summarizeWithGemini(result) : null;
 
     await recordAuditEvent({
       action: "reconciliation_run",
