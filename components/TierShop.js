@@ -49,6 +49,13 @@ function downloadSampleCsv(kind) {
   URL.revokeObjectURL(url);
 }
 
+function hasNetworkMismatches(rows, networkId) {
+  return rows.filter((row) => {
+    const likely = getLikelyNetwork(row.phone);
+    return Boolean(likely && likely !== networkId);
+  });
+}
+
 function estimateBulkTotal(kind, rows, tier, liveSizes) {
   if (kind === "airtime") return rows.reduce((s, r) => s + r.value, 0);
   return rows.reduce((s, r) => {
@@ -243,8 +250,10 @@ function EvdSingleForm({ networkId, email, setEmail, loading, setLoading, onDone
 
 function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, setLoading, onDone, onError, liveSizes }) {
   const [text, setText] = useState("");
+  const [networkConfirmed, setNetworkConfirmed] = useState(false);
   const rows = parseBulkText(text);
-  const valid = rows.length > 0 && email.includes("@");
+  const mismatches = hasNetworkMismatches(rows, networkId);
+  const valid = rows.length > 0 && email.includes("@") && (!mismatches.length || networkConfirmed);
   const total = estimateBulkTotal(kind, rows, tier, liveSizes);
 
   function submit() {
@@ -278,7 +287,7 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
           className="input"
           rows={6}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); setNetworkConfirmed(false); }}
           placeholder={kind === "data" ? "024XXXXXXX 5\n024YYYYYYY 10" : "024XXXXXXX 10\n024YYYYYYY 20"}
           style={{ fontFamily: "monospace", resize: "vertical" }}
         />
@@ -286,6 +295,18 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
       <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
         {rows.length} valid line{rows.length === 1 ? "" : "s"} detected. Estimated total: GHS {withPaystackFee(total).toFixed(2)} (includes the Paystack processing fee). The final total is confirmed exactly at payment.
       </p>
+      {mismatches.length > 0 && (
+        <div style={{ border: "1px solid var(--red)", borderRadius: 8, padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}>
+          <div style={{ color: "var(--red)", fontWeight: 700, marginBottom: 4 }}>Check recipient networks</div>
+          <div style={{ marginBottom: 7 }}>
+            {mismatches.length} recipient number{mismatches.length === 1 ? "" : "s"} start with a prefix commonly associated with another network. Please confirm that each recipient is currently on {NETWORKS[networkId]?.label || networkId}. Ported numbers can keep their original prefix.
+          </div>
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
+            <input type="checkbox" checked={networkConfirmed} onChange={(e) => setNetworkConfirmed(e.target.checked)} style={{ marginTop: 2 }} />
+            <span>I confirm the listed recipients are currently on {NETWORKS[networkId]?.label || networkId}.</span>
+          </label>
+        </div>
+      )}
       <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>
       <NoRefundNotice>Double-check every number on the list — wrong numbers in a bulk order aren't refunded either.</NoRefundNotice>
       <div style={{ maxWidth: 300 }}>
@@ -303,7 +324,9 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
   const [rows, setRows] = useState([]);
   const [fileName, setFileName] = useState("");
   const [parsing, setParsing] = useState(false);
-  const valid = rows.length > 0 && email.includes("@");
+  const [networkConfirmed, setNetworkConfirmed] = useState(false);
+  const mismatches = hasNetworkMismatches(rows, networkId);
+  const valid = rows.length > 0 && email.includes("@") && (!mismatches.length || networkConfirmed);
   const total = estimateBulkTotal(kind, rows, tier, liveSizes);
 
   async function handleFile(e) {
@@ -313,6 +336,7 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
     setParsing(true);
     try {
       setRows(await parseExcelFile(file));
+      setNetworkConfirmed(false);
     } catch {
       setRows([]);
     } finally {
@@ -361,6 +385,18 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
             ? "Reading file..."
             : `${fileName}: ${rows.length} valid line${rows.length === 1 ? "" : "s"} detected. Estimated total: GHS ${withPaystackFee(total).toFixed(2)} (includes the Paystack processing fee). The final total is confirmed exactly at payment.`}
         </p>
+      )}
+      {mismatches.length > 0 && (
+        <div style={{ border: "1px solid var(--red)", borderRadius: 8, padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}>
+          <div style={{ color: "var(--red)", fontWeight: 700, marginBottom: 4 }}>Check recipient networks</div>
+          <div style={{ marginBottom: 7 }}>
+            {mismatches.length} recipient number{mismatches.length === 1 ? "" : "s"} start with a prefix commonly associated with another network. Please confirm that each recipient is currently on {NETWORKS[networkId]?.label || networkId}. Ported numbers can keep their original prefix.
+          </div>
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
+            <input type="checkbox" checked={networkConfirmed} onChange={(e) => setNetworkConfirmed(e.target.checked)} style={{ marginTop: 2 }} />
+            <span>I confirm the listed recipients are currently on {NETWORKS[networkId]?.label || networkId}.</span>
+          </label>
+        </div>
       )}
       <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>
       <NoRefundNotice>Double-check every number in the file — wrong numbers in a bulk order aren't refunded either.</NoRefundNotice>
