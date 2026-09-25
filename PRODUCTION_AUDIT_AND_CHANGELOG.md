@@ -10,6 +10,14 @@
 - Tightened idempotency-key reuse so a reused key must match the original checkout email before an existing order is returned.
 - Updated release documentation/schema versioning to v1.3.6.
 
+## v1.3.7 ECG/Water bill workflow audit — September 25, 2026
+
+- Aligned ECG validation with the Techlink document's meter lookup and documented phone-based alternate lookup.
+- ECG lookup errors are now distinguished between an actual not-found response and temporary provider availability problems.
+- Water validation now passes the customer's phone and can use the documented GWCL account+phone validator before payment when the primary Water validator does not resolve a payable amount.
+- Bill payment cannot remain enabled after the customer changes the meter/account or phone until the new details are validated again.
+- Customer-facing billing errors no longer incorrectly label provider outages as missing meters/accounts.
+
 ## What was reviewed
 
 The project was reviewed layer-by-layer across the Next.js application, API routes, Paystack flow, Techlink integration, Supabase storage, customer order tracking, admin area, PWA files and customer-support chatbot.
