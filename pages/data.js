@@ -113,11 +113,12 @@ export default function DataPage() {
             </button>
           </div>
         </Field>
-        {network === "airteltigo" && phone.length >= 3 && !isLikelyAirtelTigoNumber(phone) && (
-          <p style={{ fontSize: 12, color: "var(--red)", margin: 0 }}>
-            That doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053) — AirtelTigo bundles can only be delivered to AirtelTigo lines, and wrong numbers aren't refunded.
-          </p>
-        )}
+        <NetworkMismatchNotice
+          network={network}
+          phone={phone}
+          acknowledged={networkConfirmed}
+          onAcknowledge={setNetworkConfirmed}
+        />
 
         {loadError && (
           <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>
