@@ -304,11 +304,14 @@ function ReconciliationTab() {
       <div className="card" style={{ padding: 20 }}>
         <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
           In Paystack: Dashboard → Transactions → Export CSV. Upload that file here — it's matched exactly
-          against your orders table (by reference, amount, and status). Nothing is sent anywhere except
-          to Google, and only if you want the plain-English summary below.
+          against your orders table (by reference, amount, and status). Exact reconciliation runs inside the app. No transaction-level results are sent to Gemini unless you explicitly enable the optional AI summary.
         </p>
         <input type="file" accept=".csv" onChange={handleFile} />
         {fileName && <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: "8px 0 0" }}>Loaded: {fileName}</p>}
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13, color: "var(--muted)" }}>
+          <input type="checkbox" checked={generateAiSummary} onChange={(e) => setGenerateAiSummary(e.target.checked)} />
+          Generate optional AI summary (sends the computed reconciliation result to Gemini)
+        </label>
         <div style={{ marginTop: 12 }}>
           <button className="primary-btn" onClick={run} disabled={!csvText || busy} style={{ width: "auto", padding: "8px 20px" }}>
             {busy ? "Reconciling…" : "Run reconciliation"}
