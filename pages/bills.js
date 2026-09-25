@@ -75,7 +75,8 @@ export default function BillsPage() {
 
   const ecgLookupResolved = ecgLookup && !ecgLookup.kind;
   const ecgValid = ecgLookupResolved && meterNumber.length >= 4 && phone.length >= 10 && Number(amount) > 0 && email.includes("@");
-  const waterValid = waterBill && waterBill !== "error" && phone.length >= 10 && email.includes("@");
+  const waterResolved = waterBill && !waterBill.kind;
+  const waterValid = waterResolved && phone.length >= 10 && email.includes("@");
 
   function submit() {
     setLoading(true);
@@ -141,7 +142,7 @@ export default function BillsPage() {
             </Field>
             {ecgLookup?.kind === "not_found" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{ecgLookup.message || "No ECG account matched that meter or phone."}</p>}
             {ecgLookup?.kind === "unavailable" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{ecgLookup.message || "ECG lookup is temporarily unavailable. Please try again shortly."}</p>}
-            {ecgLookup && ecgLookup !== "error" && (
+            {ecgLookup && !ecgLookup.kind && (
               <div className="card" style={{ padding: 12, fontSize: 13 }}>
                 Meter belongs to <strong>{ecgLookup.customerName}</strong>{ecgLookup.district ? ` · ${ecgLookup.district}` : ""}
               </div>
@@ -175,7 +176,7 @@ export default function BillsPage() {
             </Field>
             {waterBill?.kind === "not_found" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{waterBill.message || "No Ghana Water account matched that number."}</p>}
             {waterBill?.kind === "unavailable" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{waterBill.message || "Ghana Water validation is temporarily unavailable. Please try again shortly."}</p>}
-            {waterBill && waterBill !== "error" && (
+            {waterResolved && (
               <div className="card" style={{ padding: 12, fontSize: 13 }}>
                 <div><strong>{waterBill.accountName || waterBill.customerName}</strong></div>
                 <div style={{ marginTop: 4 }}>Amount due: <strong>GHS {Number(waterBill.balance ?? waterBill.amountDue ?? waterBill.amount).toFixed(2)}</strong></div>
