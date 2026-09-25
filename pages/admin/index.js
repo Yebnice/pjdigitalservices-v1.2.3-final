@@ -436,7 +436,11 @@ export default function AdminPage() {
   // break the rest of the dashboard. Re-checked every 2 minutes so a wallet
   // that runs dry mid-shift shows up without a manual refresh.
   useEffect(() => {
-    if (!auth) return;
+    if (!auth || !canOperate) {
+      setWalletBalance(null);
+      setWalletError(null);
+      return;
+    }
     let cancelled = false;
     async function loadWallet() {
       try {
@@ -454,7 +458,7 @@ export default function AdminPage() {
     loadWallet();
     const interval = setInterval(loadWallet, 120000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [auth]);
+  }, [auth, canOperate]);
 
   async function manualAction(reference, action) {
     const note = window.prompt(action === "confirm_fulfilled" ? "Confirm provider delivery and enter a brief note:" : "Confirm provider did not deliver and enter a brief note before retrying:");
@@ -468,6 +472,7 @@ export default function AdminPage() {
   async function logout() {
     await fetch("/api/admin/logout", { method: "POST" });
     setAuth(false);
+    setRole(null);
   }
 
   if (auth === null) return null;

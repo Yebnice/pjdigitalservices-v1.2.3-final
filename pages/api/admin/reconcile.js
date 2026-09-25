@@ -43,6 +43,13 @@ function parseAmount(raw) {
   return Number.isFinite(n) ? n : null;
 }
 
+function buildAiSummaryPayload(result) {
+  return {
+    counts: result.counts,
+    note: "Explain these precomputed reconciliation totals only. Do not infer or identify individual transactions.",
+  };
+}
+
 async function summarizeWithGemini(summary) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
@@ -152,7 +159,7 @@ export default async function handler(req, res) {
       note: "\"App-only\" entries are only meaningful if the uploaded file covers the full date range and includes every successful transaction for that period.",
     };
 
-    result.summary = generateAiSummary ? await summarizeWithGemini(result) : null;
+    result.summary = generateAiSummary ? await summarizeWithGemini(buildAiSummaryPayload(result)) : null;
 
     await recordAuditEvent({
       actor: actor.username,
