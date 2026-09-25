@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
-import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, isLikelyAirtelTigoNumber, NetworkBadge, OrderReceipt } from "./ui";
+import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, NetworkBadge, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork, NETWORKS } from "./ui";
 import { payAndFulfil } from "../lib/payment";
 import { withPaystackFee } from "../lib/pricing";
 import { TIERS, NETWORK_PAGES } from "../lib/agentProducts";
@@ -126,10 +126,12 @@ function ModeTabs({ mode, setMode }) {
 function TierSingleForm({ tierKey, tier, networkId, email, setEmail, loading, setLoading, onDone, onError, liveSizes }) {
   const [phone, setPhone] = useState("");
   const [size, setSize] = useState(null);
+  const [networkConfirmed, setNetworkConfirmed] = useState(false);
   const merged = mergeBundles(tier, liveSizes);
   const selected = merged.find((b) => b.size === size && b.available);
-  const prefixOk = networkId !== "airteltigo" || isLikelyAirtelTigoNumber(phone);
-  const valid = phone.length >= 10 && selected && email.includes("@") && prefixOk;
+  const likelyNetwork = getLikelyNetwork(phone);
+  const networkMismatch = Boolean(likelyNetwork && likelyNetwork !== networkId);
+  const valid = phone.length >= 10 && selected && email.includes("@") && (!networkMismatch || networkConfirmed);
 
   // If the live check comes back after a size was already picked (a real
   // race: clicking a tile in the moment before the availability check
@@ -159,13 +161,14 @@ function TierSingleForm({ tierKey, tier, networkId, email, setEmail, loading, se
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Field label="Recipient phone number">
-        <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" style={{ maxWidth: 260 }} />
+        <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder="024 000 0000" style={{ maxWidth: 260 }} />
       </Field>
-      {networkId === "airteltigo" && phone.length >= 3 && !prefixOk && (
-        <p style={{ fontSize: 12, color: "var(--red)", margin: 0 }}>
-          That doesn't look like an AirtelTigo number (026, 056, 027, 057, 023, 053).
-        </p>
-      )}
+      <NetworkMismatchNotice
+        network={networkId}
+        phone={phone}
+        acknowledged={networkConfirmed}
+        onAcknowledge={setNetworkConfirmed}
+      />
       <BundleGrid tier={tier} sizeSelected={size} onSelect={setSize} liveSizes={liveSizes} />
       <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>
       <NoRefundNotice />
@@ -190,8 +193,10 @@ function TierSingleForm({ tierKey, tier, networkId, email, setEmail, loading, se
 function EvdSingleForm({ networkId, email, setEmail, loading, setLoading, onDone, onError }) {
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("");
-  const prefixOk = networkId !== "airteltigo" || isLikelyAirtelTigoNumber(phone);
-  const valid = phone.length >= 10 && Number(amount) > 0 && email.includes("@") && prefixOk;
+  const [networkConfirmed, setNetworkConfirmed] = useState(false);
+  const likelyNetwork = getLikelyNetwork(phone);
+  const networkMismatch = Boolean(likelyNetwork && likelyNetwork !== networkId);
+  const valid = phone.length >= 10 && Number(amount) > 0 && email.includes("@") && (!networkMismatch || networkConfirmed);
 
   function submit() {
     setLoading(true);
@@ -209,11 +214,14 @@ function EvdSingleForm({ networkId, email, setEmail, loading, setLoading, onDone
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 320 }}>
       <Field label="Phone number">
-        <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" />
+        <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder="024 000 0000" />
       </Field>
-      {networkId === "airteltigo" && phone.length >= 3 && !prefixOk && (
-        <p style={{ fontSize: 12, color: "var(--red)", margin: 0 }}>Doesn't look like an AirtelTigo number.</p>
-      )}
+      <NetworkMismatchNotice
+        network={networkId}
+        phone={phone}
+        acknowledged={networkConfirmed}
+        onAcknowledge={setNetworkConfirmed}
+      />
       <Field label="Amount (GHS)">
         <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10.00" type="number" />
       </Field>
