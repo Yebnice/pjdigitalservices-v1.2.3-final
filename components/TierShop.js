@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, NetworkBadge, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork, NETWORKS } from "./ui";
 import { payAndFulfil } from "../lib/payment";
-import { withPaystackFee } from "../lib/pricing";
+import { withPaystackFee, businessMarkup } from "../lib/pricing";
 import { TIERS, NETWORK_PAGES } from "../lib/agentProducts";
 
 /* ---------- shared helpers ---------- */
@@ -61,8 +61,17 @@ function estimateBulkTotal(kind, rows, tier, liveSizes) {
   return rows.reduce((s, r) => {
     const live = Array.isArray(liveSizes) ? liveSizes.find((x) => x.size === r.value) : null;
     if (live) return s + Number(live.bulkPrice ?? live.price ?? 0);
+    // BUG FIX: this fallback (used while the live catalogue hasn't resolved
+    // yet, or failed) summed the raw static reference price from
+    // lib/agentProducts.js directly — that's the provider's cost, not the
+    // customer-facing price, so it silently omitted the business markup
+    // that /api/orders/create.js actually applies for tierBulkData (unlike
+    // the `live` branch above, whose `bulkPrice` already has it baked in
+    // server-side). Apply the same markup here so the "Estimated total"
+    // doesn't quietly understate the eventual checkout total.
     const b = tier?.bundles.find((x) => x.size === r.value);
-    return s + (b ? b.price : 0);
+    if (!b) return s;
+    return s + b.price + businessMarkup(b.price, { orderType: "tierBulkData", network: tier?.network });
   }, 0);
 }
 

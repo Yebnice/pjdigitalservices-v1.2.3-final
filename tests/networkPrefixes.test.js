@@ -9,6 +9,13 @@ describe("Ghana network prefix hints", () => {
     expect(getLikelyNetwork("+233551234567")).toBe("mtn");
   });
 
+  // BUG FIX regression: 059 was missing from the MTN prefix list, so these
+  // numbers got no network hint (no badge, no mismatch warning) at all.
+  it("recognizes the 059 MTN prefix", () => {
+    expect(getLikelyNetwork("0591234567")).toBe("mtn");
+    expect(getLikelyNetwork("+233591234567")).toBe("mtn");
+  });
+
   it("recognizes common Telecel prefixes", () => {
     expect(getLikelyNetwork("0201234567")).toBe("telecel");
     expect(getLikelyNetwork("0501234567")).toBe("telecel");

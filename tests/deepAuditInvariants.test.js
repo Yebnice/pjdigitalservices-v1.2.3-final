@@ -10,7 +10,7 @@ describe("deep audit invariants", () => {
     const networkValidation = read("lib/networkValidation.js");
     expect(phoneValidation).toContain("from \"./networkValidation.js\"");
     expect(phoneValidation).not.toContain('["026", "056", "027", "057", "023", "053"]');
-    expect(networkValidation).toContain('mtn: ["024", "054", "055"]');
+    expect(networkValidation).toContain('mtn: ["024", "054", "055", "059"]');
     expect(networkValidation).toContain('telecel: ["020", "050"]');
     expect(networkValidation).toContain('airteltigo: ["026", "027", "056", "057"]');
   });
