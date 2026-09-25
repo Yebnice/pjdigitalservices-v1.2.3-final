@@ -97,10 +97,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: `Bulk orders are limited to ${MAX_BULK_ROWS} lines per order` });
     }
     if (!/^\S+@\S+\.\S+$/.test(String(email))) return res.status(400).json({ error: "Enter a valid email address" });
-    if (!isBulk && !phone) {
+    const isChecker = orderType === "checker";
+    const checkerRequiresSmsPhone = isChecker && String(req.body?.checkerDetails?.mode || "voucher") === "voucher" &&
+      String(req.body?.checkerDetails?.deliveryMethod || "email").toLowerCase() === "sms";
+
+    if (!isBulk && !isChecker && !phone) {
       return res.status(400).json({ error: "Phone number is required" });
     }
-    if (!isBulk && !/^[+0-9][0-9\s-]{7,20}$/.test(String(phone))) return res.status(400).json({ error: "Enter a valid phone number" });
+    if (checkerRequiresSmsPhone && !phone) {
+      return res.status(400).json({ error: "Phone number is required for SMS delivery" });
+    }
+    if (!isBulk && phone && !/^[+0-9][0-9\s-]{7,20}$/.test(String(phone))) {
+      return res.status(400).json({ error: "Enter a valid phone number" });
+    }
     let resolvedNetwork = network; // may be overridden below for tier orders — see note there
 
     const normalizedEmail = String(email).trim().toLowerCase();
@@ -198,21 +207,58 @@ export default async function handler(req, res) {
       extra.tvDetails = { ...tvDetails, customerName: validation.customerName || null, package: validation.packageName || validation.package || null };
 
     } else if (orderType === "checker") {
-      if (!checkerDetails?.type) return res.status(400).json({ error: "Checker type is required" });
-      if (checkerDetails.mode === "lookup") {
-        if (!checkerDetails.indexNumber || !checkerDetails.examYear) {
-          return res.status(400).json({ error: "Index number and exam year are required" });
-        }
-        const prices = await getResultCheckServicePrices();
-        const row = (prices.prices || prices.data || []).find((p) => (p.type || "").toLowerCase() === checkerDetails.type.toLowerCase());
-        amount = Number(row?.price ?? prices.price);
-      } else {
-        const quantity = Number(checkerDetails.quantity) || 1;
-        const prices = await getCheckerPrices();
-        const row = (prices.prices || prices.data || []).find((p) => (p.type || "").toLowerCase() === checkerDetails.type.toLowerCase());
-        amount = Number(row?.price ?? prices.price) * quantity;
+      const checkerType = String(checkerDetails?.type || "").toUpperCase();
+      if (!["BECE", "WASSCE"].includes(checkerType)) {
+        return res.status(400).json({ error: "Checker type must be BECE or WASSCE" });
       }
-      if (!amount || amount <= 0) {
+
+      const checkerMode = String(checkerDetails?.mode || "voucher").toLowerCase();
+      if (!["voucher", "lookup"].includes(checkerMode)) {
+        return res.status(400).json({ error: "Invalid result-checker mode" });
+      }
+
+      if (checkerMode === "lookup") {
+        const indexNumber = String(checkerDetails.indexNumber || "").trim();
+        const examYear = String(checkerDetails.examYear || "").trim();
+        const candidateName = String(checkerDetails.candidateName || "").trim();
+        if (!/^\d{4}$/.test(examYear) || indexNumber.length < 5 || candidateName.length < 2) {
+          return res.status(400).json({ error: "Index number, four-digit exam year and candidate name are required" });
+        }
+
+        const prices = await getResultCheckServicePrices();
+        const rows = Array.isArray(prices?.prices) ? prices.prices : (Array.isArray(prices?.data) ? prices.data : []);
+        const row = rows.find((p) => String(p?.type || p?.exam || p?.name || "").toUpperCase() === checkerType);
+        amount = Number(row?.price ?? row?.amount ?? row?.cost ?? prices?.price);
+        extra.checkerDetails = {
+          mode: "lookup",
+          type: checkerType.toLowerCase(),
+          indexNumber,
+          examYear,
+          candidateName,
+        };
+      } else {
+        const quantity = Number(checkerDetails?.quantity);
+        const deliveryMethod = String(checkerDetails?.deliveryMethod || "").toLowerCase();
+        if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) {
+          return res.status(400).json({ error: "Voucher quantity must be a whole number from 1 to 20" });
+        }
+        if (!["email", "sms"].includes(deliveryMethod)) {
+          return res.status(400).json({ error: "Voucher delivery method must be email or sms" });
+        }
+
+        const prices = await getCheckerPrices();
+        const rows = Array.isArray(prices?.prices) ? prices.prices : (Array.isArray(prices?.data) ? prices.data : []);
+        const row = rows.find((p) => String(p?.type || p?.exam || p?.name || "").toUpperCase() === checkerType);
+        amount = Number(row?.price ?? row?.amount ?? row?.cost ?? prices?.price) * quantity;
+        extra.checkerDetails = {
+          mode: "voucher",
+          type: checkerType,
+          quantity,
+          deliveryMethod,
+        };
+      }
+
+      if (!Number.isFinite(amount) || amount <= 0) {
         const reference = await logFailedAttempt("checker_price_unresolved", { orderType, network: checkerDetails?.type, phone, email });
         return res.status(400).json({ error: "Could not resolve a price for that checker" });
       }
