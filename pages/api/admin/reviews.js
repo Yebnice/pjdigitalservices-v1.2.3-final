@@ -17,7 +17,7 @@ export default async function handler(req, res) {
       const { id, isHidden } = req.body || {};
       if (!id || typeof isHidden !== "boolean") return res.status(400).json({ error: "id and isHidden are required" });
       const review = await setReviewHidden(id, isHidden);
-      await recordAuditEvent({ action: isHidden ? "review_hidden" : "review_unhidden", reference: review?.orderReference || id });
+      await recordAuditEvent({ actor: actor.username, action: isHidden ? "review_hidden" : "review_unhidden", reference: review?.orderReference || id });
       return res.status(200).json({ review });
     } catch (err) {
       console.error("Admin review moderation error", err);
