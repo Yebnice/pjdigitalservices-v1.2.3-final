@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getLikelyNetwork, isLikelyAirtelTigoNumber } from "../components/ui.js";
+import { getLikelyNetwork, isLikelyAirtelTigoNumber } from "../lib/networkValidation.js";
 
 describe("Ghana network prefix hints", () => {
   it("recognizes common MTN prefixes", () => {
