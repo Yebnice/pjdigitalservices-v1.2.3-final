@@ -1,0 +1,27 @@
+name: Package current main
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create source ZIP
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          zip -r "PjDigitalServices-v${VERSION}-current-main.zip" .             -x ".git/*" ".github/workflows/package-current-main.yml" "node_modules/*" ".next/*"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PjDigitalServices-current-main
+          path: "PjDigitalServices-v*-current-main.zip"
+          if-no-files-found: error
+          retention-days: 7
