@@ -61,6 +61,20 @@ for (const file of ["pages/data.js","pages/airtime.js","pages/tv.js","pages/afa.
 }
 
 
+const bills = read("pages/bills.js");
+if (!bills.includes("/api/techlink/ecg-lookup?")) {
+  failures.push("pages/bills.js: ECG lookup route wiring missing");
+}
+if (!bills.includes('phone,') || !bills.includes("setEcgLookup(null)") || !bills.includes("ecgLookupResolved")) {
+  failures.push("pages/bills.js: ECG phone-aware validation/reset contract missing");
+}
+if (!bills.includes("/api/techlink/water-validate") || !bills.includes('account: meterNumber, phone')) {
+  failures.push("pages/bills.js: Water validation must pass account and phone");
+}
+if (!bills.includes("waterResolved")) {
+  failures.push("pages/bills.js: Water payment must require a successful validation state");
+}
+
 const tierShop = read("components/TierShop.js");
 if (!tierShop.includes("NetworkMismatchNotice") ||
     !tierShop.includes("(!networkMismatch || networkConfirmed)") ||
