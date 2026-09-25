@@ -36,10 +36,7 @@ export default function BillsPage() {
   function lookupEcg() {
     setLookingUp(true);
     setEcgLookup(null);
-    const params = new URLSearchParams({
-      meter: meterNumber,
-      phone,
-    });
+    const params = new URLSearchParams({ meter: meterNumber });
     fetch(`/api/techlink/ecg-lookup?${params.toString()}`)
       .then((r) => r.json().then((d) => ({ ok: r.ok, status: r.status, data: d })))
       .then(({ ok, status, data }) => {
@@ -135,12 +132,12 @@ export default function BillsPage() {
             <Field label="Meter number">
               <div style={{ display: "flex", gap: 8 }}>
                 <input className="input" style={{ flex: 1 }} value={meterNumber} onChange={(e) => { setMeterNumber(e.target.value); setEcgLookup(null); }} placeholder="e.g. 0210444711" />
-                <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={lookupEcg} disabled={meterNumber.length < 4 || phone.length < 10 || lookingUp}>
+                <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={lookupEcg} disabled={meterNumber.length < 4 || lookingUp}>
                   {lookingUp ? "..." : "Look up"}
                 </button>
               </div>
             </Field>
-            {ecgLookup?.kind === "not_found" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{ecgLookup.message || "No ECG account matched that meter or phone."}</p>}
+            {ecgLookup?.kind === "not_found" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{ecgLookup.message || "No ECG account matched that meter."}</p>}
             {ecgLookup?.kind === "unavailable" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{ecgLookup.message || "ECG lookup is temporarily unavailable. Please try again shortly."}</p>}
             {ecgLookup && !ecgLookup.kind && (
               <div className="card" style={{ padding: 12, fontSize: 13 }}>
@@ -158,7 +155,7 @@ export default function BillsPage() {
               Pay GHS {(amount ? withPaystackFee(Number(amount)) : 0).toFixed(2)} with Paystack
             </PrimaryButton>
             <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
-              Enter the meter and phone number, then look up the account before paying. This confirms the recipient before the top-up.
+              Look up the meter number before paying. A valid phone number is still required for the electricity payment.
             </p>
             <NoRefundNotice />
           </>
