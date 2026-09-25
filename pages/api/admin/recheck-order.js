@@ -4,13 +4,14 @@ import { recordAuditEvent } from "../../../lib/auditLog";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  if (!requireAdminRole(req, res, ["operator"])) return;
+  const actor = requireAdminRole(req, res, ["operator"]);
+  if (!actor) return;
   try {
     const { reference } = req.body || {};
     if (!reference) return res.status(400).json({ error: "reference is required" });
     const order = await checkQueuedOrder(String(reference).trim());
     if (!order) return res.status(404).json({ error: "Order not found" });
-    await recordAuditEvent({ action: "admin_rechecked_order", reference, note: `Result: ${order.fulfillmentStatus}` });
+    await recordAuditEvent({ actor: actor.username, action: "admin_rechecked_order", reference, note: `Result: ${order.fulfillmentStatus}` });
     return res.status(200).json({ order });
   } catch (err) {
     console.error("Admin re-check order error", err);

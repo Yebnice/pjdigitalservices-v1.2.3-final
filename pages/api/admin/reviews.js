@@ -3,8 +3,8 @@ import { listAllReviews, setReviewHidden } from "../../../lib/reviews";
 import { recordAuditEvent } from "../../../lib/auditLog";
 
 export default async function handler(req, res) {
-  if (!requireAdminRole(req, res, ["viewer"])) return;
   if (req.method === "GET") {
+    if (!requireAdminRole(req, res, ["viewer"])) return;
     try {
       return res.status(200).json({ reviews: await listAllReviews() });
     } catch (err) {
@@ -12,17 +12,25 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Could not load reviews" });
     }
   }
+
   if (req.method === "POST") {
+    const actor = requireAdminRole(req, res, ["operator"]);
+    if (!actor) return;
     try {
       const { id, isHidden } = req.body || {};
       if (!id || typeof isHidden !== "boolean") return res.status(400).json({ error: "id and isHidden are required" });
       const review = await setReviewHidden(id, isHidden);
-      await recordAuditEvent({ action: isHidden ? "review_hidden" : "review_unhidden", reference: review?.orderReference || id });
+      await recordAuditEvent({
+        actor: actor.username,
+        action: isHidden ? "review_hidden" : "review_unhidden",
+        reference: review?.orderReference || id,
+      });
       return res.status(200).json({ review });
     } catch (err) {
       console.error("Admin review moderation error", err);
       return res.status(500).json({ error: "Could not update the review" });
     }
   }
+
   return res.status(405).json({ error: "Method not allowed" });
 }

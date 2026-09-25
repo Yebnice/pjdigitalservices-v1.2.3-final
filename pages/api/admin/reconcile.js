@@ -152,9 +152,10 @@ export default async function handler(req, res) {
       note: "\"App-only\" entries are only meaningful if the uploaded file covers the full date range and includes every successful transaction for that period.",
     };
 
-    result.summary = await summarizeWithGemini(result);
+    result.summary = generateAiSummary ? await summarizeWithGemini(result) : null;
 
     await recordAuditEvent({
+      actor: actor.username,
       action: "reconciliation_run",
       note: `${result.counts.matched} matched, ${result.counts.mismatched} mismatched, ${result.counts.paystackOnly} Paystack-only, ${result.counts.appOnly} app-only`,
     });

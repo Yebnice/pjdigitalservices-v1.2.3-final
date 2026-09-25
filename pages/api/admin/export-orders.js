@@ -30,14 +30,15 @@ const COLUMNS = [
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
-  if (!requireAdminRole(req, res, ["operator"])) return;
+  const actor = requireAdminRole(req, res, ["operator"]);
+  if (!actor) return;
   try {
     const orders = await listOrders();
     const header = COLUMNS.map(([, label]) => csvField(label)).join(",");
     const rows = orders.map((o) => COLUMNS.map(([key]) => csvField(o[key])).join(","));
     const csv = [header, ...rows].join("\r\n");
 
-    await recordAuditEvent({ action: "orders_exported", note: `${orders.length} orders exported to CSV` });
+    await recordAuditEvent({ actor: actor.username, action: "orders_exported", note: `${orders.length} orders exported to CSV` });
 
     const filename = `pjdigitalservices-orders-${new Date().toISOString().slice(0, 10)}.csv`;
     res.setHeader("Content-Type", "text/csv; charset=utf-8");

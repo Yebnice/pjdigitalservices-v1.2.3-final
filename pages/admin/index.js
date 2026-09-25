@@ -23,7 +23,7 @@ function PasswordGate({ onUnlock }) {
         throw new Error(`Server error (${r.status}). Check the deployment logs.`);
       }
       if (!r.ok) throw new Error(data.error || "Login failed");
-      onUnlock(true);
+      onUnlock({ role: data.role || "admin" });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -134,6 +134,8 @@ function OverviewTab({ orders, feedback, manualReview, walletBalance }) {
   const cutoff = startOfRange(rangeDef.days);
   const inRange = cutoff ? orders.filter((o) => o.createdAt && new Date(o.createdAt) >= cutoff) : orders;
   const successInRange = inRange.filter((o) => o.status === "success");
+  const paidInRange = inRange.filter((o) => ["payment_verified", "success"].includes(o.status));
+  const fulfilledInRange = inRange.filter((o) => o.fulfillmentStatus === "fulfilled");
 
   const revenue = successInRange.reduce((s, o) => s + Number(o.amount || 0), 0);
   const fees = successInRange.reduce((s, o) => s + Number(o.paystackFeeAmount || 0), 0);
@@ -145,7 +147,8 @@ function OverviewTab({ orders, feedback, manualReview, walletBalance }) {
   // of this counted every failed order as "pending" too.
   const failedInRange = inRange.filter((o) => o.fulfillmentStatus === "failed").length;
   const pendingInRange = inRange.filter((o) => o.status !== "success" && o.fulfillmentStatus !== "failed").length;
-  const successRate = inRange.length ? Math.round((successInRange.length / inRange.length) * 100) : 0;
+  const paymentSuccessRate = inRange.length ? Math.round((paidInRange.length / inRange.length) * 100) : 0;
+  const fulfillmentSuccessRate = paidInRange.length ? Math.round((fulfilledInRange.length / paidInRange.length) * 100) : 0;
 
   // Daily revenue trend — bucket successful orders in range by calendar day.
   const dayBuckets = {};
@@ -185,10 +188,11 @@ function OverviewTab({ orders, feedback, manualReview, walletBalance }) {
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 16 }}>
         <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Revenue</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {revenue.toFixed(2)}</div></div>
         <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Orders</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>{inRange.length}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Success rate</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600, color: successRate < 90 && inRange.length > 0 ? "#dc2626" : undefined }}>{inRange.length ? `${successRate}%` : "—"}</div></div>
+        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Payment success</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600, color: paymentSuccessRate < 90 && inRange.length > 0 ? "#dc2626" : undefined }}>{inRange.length ? `${paymentSuccessRate}%` : "—"}</div></div>
+        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Fulfillment success</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600, color: fulfillmentSuccessRate < 90 && paidInRange.length > 0 ? "#dc2626" : undefined }}>{paidInRange.length ? `${fulfillmentSuccessRate}%` : "—"}</div></div>
         <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Avg order value</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {avgOrder.toFixed(2)}</div></div>
         <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Fees recovered</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {fees.toFixed(2)}</div></div>
       </div>
@@ -263,6 +267,7 @@ function ReconciliationTab() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [generateAiSummary, setGenerateAiSummary] = useState(false);
 
   function handleFile(e) {
     const file = e.target.files?.[0];
@@ -282,7 +287,7 @@ function ReconciliationTab() {
       const r = await fetch("/api/admin/reconcile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv: csvText }),
+        body: JSON.stringify({ csv: csvText, generateAiSummary }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Reconciliation failed");
@@ -299,11 +304,14 @@ function ReconciliationTab() {
       <div className="card" style={{ padding: 20 }}>
         <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
           In Paystack: Dashboard → Transactions → Export CSV. Upload that file here — it's matched exactly
-          against your orders table (by reference, amount, and status). Nothing is sent anywhere except
-          to Google, and only if you want the plain-English summary below.
+          against your orders table (by reference, amount, and status). Exact reconciliation runs inside the app. No transaction-level results are sent to Gemini unless you explicitly enable the optional AI summary.
         </p>
         <input type="file" accept=".csv" onChange={handleFile} />
         {fileName && <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: "8px 0 0" }}>Loaded: {fileName}</p>}
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13, color: "var(--muted)" }}>
+          <input type="checkbox" checked={generateAiSummary} onChange={(e) => setGenerateAiSummary(e.target.checked)} />
+          Generate optional AI summary (sends the computed reconciliation result to Gemini)
+        </label>
         <div style={{ marginTop: 12 }}>
           <button className="primary-btn" onClick={run} disabled={!csvText || busy} style={{ width: "auto", padding: "8px 20px" }}>
             {busy ? "Reconciling…" : "Run reconciliation"}
@@ -375,6 +383,7 @@ function ReconciliationTab() {
 
 export default function AdminPage() {
   const [auth, setAuth] = useState(null);
+  const [role, setRole] = useState(null);
   const [orders, setOrders] = useState([]);
   const [feedback, setFeedback] = useState([]);
   const [manualReview, setManualReview] = useState([]);
@@ -386,23 +395,27 @@ export default function AdminPage() {
   const [walletBalance, setWalletBalance] = useState(null);
   const [walletError, setWalletError] = useState(null);
 
+  const canOperate = role === "operator" || role === "admin";
+
   async function load() {
-    const [ordersRes, feedbackRes, reviewRes, auditRes, reviewsRes] = await Promise.all([
+    const results = await Promise.all([
       fetch("/api/orders/list"),
       fetch("/api/feedback/list"),
-      fetch("/api/orders/manual-review"),
       fetch("/api/admin/audit-log"),
       fetch("/api/admin/reviews"),
+      canOperate ? fetch("/api/orders/manual-review") : Promise.resolve(null),
     ]);
-    if ([ordersRes, feedbackRes, reviewRes, auditRes, reviewsRes].some((r) => r.status === 401)) {
+    const [ordersRes, feedbackRes, auditRes, reviewsRes, reviewRes] = results;
+    if ([ordersRes, feedbackRes, auditRes, reviewsRes].some((r) => r.status === 401)) {
       setAuth(false);
+      setRole(null);
       return;
     }
     const ordersData = await ordersRes.json();
     const feedbackData = await feedbackRes.json();
-    const reviewData = await reviewRes.json();
     const auditData = await auditRes.json();
     const reviewsData = await reviewsRes.json();
+    const reviewData = reviewRes ? await reviewRes.json() : { orders: [] };
     setOrders(ordersData.orders || []);
     setFeedback(feedbackData.feedback || []);
     setManualReview(reviewData.orders || []);
@@ -411,8 +424,13 @@ export default function AdminPage() {
     setAuth(true);
   }
 
-  useEffect(() => { fetch("/api/admin/me").then((r) => r.json()).then((d) => setAuth(d.authenticated)); }, []);
-  useEffect(() => { if (auth) load(); }, [auth]);
+  useEffect(() => {
+    fetch("/api/admin/me").then((r) => r.json()).then((d) => {
+      setAuth(Boolean(d.authenticated));
+      setRole(d.role || null);
+    });
+  }, []);
+  useEffect(() => { if (auth && role) load(); }, [auth, role]);
 
   // Independent of the main load() above — a Techlink hiccup here shouldn't
   // break the rest of the dashboard. Re-checked every 2 minutes so a wallet
@@ -453,7 +471,7 @@ export default function AdminPage() {
   }
 
   if (auth === null) return null;
-  if (!auth) return <PasswordGate onUnlock={() => setAuth(true)} />;
+  if (!auth) return <PasswordGate onUnlock={({ role: nextRole }) => { setRole(nextRole); setAuth(true); }} />;
 
   const successfulOrders = orders.filter((o) => o.status === "success");
   // "Total sales" is deliberately the net product revenue (`amount`), not
@@ -480,7 +498,7 @@ export default function AdminPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 600, margin: "0 0 4px" }}>Admin</h1>
-          <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 0, marginBottom: 24 }}>Secure admin session expires after 8 hours.</p>
+          <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 0, marginBottom: 24 }}>Secure admin session expires after 8 hours · Role: <strong style={{ color: "var(--text)" }}>{role || "—"}</strong></p>
         </div>
         <button className="nav-item" onClick={logout} style={{ width: "auto", padding: "6px 12px" }}>Sign out</button>
       </div>
@@ -496,7 +514,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 16, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 24 }}>
         <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Total sales</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>GHS {totalSales.toFixed(2)}</div></div>
         <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Paystack fees recovered</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>GHS {totalFeesCollected.toFixed(2)}</div></div>
         <div className="stat-card">
@@ -514,14 +532,30 @@ export default function AdminPage() {
         <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>Overview</TabButton>
         <TabButton active={tab === "orders"} onClick={() => setTab("orders")}>Orders</TabButton>
         <TabButton active={tab === "feedback"} onClick={() => setTab("feedback")}>Feedback</TabButton>
-        <TabButton active={tab === "review"} onClick={() => setTab("review")}>Needs Attention ({manualReview.length})</TabButton>
-        <TabButton active={tab === "reconcile"} onClick={() => setTab("reconcile")}>Reconciliation</TabButton>
+        {canOperate && <TabButton active={tab === "review"} onClick={() => setTab("review")}>Needs Attention ({manualReview.length})</TabButton>}
+        {canOperate && <TabButton active={tab === "reconcile"} onClick={() => setTab("reconcile")}>Reconciliation</TabButton>}
         <TabButton active={tab === "reviews"} onClick={() => setTab("reviews")}>Reviews ({reviews.length})</TabButton>
         <TabButton active={tab === "audit"} onClick={() => setTab("audit")}>Audit Log</TabButton>
       </div>
 
       {tab === "overview" && (
-        <OverviewTab orders={orders} feedback={feedback} manualReview={manualReview} walletBalance={walletBalance} />
+        <>
+          <OverviewTab orders={orders} feedback={feedback} manualReview={manualReview} walletBalance={walletBalance} />
+          <div className="card" style={{ padding: 18, marginTop: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Operations snapshot</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, fontSize: 13 }}>
+              <div><span style={{ color: "var(--muted)" }}>Admin role</span><br /><strong>{role || "—"}</strong></div>
+              <div><span style={{ color: "var(--muted)" }}>Techlink wallet</span><br /><strong>{walletBalance != null ? `GHS ${Number(walletBalance).toFixed(2)}` : "Unavailable"}</strong></div>
+              <div><span style={{ color: "var(--muted)" }}>Manual review</span><br /><strong>{manualReview.length}</strong></div>
+              <div><span style={{ color: "var(--muted)" }}>Open feedback</span><br /><strong>{feedback.filter((f) => f.status === "open").length}</strong></div>
+            </div>
+            {canOperate && (manualReview.length > 0 || feedback.filter((f) => f.status === "open").length > 0 || walletError) && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 13 }}>
+                <strong>Needs attention:</strong> {manualReview.length > 0 ? `${manualReview.length} fulfillment item(s)` : ""}{manualReview.length > 0 && feedback.filter((f) => f.status === "open").length > 0 ? ", " : ""}{feedback.filter((f) => f.status === "open").length > 0 ? `${feedback.filter((f) => f.status === "open").length} open customer case(s)` : ""}{walletError ? `${manualReview.length || feedback.filter((f) => f.status === "open").length ? ", " : ""}Techlink wallet check unavailable` : ""}.
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {tab === "orders" && (
@@ -572,7 +606,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {tab === "review" && (
+      {tab === "review" && canOperate && (
         <div className="card" style={{ overflow: "hidden" }}>
           <div style={{ padding: "12px 16px 0", fontSize: 12, color: "var(--muted)" }}>
             Includes both orders escalated automatically and orders that failed immediately (e.g. an instant airtime top-up that couldn't be delivered) — the latter never promote themselves further without a scheduled job, so they're shown here directly.
@@ -638,7 +672,7 @@ export default function AdminPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", width: "100%", gap: 12 }}>
                   <span style={{ fontSize: 14, fontWeight: 600 }}>{f.name} · <span style={{ color: "var(--muted)", fontWeight: 400 }}>{f.category}</span></span>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <select
+                    {canOperate ? (                    <select
                       className="input"
                       style={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
                       value={f.status || "open"}
@@ -654,7 +688,9 @@ export default function AdminPage() {
                       <option value="open">Open</option>
                       <option value="in_progress">In progress</option>
                       <option value="resolved">Resolved</option>
-                    </select>
+                    </select>) : (
+                      <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{f.status || "open"}</span>
+                    )}
                     <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{new Date(f.createdAt).toLocaleString()}</span>
                   </div>
                 </div>
