@@ -391,3 +391,8 @@ Evidence still required before calling the release fully production-ready:
 - The production `AFA_ENCRYPTION_KEY` must be configured and migration `supabase/migration_v1_3_5.sql` applied.
 - GitHub Actions, Supabase Vault and Vercel must hold the same `CRON_SECRET`; the new Vercel value must be deployed before the Supabase scheduler can be re-tested.
 - A committed `package-lock.json` is still recommended once a machine/CI environment with npm registry access can generate it safely.
+
+
+## Final double-run verification — September 25, 2026
+- Verification run 1: CI run 36080374001 passed all gates on the merged production-fact-check code.
+- Verification run 2: independent CI run on the current main code state, with no application-code changes in this branch.
