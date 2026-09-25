@@ -155,6 +155,7 @@ export default async function handler(req, res) {
     result.summary = generateAiSummary ? await summarizeWithGemini(result) : null;
 
     await recordAuditEvent({
+      actor: actor.username,
       action: "reconciliation_run",
       note: `${result.counts.matched} matched, ${result.counts.mismatched} mismatched, ${result.counts.paystackOnly} Paystack-only, ${result.counts.appOnly} app-only`,
     });
