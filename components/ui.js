@@ -323,9 +323,13 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
   // Paystack processing fee) — prefer that over the bare product `amount`,
   // falling back to the `amount` prop (from the checkout call) for orders
   // that predate the checkoutAmount field.
-  const totalPaid = Number(order.checkoutAmount ?? amount ?? order.amount ?? 0);
-  const productPrice = Number(order.amount ?? 0);
-  const feePaid = order.paystackFeeAmount != null ? Number(order.paystackFeeAmount) : (order.checkoutAmount != null ? Math.round((totalPaid - productPrice) * 100) / 100 : null);
+  const totalPaid = Number(order.checkoutAmount ?? amount ?? order.customerProductAmount ?? order.amount ?? 0);
+  // customerProductAmount is the actual customer-facing product price after
+  // the PjDigitalServices business margin and before the Paystack fee.
+  const productPrice = Number(order.customerProductAmount ?? order.amount ?? 0);
+  const feePaid = order.paystackFeeAmount != null
+    ? Number(order.paystackFeeAmount)
+    : (order.checkoutAmount != null ? Math.round((totalPaid - productPrice) * 100) / 100 : null);
   const showFeeBreakdown = feePaid != null && feePaid > 0;
   const showRecipient = order.phone && order.phone !== "—" && !String(order.phone).includes("recipient");
   return (
