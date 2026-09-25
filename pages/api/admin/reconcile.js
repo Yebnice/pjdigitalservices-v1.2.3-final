@@ -20,8 +20,10 @@ function parseCsv(text) {
       else field += c;
     } else if (c === '"') inQuotes = true;
     else if (c === ",") pushField();
-    else if (c === "\n") { if (field !== "" || row.length > 0) pushRow(); }
-    else if (c === "\r") { /* ignore, \n handles the row break */ }
+    else if (c === "
+") { if (field !== "" || row.length > 0) pushRow(); }
+    else if (c === "\r") { /* ignore, 
+ handles the row break */ }
     else field += c;
   }
   if (field !== "" || row.length > 0) pushRow();
@@ -47,7 +49,8 @@ async function summarizeWithGemini(summary) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-  const prompt = `You are helping a small Ghana-based digital-services business reconcile their Paystack payments against their own order records. You are given ALREADY-COMPUTED, exact results — never recompute, re-check, or dispute the numbers, only explain them plainly. Write a short (4-8 sentence) plain-English summary for a non-technical business owner, in plain text with no markdown. Be direct about anything that needs their attention, and reassuring if everything matches. Here is the computed reconciliation result as JSON:\n${JSON.stringify(summary)}`;
+  const prompt = `You are helping a small Ghana-based digital-services business reconcile their Paystack payments against their own order records. You are given ALREADY-COMPUTED, exact results — never recompute, re-check, or dispute the numbers, only explain them plainly. Write a short (4-8 sentence) plain-English summary for a non-technical business owner, in plain text with no markdown. Be direct about anything that needs their attention, and reassuring if everything matches. Here is the computed reconciliation result as JSON:
+${JSON.stringify(summary)}`;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   try {
     const response = await fetch(url, {
@@ -69,7 +72,8 @@ async function summarizeWithGemini(summary) {
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  const actor = requireAdminRole(req, res, ["operator"]);\n  if (!actor) return;
+  const actor = requireAdminRole(req, res, ["operator"]);
+  if (!actor) return;
   try {
     const { csv, generateAiSummary = false } = req.body || {};
     if (!csv || typeof csv !== "string") return res.status(400).json({ error: "Paste or upload the Paystack CSV export first" });
