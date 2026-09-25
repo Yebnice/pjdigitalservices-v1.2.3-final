@@ -1,0 +1,28 @@
+name: Package verified main source
+
+on:
+  push:
+    branches: ["double-ci-verification-v1"]
+
+jobs:
+  package-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Create source ZIP
+        run: |
+          mkdir -p out
+          git archive --format=zip --output=out/PjDigitalServices-v1.3.9-final-double-tested.zip HEAD
+          sha256sum out/PjDigitalServices-v1.3.9-final-double-tested.zip | tee out/SHA256SUM.txt
+
+      - name: Upload verified source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: PjDigitalServices-v1.3.9-final-double-tested
+          path: out/
+          if-no-files-found: error

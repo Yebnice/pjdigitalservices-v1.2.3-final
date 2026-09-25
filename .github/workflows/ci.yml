@@ -41,3 +41,17 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Package exact main source
+        run: |
+          git fetch origin main --depth=1
+          mkdir -p out
+          git archive --format=zip --output=out/PjDigitalServices-v1.3.9-final-double-tested.zip origin/main
+          sha256sum out/PjDigitalServices-v1.3.9-final-double-tested.zip | tee out/SHA256SUM.txt
+
+      - name: Upload exact main source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: PjDigitalServices-v1.3.9-final-double-tested
+          path: out/
+          if-no-files-found: error
