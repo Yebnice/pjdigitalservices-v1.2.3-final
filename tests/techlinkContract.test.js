@@ -4,12 +4,14 @@ let buyAirtime;
 let purchaseDataBulk;
 let purchaseAirtimeBulk;
 let registerAfa;
+let purchaseChecker;
+let requestResultCheck;
 
 beforeAll(async () => {
   vi.stubEnv("TECHLINK_API_KEY", "tlg_test_contract");
   vi.stubEnv("TECHLINK_API_BASE_URL", "https://api.techlinkgh.com/api/v1");
   vi.resetModules();
-  ({ buyAirtime, purchaseDataBulk, purchaseAirtimeBulk, registerAfa } = await import("../lib/techlink.js"));
+  ({ buyAirtime, purchaseDataBulk, purchaseAirtimeBulk, registerAfa, purchaseChecker, requestResultCheck } = await import("../lib/techlink.js"));
 });
 
 describe("Techlink request contracts", () => {
@@ -102,3 +104,50 @@ describe("Techlink request contracts", () => {
     });
   });
 });
+
+
+  it("uses the documented BECE/WASSCE voucher purchase shape", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, orderId: "TEST", checkers: [] }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    await purchaseChecker({ type: "BECE", quantity: 1, deliveryMethod: "email" });
+
+    const [url, request] = global.fetch.mock.calls[0];
+    const body = JSON.parse(request.body);
+
+    expect(url).toBe("https://api.techlinkgh.com/api/v1/result-checker/purchase");
+    expect(body).toEqual({ type: "BECE", quantity: 1, deliveryMethod: "email" });
+  });
+
+  it("uses the documented result-check service request shape", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, checkers: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    await requestResultCheck({
+      type: "bece",
+      indexNumber: "010101010101",
+      examYear: "2025",
+      candidateName: "Kofi Mensah",
+      email: "kofi@example.com",
+    });
+
+    const [url, request] = global.fetch.mock.calls[0];
+    const body = JSON.parse(request.body);
+
+    expect(url).toBe("https://api.techlinkgh.com/api/v1/result-check-service/request");
+    expect(body).toEqual({
+      type: "bece",
+      indexNumber: "010101010101",
+      examYear: "2025",
+      candidateName: "Kofi Mensah",
+      email: "kofi@example.com",
+    });
+  });
