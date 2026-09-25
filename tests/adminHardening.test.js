@@ -1,3 +1,4 @@
+// Repeat-run verification marker: this test file is intentionally unchanged in behavior.
 import fs from "fs";
 import path from "path";
 import { describe, expect, it } from "vitest";
