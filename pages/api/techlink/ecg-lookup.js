@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   if (!rl.allowed) return res.status(429).setHeader("Retry-After", rl.retryAfter).json({ error: "Too many requests. Please try again shortly." });
 
   const { meter, phone } = req.query;
-  if (!meter && !phone) return res.status(400).json({ error: "meter or phone is required" });
+  if (!meter || !phone) return res.status(400).json({ error: "meter and phone are both required" });
   try {
     const data = await lookupEcgMeter({ meter, phone });
     res.status(200).json(data);
