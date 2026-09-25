@@ -18,6 +18,15 @@
 - Bill payment cannot remain enabled after the customer changes the meter/account or phone until the new details are validated again.
 - Customer-facing billing errors no longer incorrectly label provider outages as missing meters/accounts.
 
+## v1.3.8 deep source/document verification — September 25, 2026
+
+- Performed a source-wide secret-leakage scan over the verified source package. No real Paystack, Techlink, Supabase, Gemini/OpenAI, GitHub, AWS, Slack, private-key, cron, or AFA encryption secret values were found. `.env.example` contains placeholders only.
+- Reconciled all Techlink Business API V1 calls against the supplied Postman/API document, including Airtime, Data Bundles, ECG, Water, TV, Result Checker, Result Checking Service, Agent Data Products, AFA, Orders, Verify, Wallet Balance and Airtime Fee.
+- Confirmed provider-cost and internal business-markup fields remain server-side and are not included in public order responses.
+- Corrected stale/duplicated AirtelTigo prefix guidance so one shared network-validation source is used. Prefix checks remain safety hints rather than provider-of-record truth.
+- Corrected ECG lookup so an HTTP-success response that does not actually resolve an account cannot enable payment.
+- Corrected Quick Data network-confirmation state so changing the phone or selected network clears the previous confirmation.
+- Reconciled current Gemini runtime documentation with Google's current Gemini 3.8 Flash model and medium thinking configuration.
 ## What was reviewed
 
 The project was reviewed layer-by-layer across the Next.js application, API routes, Paystack flow, Techlink integration, Supabase storage, customer order tracking, admin area, PWA files and customer-support chatbot.
