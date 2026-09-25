@@ -1,0 +1,29 @@
+name: Package final v1.3.8 source
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout final source
+        uses: actions/checkout@v4
+      - name: Create clean source ZIP
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          zip -r "PjDigitalServices-v${VERSION}-final-source.zip" .             -x ".git/*"                ".github/workflows/package-final-v1-3-8.yml"                "node_modules/*"                ".next/*"
+      - name: Upload final source
+        uses: actions/upload-artifact@v4
+        with:
+          name: PjDigitalServices-v1.3.8-final-source
+          path: "PjDigitalServices-v*-final-source.zip"
+          if-no-files-found: error
+          retention-days: 7
