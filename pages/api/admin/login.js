@@ -1,5 +1,6 @@
 import { authenticateAdmin, createAdminSession } from "../../../lib/adminAuth";
 import { recordAuditEvent } from "../../../lib/auditLog";
+import { rateLimit } from "../../../lib/rateLimit";
 
 const attempts = new Map();
 const WINDOW_MS = 10 * 60 * 1000;
@@ -32,6 +33,6 @@ export default async function handler(req, res) {
     console.error("Admin login: could not create session —", err.message);
     return res.status(500).json({ error: "Server misconfigured: ADMIN_SESSION_SECRET is missing or invalid. Set a random string of 32+ characters in your environment variables and redeploy." });
   }
-  await recordAuditEvent({ action: "admin_login", note: `Admin ${identity.username} signed in from IP ${key}` });
+  await recordAuditEvent({ actor: identity.username, action: "admin_login", note: `Admin ${identity.username} signed in from IP ${key}` });
   return res.status(200).json({ ok: true });
 }
