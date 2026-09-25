@@ -290,7 +290,7 @@ This version includes the production fixes identified during the security/archit
 - Paystack webhooks verify the signature/payment and acknowledge quickly; the actual Techlink fulfillment is handled by the browser callback or `/api/jobs/fulfill`. Paystack's current webhook guidance specifically recommends returning HTTP 200 promptly and notes failed webhooks are retried.
 - Added a protected fulfillment worker endpoint using `CRON_SECRET`. Configure an external scheduler or your hosting platform's cron facility to call `POST /api/jobs/fulfill` with `Authorization: Bearer $CRON_SECRET`.
 - Added basic API rate limiting for order creation, tracking, feedback and AI chat. For a multi-instance deployment, also use your host/WAF or a distributed rate limiter.
-- Added an optional AI support route. With `GEMINI_API_KEY` set, the chat uses `GEMINI_MODEL` (default `gemini-2.5-flash`); without a key it automatically falls back to the built-in FAQ assistant. Live order context is only fetched when the customer supplies both reference and checkout email.
+- Added an optional AI support route. With `GEMINI_API_KEY` set, the chat uses `GEMINI_MODEL` (default `gemini-3.8-flash`); without a key it automatically falls back to the built-in FAQ assistant. Live order context is only fetched when the customer supplies both reference and checkout email.
 - The AI is support-only: it cannot charge customers, cannot bypass Paystack, and is instructed not to request or repeat card/PIN/Ghana Card details.
 
 ### Required deployment steps
