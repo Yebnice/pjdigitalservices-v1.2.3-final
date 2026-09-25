@@ -1,6 +1,6 @@
 {
   "name": "pjdigitalservices",
-  "version": "1.3.8",
+  "version": "1.3.9",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,7 +8,8 @@
     "start": "next start",
     "check:rate-limit": "node scripts/check-rate-limit.js",
     "check:production": "node scripts/check-production-contracts.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:secrets": "node scripts/check-secret-leakage.js"
   },
   "engines": {
     "node": "24.x"
