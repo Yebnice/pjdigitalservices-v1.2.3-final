@@ -4,7 +4,8 @@ import { recordAuditEvent } from "../../../lib/auditLog";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  const actor = requireAdminRole(req, res, ["operator"]);\n  if (!actor) return;
+  const actor = requireAdminRole(req, res, ["operator"]);
+  if (!actor) return;
   try {
     const { id, status, note } = req.body || {};
     if (!id || !status) return res.status(400).json({ error: "id and status are required" });
