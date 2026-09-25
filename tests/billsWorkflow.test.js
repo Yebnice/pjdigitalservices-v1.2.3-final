@@ -32,7 +32,9 @@ describe("ECG and Water customer bill workflow contracts", () => {
 
   it("uses the documented ECG phone fallback and GWCL water fallback", () => {
     const techlink = read("lib/techlink.js");
-    expect(techlink).toContain("/ecg/lookup?phone=");
+    expect(techlink).toContain("const params = new URLSearchParams");
+    expect(techlink).toContain("meter: requestedMeter");
+    expect(techlink).toContain("phone: requestedPhone");
     expect(techlink).toContain("validateGwclMeter({ account, phone })");
   });
 });
