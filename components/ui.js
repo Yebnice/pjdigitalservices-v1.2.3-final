@@ -107,9 +107,16 @@ export function NetworkPicker({ value, onChange, palette = NETWORKS }) {
           onClick={() => onChange(id)}
           style={value === id ? { borderColor: n.color } : undefined}
         >
-          <NetworkBadg// Network prefix helpers live in lib/networkValidation.js so they can be
-// tested without importing this JSX component module.
+          <NetworkBadge id={id} palette={palette} size={18} />
+          {n.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
+// Network prefix helpers live in lib/networkValidation.js so they can be
+// tested without importing this JSX component module.
 export { AIRTELTIGO_PREFIXES, getLikelyNetwork, isLikelyAirtelTigoNumber };
 
 export function NetworkMismatchNotice({ network, phone, acknowledged, onAcknowledge }) {
@@ -144,11 +151,6 @@ export function NetworkMismatchNotice({ network, phone, acknowledged, onAcknowle
           style={{ marginTop: 2 }}
         />
         <span>I confirm that this recipient is currently on {selectedLabel}.</span>
-      </label>
-    </div>
-  );
-}
-pan>I confirm that this recipient is currently on {selectedLabel}.</span>
       </label>
     </div>
   );
