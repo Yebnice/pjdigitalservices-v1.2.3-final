@@ -391,3 +391,9 @@ Evidence still required before calling the release fully production-ready:
 - The production `AFA_ENCRYPTION_KEY` must be configured and migration `supabase/migration_v1_3_5.sql` applied.
 - GitHub Actions, Supabase Vault and Vercel must hold the same `CRON_SECRET`; the new Vercel value must be deployed before the Supabase scheduler can be re-tested.
 - A committed `package-lock.json` is still recommended once a machine/CI environment with npm registry access can generate it safely.
+
+
+## v1.3.9 Final double-run verification — September 25, 2026
+- Full CI verification run #1: GitHub Actions run 36080374001 passed all gates — regression tests, distributed rate-limit check, production-contract check, secret-leakage scan, and Next.js production build.
+- Full CI verification run #2: rerun on the identical application state is required before release packaging; the final package must correspond to the branch head after this entry.
+- Final known external deployment blocker remains the Vercel build-rate limit; CI success does not by itself prove the custom-domain deployment is live.
