@@ -21,6 +21,7 @@ describe("Annette conversation routing", () => {
     const reply = supportReply("Should I send you my mobile money PIN?");
     expect(reply).toContain("PIN");
     expect(reply).toContain("don't send");
+    expect(supportReply("I can send you my password if needed.")).toContain("don't send");
   });
 
   it("still keeps a direct order status helper available", () => {
