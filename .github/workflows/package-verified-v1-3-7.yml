@@ -1,0 +1,29 @@
+name: Package verified v1.3.7 source
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout verified source
+        uses: actions/checkout@v4
+      - name: Create clean source ZIP
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          zip -r "PjDigitalServices-v${VERSION}-verified-source.zip" .             -x ".git/*"                ".github/workflows/package-verified-v1-3-7.yml"                "node_modules/*"                ".next/*"
+      - name: Upload verified source
+        uses: actions/upload-artifact@v4
+        with:
+          name: PjDigitalServices-v1.3.7-verified-source
+          path: "PjDigitalServices-v*-verified-source.zip"
+          if-no-files-found: error
+          retention-days: 7
