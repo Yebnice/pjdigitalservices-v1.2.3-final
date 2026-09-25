@@ -61,6 +61,16 @@ for (const file of ["pages/data.js","pages/airtime.js","pages/tv.js","pages/afa.
 }
 
 
+const tierShop = read("components/TierShop.js");
+if (!tierShop.includes("NetworkMismatchNotice") ||
+    !tierShop.includes("(!networkMismatch || networkConfirmed)") ||
+    !tierShop.includes("hasNetworkMismatches(rows, networkId)")) {
+  failures.push("components/TierShop.js: network mismatch protection must cover dedicated data purchase modes");
+}
+if (!tierShop.includes("const mismatches = hasNetworkMismatches(rows, networkId)")) {
+  failures.push("components/TierShop.js: bulk/Excel network mismatch detection missing");
+}
+
 const webhookQueue = read("lib/paystackWebhookQueue.js");
 if (webhookQueue.includes("available_at: terminal")) {
   failures.push("lib/paystackWebhookQueue.js: retry scheduling references undefined terminal state");
