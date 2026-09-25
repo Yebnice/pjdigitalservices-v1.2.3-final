@@ -1,0 +1,31 @@
+name: Package source release
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create source ZIP
+        run: |
+          mkdir -p release
+          zip -r "release/PjDigitalServices-v1.3.9-current-main.zip" . \
+            -x ".git/*" ".next/*" "node_modules/*" "coverage/*" "release/*"
+
+      - name: Upload source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: PjDigitalServices-v1.3.9-current-main
+          path: release/PjDigitalServices-v1.3.9-current-main.zip
+          if-no-files-found: error
+          retention-days: 30
