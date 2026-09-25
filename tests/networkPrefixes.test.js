@@ -4,6 +4,8 @@ import { getLikelyNetwork, isLikelyAirtelTigoNumber } from "../components/ui.js"
 describe("Ghana network prefix hints", () => {
   it("recognizes common MTN prefixes", () => {
     expect(getLikelyNetwork("024 123 4567")).toBe("mtn");
+    expect(getLikelyNetwork("0251234567")).toBe("mtn");
+    expect(getLikelyNetwork("0531234567")).toBe("mtn");
     expect(getLikelyNetwork("0541234567")).toBe("mtn");
     expect(getLikelyNetwork("+233551234567")).toBe("mtn");
   });
@@ -19,6 +21,7 @@ describe("Ghana network prefix hints", () => {
     expect(isLikelyAirtelTigoNumber("0561234567")).toBe(true);
     expect(isLikelyAirtelTigoNumber("0531234567")).toBe(false);
     expect(isLikelyAirtelTigoNumber("0231234567")).toBe(false);
+    expect(getLikelyNetwork("0231234567")).toBeNull();
   });
 
   it("returns no hint for an unrecognized mobile prefix", () => {
