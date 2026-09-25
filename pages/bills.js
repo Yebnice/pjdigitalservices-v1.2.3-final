@@ -36,13 +36,20 @@ export default function BillsPage() {
   function lookupEcg() {
     setLookingUp(true);
     setEcgLookup(null);
-    fetch(`/api/techlink/ecg-lookup?meter=${encodeURIComponent(meterNumber)}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) setEcgLookup("error");
-        else setEcgLookup(d);
+    const params = new URLSearchParams({
+      meter: meterNumber,
+      phone,
+    });
+    fetch(`/api/techlink/ecg-lookup?${params.toString()}`)
+      .then((r) => r.json().then((d) => ({ ok: r.ok, status: r.status, data: d })))
+      .then(({ ok, status, data }) => {
+        if (!ok) {
+          setEcgLookup({ kind: status === 404 ? "not_found" : "unavailable", message: data.error });
+        } else {
+          setEcgLookup(data);
+        }
       })
-      .catch(() => setEcgLookup("error"))
+      .catch(() => setEcgLookup({ kind: "unavailable", message: "ECG lookup is temporarily unavailable. Please try again shortly." }))
       .finally(() => setLookingUp(false));
   }
 
@@ -52,18 +59,22 @@ export default function BillsPage() {
     fetch("/api/techlink/water-validate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ account: meterNumber }),
+      body: JSON.stringify({ account: meterNumber, phone }),
     })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) setWaterBill("error");
-        else setWaterBill(d);
+      .then((r) => r.json().then((d) => ({ ok: r.ok, status: r.status, data: d })))
+      .then(({ ok, status, data }) => {
+        if (!ok) {
+          setWaterBill({ kind: status === 404 ? "not_found" : "unavailable", message: data.error });
+        } else {
+          setWaterBill(data);
+        }
       })
-      .catch(() => setWaterBill("error"))
+      .catch(() => setWaterBill({ kind: "unavailable", message: "Ghana Water validation is temporarily unavailable. Please try again shortly." }))
       .finally(() => setCheckingBill(false));
   }
 
-  const ecgValid = meterNumber.length >= 4 && phone.length >= 10 && Number(amount) > 0 && email.includes("@");
+  const ecgLookupResolved = ecgLookup && !ecgLookup.kind;
+  const ecgValid = ecgLookupResolved && meterNumber.length >= 4 && phone.length >= 10 && Number(amount) > 0 && email.includes("@");
   const waterValid = waterBill && waterBill !== "error" && phone.length >= 10 && email.includes("@");
 
   function submit() {
@@ -123,12 +134,13 @@ export default function BillsPage() {
             <Field label="Meter number">
               <div style={{ display: "flex", gap: 8 }}>
                 <input className="input" style={{ flex: 1 }} value={meterNumber} onChange={(e) => setMeterNumber(e.target.value)} placeholder="e.g. 0210444711" />
-                <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={lookupEcg} disabled={meterNumber.length < 4 || lookingUp}>
+                <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={lookupEcg} disabled={meterNumber.length < 4 || phone.length < 10 || lookingUp}>
                   {lookingUp ? "..." : "Look up"}
                 </button>
               </div>
             </Field>
-            {ecgLookup === "error" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>Could not find that meter — double-check the number.</p>}
+            {ecgLookup?.kind === "not_found" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{ecgLookup.message || "No ECG account matched that meter or phone."}</p>}
+            {ecgLookup?.kind === "unavailable" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{ecgLookup.message || "ECG lookup is temporarily unavailable. Please try again shortly."}</p>}
             {ecgLookup && ecgLookup !== "error" && (
               <div className="card" style={{ padding: 12, fontSize: 13 }}>
                 Meter belongs to <strong>{ecgLookup.customerName}</strong>{ecgLookup.district ? ` · ${ecgLookup.district}` : ""}
@@ -145,7 +157,7 @@ export default function BillsPage() {
               Pay GHS {(amount ? withPaystackFee(Number(amount)) : 0).toFixed(2)} with Paystack
             </PrimaryButton>
             <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
-              Look up the meter first to confirm whose account you're topping up.
+              Enter the meter and phone number, then look up the account before paying. This confirms the recipient before the top-up.
             </p>
             <NoRefundNotice />
           </>
@@ -161,7 +173,8 @@ export default function BillsPage() {
                 </button>
               </div>
             </Field>
-            {waterBill === "error" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>Could not find a bill for that account — double-check the number.</p>}
+            {waterBill?.kind === "not_found" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{waterBill.message || "No Ghana Water account matched that number."}</p>}
+            {waterBill?.kind === "unavailable" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{waterBill.message || "Ghana Water validation is temporarily unavailable. Please try again shortly."}</p>}
             {waterBill && waterBill !== "error" && (
               <div className="card" style={{ padding: 12, fontSize: 13 }}>
                 <div><strong>{waterBill.accountName || waterBill.customerName}</strong></div>
