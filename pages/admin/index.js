@@ -133,7 +133,9 @@ function OverviewTab({ orders, feedback, manualReview, walletBalance }) {
   const rangeDef = RANGE_OPTIONS.find((r) => r.id === range);
   const cutoff = startOfRange(rangeDef.days);
   const inRange = cutoff ? orders.filter((o) => o.createdAt && new Date(o.createdAt) >= cutoff) : orders;
-  const successInRange = inRange.filter((o) => o.status === "success");\n  const paidInRange = inRange.filter((o) => ["payment_verified", "success"].includes(o.status));\n  const fulfilledInRange = inRange.filter((o) => o.fulfillmentStatus === "fulfilled");
+  const successInRange = inRange.filter((o) => o.status === "success");
+  const paidInRange = inRange.filter((o) => ["payment_verified", "success"].includes(o.status));
+  const fulfilledInRange = inRange.filter((o) => o.fulfillmentStatus === "fulfilled");
 
   const revenue = successInRange.reduce((s, o) => s + Number(o.amount || 0), 0);
   const fees = successInRange.reduce((s, o) => s + Number(o.paystackFeeAmount || 0), 0);
@@ -145,7 +147,8 @@ function OverviewTab({ orders, feedback, manualReview, walletBalance }) {
   // of this counted every failed order as "pending" too.
   const failedInRange = inRange.filter((o) => o.fulfillmentStatus === "failed").length;
   const pendingInRange = inRange.filter((o) => o.status !== "success" && o.fulfillmentStatus !== "failed").length;
-  const paymentSuccessRate = inRange.length ? Math.round((paidInRange.length / inRange.length) * 100) : 0;\n  const fulfillmentSuccessRate = paidInRange.length ? Math.round((fulfilledInRange.length / paidInRange.length) * 100) : 0;
+  const paymentSuccessRate = inRange.length ? Math.round((paidInRange.length / inRange.length) * 100) : 0;
+  const fulfillmentSuccessRate = paidInRange.length ? Math.round((fulfilledInRange.length / paidInRange.length) * 100) : 0;
 
   // Daily revenue trend — bucket successful orders in range by calendar day.
   const dayBuckets = {};
@@ -188,7 +191,8 @@ function OverviewTab({ orders, feedback, manualReview, walletBalance }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 16 }}>
         <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Revenue</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {revenue.toFixed(2)}</div></div>
         <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Orders</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>{inRange.length}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Payment success</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600, color: paymentSuccessRate < 90 && inRange.length > 0 ? "#dc2626" : undefined }}>{inRange.length ? `${paymentSuccessRate}%` : "—"}</div></div>\n        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Fulfillment success</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600, color: fulfillmentSuccessRate < 90 && paidInRange.length > 0 ? "#dc2626" : undefined }}>{paidInRange.length ? `${fulfillmentSuccessRate}%` : "—"}</div></div>
+        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Payment success</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600, color: paymentSuccessRate < 90 && inRange.length > 0 ? "#dc2626" : undefined }}>{inRange.length ? `${paymentSuccessRate}%` : "—"}</div></div>
+        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Fulfillment success</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600, color: fulfillmentSuccessRate < 90 && paidInRange.length > 0 ? "#dc2626" : undefined }}>{paidInRange.length ? `${fulfillmentSuccessRate}%` : "—"}</div></div>
         <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Avg order value</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {avgOrder.toFixed(2)}</div></div>
         <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Fees recovered</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {fees.toFixed(2)}</div></div>
       </div>
@@ -375,7 +379,8 @@ function ReconciliationTab() {
 }
 
 export default function AdminPage() {
-  const [auth, setAuth] = useState(null);\n  const [role, setRole] = useState(null);
+  const [auth, setAuth] = useState(null);
+  const [role, setRole] = useState(null);
   const [orders, setOrders] = useState([]);
   const [feedback, setFeedback] = useState([]);
   const [manualReview, setManualReview] = useState([]);
@@ -531,7 +536,23 @@ export default function AdminPage() {
       </div>
 
       {tab === "overview" && (
-        <>\n          <OverviewTab orders={orders} feedback={feedback} manualReview={manualReview} walletBalance={walletBalance} />\n          <div className="card" style={{ padding: 18, marginTop: 20 }}>\n            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Operations snapshot</div>\n            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, fontSize: 13 }}>\n              <div><span style={{ color: "var(--muted)" }}>Admin role</span><br /><strong>{role || "—"}</strong></div>\n              <div><span style={{ color: "var(--muted)" }}>Techlink wallet</span><br /><strong>{walletBalance != null ? `GHS ${Number(walletBalance).toFixed(2)}` : "Unavailable"}</strong></div>\n              <div><span style={{ color: "var(--muted)" }}>Manual review</span><br /><strong>{manualReview.length}</strong></div>\n              <div><span style={{ color: "var(--muted)" }}>Open feedback</span><br /><strong>{feedback.filter((f) => f.status === "open").length}</strong></div>\n            </div>\n            {canOperate && (manualReview.length > 0 || feedback.filter((f) => f.status === "open").length > 0 || walletError) && (\n              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 13 }}>\n                <strong>Needs attention:</strong> {manualReview.length > 0 ? `${manualReview.length} fulfillment item(s)` : ""}{manualReview.length > 0 && feedback.filter((f) => f.status === "open").length > 0 ? ", " : ""}{feedback.filter((f) => f.status === "open").length > 0 ? `${feedback.filter((f) => f.status === "open").length} open customer case(s)` : ""}{walletError ? `${manualReview.length || feedback.filter((f) => f.status === "open").length ? ", " : ""}Techlink wallet check unavailable` : ""}.\n              </div>\n            )}\n          </div>\n        </>
+        <>
+          <OverviewTab orders={orders} feedback={feedback} manualReview={manualReview} walletBalance={walletBalance} />
+          <div className="card" style={{ padding: 18, marginTop: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Operations snapshot</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, fontSize: 13 }}>
+              <div><span style={{ color: "var(--muted)" }}>Admin role</span><br /><strong>{role || "—"}</strong></div>
+              <div><span style={{ color: "var(--muted)" }}>Techlink wallet</span><br /><strong>{walletBalance != null ? `GHS ${Number(walletBalance).toFixed(2)}` : "Unavailable"}</strong></div>
+              <div><span style={{ color: "var(--muted)" }}>Manual review</span><br /><strong>{manualReview.length}</strong></div>
+              <div><span style={{ color: "var(--muted)" }}>Open feedback</span><br /><strong>{feedback.filter((f) => f.status === "open").length}</strong></div>
+            </div>
+            {canOperate && (manualReview.length > 0 || feedback.filter((f) => f.status === "open").length > 0 || walletError) && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 13 }}>
+                <strong>Needs attention:</strong> {manualReview.length > 0 ? `${manualReview.length} fulfillment item(s)` : ""}{manualReview.length > 0 && feedback.filter((f) => f.status === "open").length > 0 ? ", " : ""}{feedback.filter((f) => f.status === "open").length > 0 ? `${feedback.filter((f) => f.status === "open").length} open customer case(s)` : ""}{walletError ? `${manualReview.length || feedback.filter((f) => f.status === "open").length ? ", " : ""}Techlink wallet check unavailable` : ""}.
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {tab === "orders" && (
@@ -664,7 +685,9 @@ export default function AdminPage() {
                       <option value="open">Open</option>
                       <option value="in_progress">In progress</option>
                       <option value="resolved">Resolved</option>
-                    </select>) : (\n                      <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{f.status || "open"}</span>\n                    )}
+                    </select>) : (
+                      <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{f.status || "open"}</span>
+                    )}
                     <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{new Date(f.createdAt).toLocaleString()}</span>
                   </div>
                 </div>
