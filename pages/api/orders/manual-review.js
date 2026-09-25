@@ -4,7 +4,8 @@ import { notifyCustomerOrderFulfilled, notifyCustomerOrderSms } from "../../../l
 import { recordAuditEvent } from "../../../lib/auditLog";
 
 export default async function handler(req, res) {
-  const actor = requireAdminRole(req, res, ["operator"]);\n  if (!actor) return;
+  const actor = requireAdminRole(req, res, ["operator"]);
+  if (!actor) return;
   if (req.method === "GET") {
     try {
       return res.status(200).json({ orders: await listManualReviewOrders() });
