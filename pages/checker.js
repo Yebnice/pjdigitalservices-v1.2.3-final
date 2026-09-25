@@ -10,8 +10,8 @@ import { payAndFulfil } from "../lib/payment";
 function findPrice(list, examType) {
   if (!Array.isArray(list)) return null;
   const row = list.find((r) => String(r?.type || r?.exam || r?.name || "").toUpperCase() === examType);
-  const value = row?.price ?? row?.amount ?? row?.cost;
-  return typeof value === "number" ? value : null;
+  const value = Number(row?.price ?? row?.amount ?? row?.cost);
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 export default function CheckerPage() {
@@ -42,7 +42,7 @@ export default function CheckerPage() {
   const lookupPrice = findPrice(prices?.lookupService, type);
 
   const voucherValid = email.includes("@") && (deliveryMethod === "email" || phone.length >= 10);
-  const lookupValid = indexNumber && examYear && email.includes("@");
+  const lookupValid = indexNumber && /^\d{4}$/.test(String(examYear)) && candidateName.trim().length >= 2 && email.includes("@");
   const valid = mode === "voucher" ? voucherValid : lookupValid;
 
   function submit() {
@@ -146,7 +146,7 @@ export default function CheckerPage() {
             <Field label="Exam year">
               <input className="input" value={examYear} onChange={(e) => setExamYear(e.target.value)} placeholder="e.g. 2025" />
             </Field>
-            <Field label="Candidate name (optional)">
+            <Field label="Candidate name">
               <input className="input" value={candidateName} onChange={(e) => setCandidateName(e.target.value)} placeholder="As registered" />
             </Field>
             <EmailField email={email} setEmail={setEmail} />
