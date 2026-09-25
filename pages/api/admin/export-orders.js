@@ -8,8 +8,7 @@ import { recordAuditEvent } from "../../../lib/auditLog";
 // would silently shift every later column in that row.
 function csvField(value) {
   const str = value == null ? "" : String(value);
-  if (/[",
-]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+  if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
   return str;
 }
 
@@ -37,8 +36,7 @@ export default async function handler(req, res) {
     const orders = await listOrders();
     const header = COLUMNS.map(([, label]) => csvField(label)).join(",");
     const rows = orders.map((o) => COLUMNS.map(([key]) => csvField(o[key])).join(","));
-    const csv = [header, ...rows].join("\r
-");
+    const csv = [header, ...rows].join("\r\n");
 
     await recordAuditEvent({ actor: actor.username, action: "orders_exported", note: `${orders.length} orders exported to CSV` });
 
