@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, NetworkBadge, OrderReceipt } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
+import { previewCustomerTotal } from "../lib/pricing";
 
 const PROVIDERS = {
   DSTV: { label: "DSTV", color: "#0f4fa8", initial: "D", logo: "/icons/tv/dstv.png" },
@@ -120,7 +121,13 @@ export default function TvPage() {
         <EmailField email={email} setEmail={setEmail} />
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
           {validation && validation !== "error"
-            ? `Pay GHS ${Number(validation.balance ?? validation.amountDue ?? validation.amount).toFixed(2)} with Paystack`
+            ? // Server-side (pages/api/orders/create.js), a "tv" order never
+              // gets a network override — the pricing rule lookup uses
+              // orderType "tv" itself as the fallback key, not the smartcard
+              // provider (DSTV/GOtv/StarTimes). Match that here so a
+              // SERVICE_MARKUP_RULES_JSON override keyed on "tv" still
+              // applies to the preview the same way it applies at checkout.
+              `Pay GHS ${previewCustomerTotal(Number(validation.balance ?? validation.amountDue ?? validation.amount), { orderType: "tv" }).toFixed(2)} with Paystack`
             : "Check your smartcard first"}
         </PrimaryButton>
         <NoRefundNotice />

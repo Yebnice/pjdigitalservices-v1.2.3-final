@@ -13,17 +13,30 @@ export default async function handler(req, res) {
   if (!authorized(req)) return res.status(401).json({ error: "Unauthorized" });
   try {
     const batchSize = Math.max(1, Math.min(100, Number(process.env.FULFILLMENT_BATCH_SIZE || 3)));
-    const paystackWebhookResults = await processPaystackWebhookQueue(batchSize);
-    // Proactive wallet-balance check — runs FIRST so a slow/failed fulfillment
-    // loop (or a 500 from a Supabase/Techlink incident, the exact moment the
-    // alert matters) can never prevent it. Piggybacks on this 5-minute cron. Never allowed to fail
-    // the fulfillment run itself (see checkTechlinkWalletBalance's own
-    // try/catch); a network/config issue here just means no alert this run.
+    // BUG FIX: the comment below has always claimed the wallet-balance check
+    // "runs FIRST so a slow/failed fulfillment loop... can never prevent it"
+    // — but processPaystackWebhookQueue() used to be called BEFORE this
+    // check, and unlike every other step here, it was never wrapped in its
+    // own try/catch. claimPaystackWebhookJobs() (inside it) throws a plain
+    // Error on any Supabase read/write failure during claiming, which is
+    // exactly the kind of transient incident this alert exists to survive.
+    // That uncaught throw would hit the outer catch below, return 500, and
+    // skip the wallet check, the stale-queued alert, the queued-order
+    // re-check, AND fulfillment itself for that entire 5-minute run — the
+    // opposite of "can never prevent it". Moved the wallet check first for
+    // real, and given webhook processing its own try/catch so one failing
+    // step degrades gracefully instead of taking the whole run down.
     let walletCheck = null;
     try {
       walletCheck = await checkTechlinkWalletBalance();
     } catch (err) {
       console.error("Wallet balance check threw unexpectedly", err);
+    }
+    let paystackWebhookResults = [];
+    try {
+      paystackWebhookResults = await processPaystackWebhookQueue(batchSize);
+    } catch (err) {
+      console.error("Paystack webhook queue processing failed", err);
     }
     // Long-waiting queued orders (incl. bulk ones that can't auto-resolve).
     const staleQueued = await alertStaleQueuedOrders();

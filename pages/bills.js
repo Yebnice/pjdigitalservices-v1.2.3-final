@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Field, EmailField, PrimaryButton, Toast, BILL_PROVIDERS, NoRefundNotice, NetworkBadge, OrderReceipt } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
-import { withPaystackFee } from "../lib/pricing";
+import { withPaystackFee, previewCustomerTotal } from "../lib/pricing";
 
 export default function BillsPage() {
   const [provider, setProvider] = useState("ecg");
@@ -36,7 +36,10 @@ export default function BillsPage() {
   function lookupEcg() {
     setLookingUp(true);
     setEcgLookup(null);
-    const params = new URLSearchParams({ meter: meterNumber });
+    const params = new URLSearchParams({
+      meter: meterNumber,
+      phone,
+    });
     fetch(`/api/techlink/ecg-lookup?${params.toString()}`)
       .then((r) => r.json().then((d) => ({ ok: r.ok, status: r.status, data: d })))
       .then(({ ok, status, data }) => {
@@ -132,12 +135,12 @@ export default function BillsPage() {
             <Field label="Meter number">
               <div style={{ display: "flex", gap: 8 }}>
                 <input className="input" style={{ flex: 1 }} value={meterNumber} onChange={(e) => { setMeterNumber(e.target.value); setEcgLookup(null); }} placeholder="e.g. 0210444711" />
-                <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={lookupEcg} disabled={meterNumber.length < 4 || lookingUp}>
+                <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={lookupEcg} disabled={meterNumber.length < 4 || phone.length < 10 || lookingUp}>
                   {lookingUp ? "..." : "Look up"}
                 </button>
               </div>
             </Field>
-            {ecgLookup?.kind === "not_found" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{ecgLookup.message || "No ECG account matched that meter."}</p>}
+            {ecgLookup?.kind === "not_found" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{ecgLookup.message || "No ECG account matched that meter or phone."}</p>}
             {ecgLookup?.kind === "unavailable" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{ecgLookup.message || "ECG lookup is temporarily unavailable. Please try again shortly."}</p>}
             {ecgLookup && !ecgLookup.kind && (
               <div className="card" style={{ padding: 12, fontSize: 13 }}>
@@ -152,10 +155,10 @@ export default function BillsPage() {
             </Field>
             <EmailField email={email} setEmail={setEmail} />
             <PrimaryButton disabled={!ecgValid} loading={loading} onClick={submit}>
-              Pay GHS {(amount ? withPaystackFee(Number(amount)) : 0).toFixed(2)} with Paystack
+              Pay GHS {(amount ? previewCustomerTotal(Number(amount), { orderType: "ecg" }) : 0).toFixed(2)} with Paystack
             </PrimaryButton>
             <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
-              Look up the meter number before paying. A valid phone number is still required for the electricity payment.
+              Enter the meter and phone number, then look up the account before paying. This confirms the recipient before the top-up.
             </p>
             <NoRefundNotice />
           </>
@@ -163,10 +166,23 @@ export default function BillsPage() {
 
         {provider === "water" && (
           <>
+            {/* BUG FIX: the meter+phone check-before-pay is a deliberate
+                fraud-prevention pattern on the ECG side (see lookupEcg above) —
+                nobody tops up a stranger's meter without confirming both. Water's
+                "Check bill" used to only require the meter number, letting anyone
+                resolve an account holder's name and outstanding balance with no
+                phone number at all. Techlink's /korba/validate doesn't require a
+                phone to resolve the bill, but requiring one here before we reveal
+                the account holder's name keeps Water's flow consistent with ECG's
+                and it's still sent to the API immediately for the GWCL fallback
+                path in lib/techlink.js. */}
+            <Field label="Phone number">
+              <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setWaterBill(null); }} placeholder="024 000 0000" />
+            </Field>
             <Field label="Ghana Water account / meter number">
               <div style={{ display: "flex", gap: 8 }}>
                 <input className="input" style={{ flex: 1 }} value={meterNumber} onChange={(e) => { setMeterNumber(e.target.value); setWaterBill(null); }} placeholder="e.g. 0500123456" />
-                <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={checkWaterBill} disabled={meterNumber.length < 4 || checkingBill}>
+                <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={checkWaterBill} disabled={meterNumber.length < 4 || phone.length < 10 || checkingBill}>
                   {checkingBill ? "..." : "Check bill"}
                 </button>
               </div>
@@ -179,13 +195,10 @@ export default function BillsPage() {
                 <div style={{ marginTop: 4 }}>Amount due: <strong>GHS {Number(waterBill.balance ?? waterBill.amountDue ?? waterBill.amount).toFixed(2)}</strong></div>
               </div>
             )}
-            <Field label="Phone number">
-              <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" />
-            </Field>
             <EmailField email={email} setEmail={setEmail} />
             <PrimaryButton disabled={!waterValid} loading={loading} onClick={submit}>
               {waterBill && waterBill !== "error"
-                ? `Pay GHS ${withPaystackFee(Number(waterBill.balance ?? waterBill.amountDue ?? waterBill.amount)).toFixed(2)} with Paystack`
+                ? `Pay GHS ${previewCustomerTotal(Number(waterBill.balance ?? waterBill.amountDue ?? waterBill.amount), { orderType: "water" }).toFixed(2)} with Paystack`
                 : "Check your bill first"}
             </PrimaryButton>
             <NoRefundNotice />

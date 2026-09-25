@@ -53,7 +53,10 @@ function buildAiSummaryPayload(result) {
 async function summarizeWithGemini(summary) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  // Kept in sync with pages/api/ai/chat.js's default — this was left at an
+  // older model/casing during the v1.3.8 Gemini version audit, which only
+  // updated the customer chat path.
+  const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
   const prompt = `You are helping a small Ghana-based digital-services business reconcile their Paystack payments against their own order records. You are given ALREADY-COMPUTED, exact results — never recompute, re-check, or dispute the numbers, only explain them plainly. Write a short (4-8 sentence) plain-English summary for a non-technical business owner, in plain text with no markdown. Be direct about anything that needs their attention, and reassuring if everything matches. Here is the computed reconciliation result as JSON:\n${JSON.stringify(summary)}`;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   try {
@@ -62,7 +65,7 @@ async function summarizeWithGemini(summary) {
       headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 400, thinkingConfig: { thinkingLevel: "LOW" } },
+        generationConfig: { maxOutputTokens: 400, thinkingConfig: { thinkingLevel: process.env.GEMINI_THINKING_LEVEL || "medium" } },
       }),
     });
     const data = await response.json();
@@ -76,9 +79,10 @@ async function summarizeWithGemini(summary) {
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  if (!requireAdminRole(req, res, ["operator"])) return;
+  const actor = requireAdminRole(req, res, ["operator"]);
+  if (!actor) return;
   try {
-    const { csv } = req.body || {};
+    const { csv, generateAiSummary } = req.body || {};
     if (!csv || typeof csv !== "string") return res.status(400).json({ error: "Paste or upload the Paystack CSV export first" });
 
     const rows = parseCsv(csv);
@@ -121,9 +125,22 @@ export default async function handler(req, res) {
       // checkoutAmount field.
       const expectedAmount = Number(order.checkoutAmount ?? order.amount);
       const amountOk = p.amount == null || Math.abs(p.amount - expectedAmount) < 0.01;
-      const statusOk = !p.status || p.status === "reversed"
-        ? order.status !== "success"
-        : (p.status === "success") === (order.status === "success");
+      // BUG FIX: `!p.status || p.status === "reversed"` used to share one
+      // branch, so a CSV with NO recognizable Status column (p.status is
+      // null for every row, e.g. a Paystack export that only lists
+      // successful settlements) fell into the same case as an explicit
+      // "reversed" row: statusOk = order.status !== "success" — the exact
+      // OPPOSITE of correct. Every legitimately matching, successful order
+      // would then fail statusOk and get reported as "mismatched", flooding
+      // the admin with false positives on the very files most likely to
+      // lack a status column. Only an explicit "reversed" status implies
+      // the order must NOT be "success"; a missing status column can't be
+      // checked at all and should not penalize the match.
+      const statusOk = !p.status
+        ? true
+        : p.status === "reversed"
+          ? order.status !== "success"
+          : (p.status === "success") === (order.status === "success");
       if (amountOk && statusOk) {
         matched.push({ reference: p.reference });
       } else {

@@ -28,9 +28,8 @@ export default async function handler(req, res) {
 
     // Best-effort: the account is already created either way — a failed
     // verification email shouldn't block the person from existing, just
-    // from logging in until they get a working verification link (they
-    // can be resent one; not built as a separate endpoint yet, but the
-    // account itself is not lost).
+    // from logging in until they get a working verification link. They
+    // can request a new one via POST /api/auth/resend-verification.
     try {
       await notifyCustomerVerifyEmail({ email: customer.email, name: customer.name, token: verificationToken });
     } catch (err) {

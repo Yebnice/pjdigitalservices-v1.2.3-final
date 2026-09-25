@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Field, EmailField, PrimaryButton, Toast, EXAM_TYPES, NetworkBadge, OrderReceipt } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
+import { previewCustomerTotal } from "../lib/pricing";
 
 // Defensive: Techlink's docs don't publish a sample response body for
 // GET /products/checker-prices or GET /result-check-service/prices, so this
@@ -114,7 +115,16 @@ export default function CheckerPage() {
         {mode === "voucher" && (
           <>
             <div style={{ fontSize: 13, color: "var(--muted)" }}>
-              {voucherPrice != null ? `GHS ${voucherPrice.toFixed(2)} per voucher` : "Price shown at checkout"}
+              {/* BUG FIX: this used to show the raw provider voucher price with
+                  no business markup and no Paystack fee at all — /api/orders/create.js
+                  actually prices "checker" orders through getOrderPricing() (1% default
+                  margin) before adding the Paystack fee, so the real checkout total was
+                  always higher than this line implied. previewCustomerTotal() mirrors
+                  that server-side calculation, applied to the full quantity*price like
+                  the server does. */}
+              {voucherPrice != null
+                ? `GHS ${previewCustomerTotal(voucherPrice * quantity, { orderType: "checker" }).toFixed(2)} for ${quantity} voucher${quantity === 1 ? "" : "s"} (incl. fees)`
+                : "Price shown at checkout"}
             </div>
             <Field label="How many?">
               <input className="input" type="number" min={1} value={quantity} onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))} style={{ maxWidth: 120 }} />
@@ -138,7 +148,7 @@ export default function CheckerPage() {
           <>
             <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
               Not instant — we look this up and email the result once it's ready.
-              {lookupPrice != null ? ` GHS ${lookupPrice.toFixed(2)}.` : ""}
+              {lookupPrice != null ? ` GHS ${previewCustomerTotal(lookupPrice, { orderType: "checker" }).toFixed(2)} (incl. fees).` : ""}
             </p>
             <Field label="Index number">
               <input className="input" value={indexNumber} onChange={(e) => setIndexNumber(e.target.value)} placeholder="e.g. 0123456789" />
@@ -154,7 +164,13 @@ export default function CheckerPage() {
         )}
 
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
-          {mode === "voucher" ? "Pay & get voucher" : "Pay & request check"}
+          {mode === "voucher"
+            ? voucherPrice != null
+              ? `Pay GHS ${previewCustomerTotal(voucherPrice * quantity, { orderType: "checker" }).toFixed(2)} & get voucher`
+              : "Pay & get voucher"
+            : lookupPrice != null
+              ? `Pay GHS ${previewCustomerTotal(lookupPrice, { orderType: "checker" }).toFixed(2)} & request check`
+              : "Pay & request check"}
         </PrimaryButton>
       </div>
       <Toast toast={toast} />

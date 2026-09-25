@@ -1,0 +1,43 @@
+name: Build and smoke test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: pjdigitalservices-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run automated regression tests
+        run: npm test
+
+      - name: Check distributed rate-limit usage
+        run: npm run check:rate-limit
+
+      - name: Check production contracts
+        run: npm run check:production
+
+      - name: Scan source for leaked secrets
+        run: npm run check:secrets
+
+      - name: Build
+        run: npm run build

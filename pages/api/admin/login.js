@@ -4,9 +4,21 @@ import { rateLimit } from "../../../lib/rateLimit";
 
 const WINDOW_MS = 10 * 60 * 1000;
 
+// Mirrors the trust boundary fixed in lib/rateLimit.js's clientKey(): the
+// audit-log "signed in from IP" note must reflect the connecting IP, not a
+// value the client itself can put in X-Forwarded-For's first hop.
 function getKey(req) {
+  const trustedVercelIp = req.headers["x-vercel-forwarded-for"];
+  if (trustedVercelIp) {
+    const first = (Array.isArray(trustedVercelIp) ? trustedVercelIp[0] : String(trustedVercelIp)).split(",")[0].trim();
+    if (first) return first;
+  }
   const forwarded = req.headers["x-forwarded-for"];
-  return (Array.isArray(forwarded) ? forwarded[0] : String(forwarded || "").split(",")[0]).trim() || "unknown";
+  if (forwarded) {
+    const parts = (Array.isArray(forwarded) ? forwarded[0] : String(forwarded)).split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1];
+  }
+  return String(req.headers["x-real-ip"] || "").trim() || req.socket?.remoteAddress || "unknown";
 }
 
 export default async function handler(req, res) {

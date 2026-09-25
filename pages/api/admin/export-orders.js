@@ -6,8 +6,22 @@ import { recordAuditEvent } from "../../../lib/auditLog";
 // character, or newline, doubling any internal quotes — the standard CSV
 // escaping rule. Without this, a note or error message containing a comma
 // would silently shift every later column in that row.
+//
+// BUG FIX: this used to stop at RFC 4180 escaping, which is not enough.
+// Several exported columns (most importantly `email`) come straight from
+// unauthenticated customer checkout input, and Excel/Google Sheets treats
+// any cell beginning with =, +, -, or @ as a FORMULA, not text — a known
+// "CSV/Formula Injection" vector. A checkout email like
+// `=HYPERLINK("http://evil.example","x")@a.com` passes the app's email
+// regex (which only requires an "@" and a dot somewhere) and would silently
+// become a live, clickable/executable formula the moment an admin opened
+// this export. Any such field is now prefixed with a leading apostrophe,
+// which Excel/Sheets render as inert literal text while keeping the value
+// unchanged for every other consumer (plain CSV parsers, re-import, etc).
+const FORMULA_TRIGGER_CHARS = ["=", "+", "-", "@", "\t", "\r"];
 function csvField(value) {
-  const str = value == null ? "" : String(value);
+  let str = value == null ? "" : String(value);
+  if (FORMULA_TRIGGER_CHARS.includes(str[0])) str = `'${str}`;
   if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
   return str;
 }
