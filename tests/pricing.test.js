@@ -12,8 +12,8 @@ describe("pricing policy", () => {
     expect(businessMarkup(100, { orderType: "tierBulkAirtime", network: "telecel" })).toBe(0);
   });
 
-  it("applies the default 1% business margin to other services", () => {
-    expect(businessMarkup(100, { orderType: "ecg", network: "ecg" })).toBe(1);
+  it("applies the default 2% business margin to other services", () => {
+    expect(businessMarkup(100, { orderType: "ecg", network: "ecg" })).toBe(2);
   });
 
   it("treats a fixed-only rule as an override, not fixed plus default percent", () => {
@@ -36,15 +36,15 @@ describe("pricing policy", () => {
       orderType: "ecg",
       network: "ecg",
     });
-    expect(pricing.customerProductAmount).toBe(101);
-    expect(pricing.checkoutAmount).toBeCloseTo(103.01, 2);
+    expect(pricing.customerProductAmount).toBe(102);
+    expect(pricing.checkoutAmount).toBeCloseTo(104.03, 2);
     expect(pricing.checkoutAmount).toBeGreaterThan(pricing.customerProductAmount);
   });
 
   // BUG FIX regression: AFA, ECG, Water, TV and the bulk-data Excel/CSV
   // fallback estimate used to preview the customer's total with
   // withPaystackFee(rawAmount) alone, which adds the Paystack fee but
-  // silently skips the 1% business markup — understating the price shown
+  // silently skips the 2% business markup — understating the price shown
   // before checkout for every non-zero-margin order type. previewCustomerTotal
   // must match what getOrderPricing() (the real server-side charge) produces.
   it("previewCustomerTotal matches getOrderPricing's real checkout total for a marked-up service", () => {

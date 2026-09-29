@@ -47,14 +47,12 @@ describe("ECG and Water customer bill workflow contracts", () => {
     expect(techlink).toContain("validateGwclMeter({ account, phone })");
   });
 
-  // BUG FIX regression: the combined meter+phone query to GET /ecg/lookup
-  // is not documented behavior (Techlink's docs only show `meter` alone, or
-  // `phone` alone as an alternative lookup mode) — retry with the
-  // documented meter-only call if the combined attempt doesn't resolve, so
-  // an unexpectedly strict provider API can't block every ECG top-up.
-  it("falls back to a meter-only lookup if the combined meter+phone query fails to resolve", () => {
+  // Techlink's own ECG page will not look a meter up without a phone number,
+  // and a meter-only call does not work in practice. The lookup therefore
+  // always sends meter + phone in ONE call and never retries meter-only.
+  it("always looks the ECG meter up with meter AND phone, never meter-only", () => {
     const techlink = read("lib/techlink.js");
-    expect(techlink).toContain("const meterOnlyParams = new URLSearchParams({ meter: requestedMeter });");
-    expect(techlink).toContain("await tlFetch(`/ecg/lookup?${meterOnlyParams.toString()}`)");
+    expect(techlink).toContain("const params = new URLSearchParams({ meter: requestedMeter, phone: requestedPhone });");
+    expect(techlink).not.toContain("meterOnlyParams");
   });
 });

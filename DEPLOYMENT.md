@@ -234,7 +234,7 @@ so a failure on one never blocks the other.
 
 ## v1.2.6 required deployment settings
 
-Set `CRON_SECRET` to a random 32+ character secret so the fulfillment cron can authenticate. Configure `PAYSTACK_FEE_RATE` to the merchant rate actually applicable to your Paystack account; do not assume a hard-coded fee is current without checking your merchant pricing. The default PjDigitalServices business margin is 1%. Keep `DEFAULT_BUSINESS_MARGIN_PERCENT=1` unless you intentionally want a different global margin, or use `SERVICE_MARKUP_RULES_JSON` for service/network-specific overrides. The repository does not depend on Vercel Cron. Background processing is configured through the GitHub Actions workflow above; no Cloudflare configuration is required.
+Set `CRON_SECRET` to a random 32+ character secret so the fulfillment cron can authenticate. Configure `PAYSTACK_FEE_RATE` to the merchant rate actually applicable to your Paystack account; do not assume a hard-coded fee is current without checking your merchant pricing. The default PjDigitalServices business margin is 2%. Keep `DEFAULT_BUSINESS_MARGIN_PERCENT=2` (or leave it unset) unless you intentionally want a different global margin, or use `SERVICE_MARKUP_RULES_JSON` for service/network-specific overrides. The repository does not depend on Vercel Cron. Background processing is configured through the GitHub Actions workflow above; no Cloudflare configuration is required.
 
 
 ### Admin hardening

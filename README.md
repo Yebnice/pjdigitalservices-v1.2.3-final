@@ -99,7 +99,7 @@ changes at the provider. Plain Quick Data Top-up uses the live
 
 Customer-facing pricing is calculated on the server. Airtime, bulk Airtime,
 and Quick Data Top-up have **0% PjDigitalServices business margin**. Other
-services use the configured business margin policy (default 1%) unless an
+services use the configured business margin policy (default 2%) unless an
 explicit service rule overrides it. The Paystack processing fee is added
 separately to the checkout total.
 
@@ -171,7 +171,7 @@ flows.
    only missing piece is your actual key. Get one from your Techlink agent
    dashboard (Auth & API Keys → Create key), set `TECHLINK_API_KEY` in your
    environment (`tlg_test_...` while testing, `tlg_live_...` once live),
-   and everything in `lib/techlink.js` will start making real calls.
+   and `lib/techlink.js` uses it for every provider call.
 
 2. **Get your Paystack keys.** Dashboard → Settings → API Keys & Webhooks.
    Use the test keys first (`sk_test_...` / `pk_test_...`).
@@ -276,9 +276,27 @@ may render imperfectly — but for a Ghanaian customer base on Chrome
 
 ## Setup
 
+Requires Node.js 24.x (see `engines` in `package.json`).
+
 ```bash
 npm install
 cp .env.example .env.local
+# fill in .env.local with your real keys (Supabase, Paystack, Techlink)
+npm run dev
+```
+
+Visit `http://localhost:3000`.
+
+Before pushing changes, run the same checks CI runs:
+
+```bash
+npm test
+npm run check:rate-limit
+npm run check:production
+npm run check:secrets
+npm run build
+```
+
 ## Production hardening applied in v1.1.0
 
 This version includes the production fixes identified during the security/architecture review:
@@ -303,23 +321,29 @@ This version includes the production fixes identified during the security/archit
 6. Complete Paystack test-mode and Techlink test-key transactions before switching to live credentials.
 
 
-# fill in .env.local with your real keys (Supabase, Paystack, Techlink)
-npm run dev
-```
-
-Visit `http://localhost:3000`.
-
 ## Environment variables
+
+Copy `.env.example` to `.env.local` for local work; on Vercel add them under
+Project Settings → Environment Variables. `.env.example` is the full,
+commented list; these are the ones the app cannot run safely without.
 
 | Variable | Where it's used |
 |---|---|
 | `SUPABASE_URL` | Server only — database connection |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server only — database connection |
-| `PAYSTACK_SECRET_KEY` | Server only — verifying payments |
+| `SUPABASE_SECRET_KEY` (or legacy `SUPABASE_SERVICE_ROLE_KEY`) | Server only — database connection |
+| `PAYSTACK_SECRET_KEY` | Server only — verifying payments and webhook signatures |
 | `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | Browser — opening the payment popup |
 | `TECHLINK_API_BASE_URL` | Server only — calling Techlink |
 | `TECHLINK_API_KEY` | Server only — calling Techlink |
-| `ADMIN_PASSWORD` | Server only — gates `/admin` |
+| `ADMIN_PASSWORD` | Server only — shared admin login (unless `ADMIN_USERS_JSON` is set) |
+| `ADMIN_USERS_JSON` | Server only — optional role-based admin accounts. If set, it must be a valid JSON array or admin login is disabled |
+| `ADMIN_SESSION_SECRET` | Server only — signs admin session cookies (32+ random characters) |
+| `CUSTOMER_SESSION_SECRET` | Server only — signs customer sessions (32+ chars, different from the admin one) |
+| `AFA_ENCRYPTION_KEY` | Server only — encrypts AFA registration details at rest (32+ chars) |
+| `CRON_SECRET` | Server only — authorises `/api/jobs/fulfill`; also add it as a GitHub Actions secret for the background worker |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_*`) | Server only — distributed rate limiting. Without them limits are per-instance only |
+| `GEMINI_API_KEY` | Server only — optional AI support chat |
+| `RESEND_API_KEY`, `BREVO_API_KEY` | Server only — optional email / SMS notifications |
 | `NEXT_PUBLIC_SITE_URL` | Your deployed domain |
 
 Never put a secret key in anything prefixed `NEXT_PUBLIC_` — those get
@@ -436,19 +460,16 @@ Store later, the standard route is wrapping this same website with
 app shell without rewriting anything here. That's a separate step to take
 once the website itself is live and working.
 
-## Still to do
+## Before going live
 
-- [ ] Get a real `TECHLINK_API_KEY` (`tlg_test_...` first) and do one live test of `/provider/validate` for both water (GWCL) and TV to confirm the field-naming quirk noted above
-- [ ] Run `supabase/schema.sql` in your Supabase project and fill in `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` (see the detailed workflow above)
-- [ ] Set `ADMIN_PASSWORD` before deploying publicly
-- [ ] Add real icon files at `public/icons/icon-192.png` and `icon-512.png`
-- [ ] Work through the deployment workflow above, in order
-- [ ] Review and tweak the homepage copy in `pages/index.js` to taste
-- [ ] Decide if/when you want document services (business reg, passports, merchant SIM, affidavits) as a phase 2
-- [ ] Review the FAQ wording on `/faq` — it's adapted from Techlink's real FAQ content but written by me, not you
-- [ ] If you also want a real MTN Master delivery-status widget (queue position, live "typical wait" like the real site shows), that needs `GET /orders/dashboard/stats` wired up — not built yet, happy to add once you confirm you want it
-- [ ] Run `npm run build` locally once you have real keys, just to catch anything this sandbox couldn't test (see note below)
-
+- [ ] Do one live test of `/provider/validate` for both water (GWCL) and TV with a `tlg_test_...` key
+- [ ] Run `supabase/schema.sql` and every `supabase/migration_*.sql` in order (see the database section)
+- [ ] Set every variable listed above, including `ADMIN_SESSION_SECRET`, `CRON_SECRET` and `AFA_ENCRYPTION_KEY`
+- [ ] Add `CRON_SECRET` as a GitHub Actions repository secret (the worker in `.github/workflows/background-worker.yml` calls `/api/jobs/fulfill` every 5 minutes)
+- [ ] Set up the Paystack webhook URL
+- [ ] Run `npm test` and `npm run build` with real keys
+- [ ] Review the homepage copy and the `/faq` wording
+- [ ] Decide whether document services should be a phase 2
 
 ## Support complaint transaction requirements (v1.2.2)
 For data and airtime complaints, the support form and chatbot require Transaction ID, Amount, Data/Airtime Requested, Recipient/Beneficiary, Transaction Date & Time, Transaction Details, and the complaint description. For other products, the normal support form is used with transaction details relevant to the service.
@@ -456,4 +477,9 @@ For data and airtime complaints, the support form and chatbot require Transactio
 
 ### v1.2.6 hardening notes
 
-The fulfillment worker automatically checks provider-queued orders on schedule and no Cloudflare service is required. Pricing is split into provider cost (including documented provider-side charges where available), a default PjDigitalServices business margin of 1%, optional service-specific markup overrides, and a 1.95% Paystack gross transaction fee. Set `DEFAULT_BUSINESS_MARGIN_PERCENT` or `SERVICE_MARKUP_RULES_JSON` only when you intentionally want different margins. The order-create API enforces idempotency and bulk limits.
+The fulfillment worker automatically checks provider-queued orders on schedule and no Cloudflare service is required. Pricing is split into provider cost (including documented provider-side charges where available), a default PjDigitalServices business margin of 2%, optional service-specific markup overrides, and a 1.95% Paystack gross transaction fee. Set `DEFAULT_BUSINESS_MARGIN_PERCENT` or `SERVICE_MARKUP_RULES_JSON` only when you intentionally want different margins. The order-create API enforces idempotency and bulk limits.
+
+### CI, worker and Vercel deployments
+
+- GitHub Actions only runs workflows from `.github/workflows/`. The duplicate `ci.yml` and `background-worker.yml` files that used to sit in the repo root never ran and have been removed.
+- `vercel.json` limits Git-triggered deployments to `main`, so packaging or CI-only branches and pull requests no longer use up Vercel's daily deployment quota.
