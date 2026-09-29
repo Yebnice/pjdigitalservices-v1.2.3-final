@@ -470,7 +470,13 @@ export default function AdminPage() {
   }, [auth, canOperate]);
 
   async function manualAction(reference, action) {
-    const note = window.prompt(action === "confirm_fulfilled" ? "Confirm provider delivery and enter a brief note:" : "Confirm provider did not deliver and enter a brief note before retrying:");
+    const prompts = {
+      confirm_fulfilled: "Confirm the provider actually delivered this order and enter a brief audit note:",
+      retry: "Confirm Techlink did not deliver this order and enter a brief audit note before retrying:",
+      process_now: "Confirm this paid order has not yet been sent to Techlink and enter a brief audit note:",
+      verify_and_process: "Confirm this payment needs a fresh Paystack verification and enter a brief audit note:",
+    };
+    const note = window.prompt(prompts[action] || "Enter a brief audit note:");
     if (!note || note.trim().length < 5) return;
     const key = `${reference}:${action}`;
     setActionBusy((prev) => ({ ...prev, [key]: true }));
@@ -566,7 +572,7 @@ export default function AdminPage() {
         </div>
         <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Orders</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>{orders.length}</div></div>
         <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Open feedback</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>{feedback.filter((f) => f.status === "open").length}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Manual review</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>{manualReview.length}</div></div>
+        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Needs attention</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>{manualReview.length}</div></div>
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -587,7 +593,7 @@ export default function AdminPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, fontSize: 13 }}>
               <div><span style={{ color: "var(--muted)" }}>Admin role</span><br /><strong>{role || "—"}</strong></div>
               <div><span style={{ color: "var(--muted)" }}>Techlink wallet</span><br /><strong>{walletBalance != null ? `GHS ${Number(walletBalance).toFixed(2)}` : "Unavailable"}</strong></div>
-              <div><span style={{ color: "var(--muted)" }}>Manual review</span><br /><strong>{manualReview.length}</strong></div>
+              <div><span style={{ color: "var(--muted)" }}>Needs attention</span><br /><strong>{manualReview.length}</strong></div>
               <div><span style={{ color: "var(--muted)" }}>Open feedback</span><br /><strong>{feedback.filter((f) => f.status === "open").length}</strong></div>
             </div>
             {canOperate && (manualReview.length > 0 || feedback.filter((f) => f.status === "open").length > 0 || walletError) && (
@@ -653,44 +659,94 @@ export default function AdminPage() {
             Includes both orders escalated automatically and orders that failed immediately (e.g. an instant airtime top-up that couldn't be delivered) — the latter never promote themselves further without a scheduled job, so they're shown here directly.
           </div>
           {manualReview.length === 0 && <div style={{ padding: 24, textAlign: "center", color: "var(--muted)", fontSize: 14 }}>Nothing needs attention right now.</div>}
-          {manualReview.map((o) => (
-            <div key={o.reference} className="tx-row" style={{ alignItems: "flex-start", flexDirection: "column", gap: 5 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                <strong>{o.reference}</strong>
-                <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{new Date(o.createdAt).toLocaleString()}</span>
-              </div>
-              <div style={{ fontSize: 13, color: "var(--muted)" }}>
-                GHS {Number(o.amount).toFixed(2)} · {o.orderType} · {o.network || "service"}
-                {o.orderType === "airtime" && <span style={{ color: "var(--red)", fontWeight: 600 }}> · instant — should not normally sit here</span>}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>{o.lastFulfillmentError || "Provider outcome requires confirmation before any retry."}</div>
-              <div style={{ fontSize: 12, color: "var(--price)" }}>
-                {o.fulfillmentStatus === "queued_with_provider"
-                  ? "This order has already been submitted to Techlink. Confirm delivery with Techlink before marking it fulfilled. Do not retry a queued/bulk order."
-                  : "Confirm the provider outcome before taking action. The buttons below create an admin audit note."}
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
-                <button
-                  className="nav-item"
-                  style={{ width: "auto", padding: "6px 10px" }}
-                  disabled={Boolean(actionBusy[`${o.reference}:confirm_fulfilled`])}
-                  onClick={() => manualAction(o.reference, "confirm_fulfilled")}
-                >
-                  {actionBusy[`${o.reference}:confirm_fulfilled`] ? "Updating…" : "Mark fulfilled"}
-                </button>
-                {o.fulfillmentStatus !== "queued_with_provider" && (
-                  <button
-                    className="nav-item"
-                    style={{ width: "auto", padding: "6px 10px" }}
-                    disabled={Boolean(actionBusy[`${o.reference}:retry`])}
-                    onClick={() => manualAction(o.reference, "retry")}
-                  >
-                    {actionBusy[`${o.reference}:retry`] ? "Authorizing…" : "Authorize retry"}
-                  </button>
+          {manualReview.map((o) => {
+            const isQueued = o.fulfillmentStatus === "queued_with_provider";
+            const isReady = o.status === "payment_verified" && o.fulfillmentStatus === "ready";
+            const needsPaymentVerification = ["pending", "payment_pending"].includes(o.status);
+            const isRetryable = ["manual_review", "failed"].includes(o.fulfillmentStatus);
+            return (
+              <div key={o.reference} className="tx-row" style={{ alignItems: "flex-start", flexDirection: "column", gap: 5 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+                  <strong>{o.reference}</strong>
+                  <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{new Date(o.createdAt).toLocaleString()}</span>
+                </div>
+                <div style={{ fontSize: 13, color: "var(--muted)" }}>
+                  GHS {Number(o.checkoutAmount ?? o.amount).toFixed(2)} · {o.orderType} · {o.network || "service"}
+                  {o.status === "payment_verified" && <span style={{ color: "var(--green)", fontWeight: 600 }}> · payment verified</span>}
+                </div>
+                {isQueued && o.result?.orderId && (
+                  <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>Techlink order ID: {String(o.result.orderId)}</div>
                 )}
+                {isReady && (
+                  <div style={{ fontSize: 12, color: "var(--price)" }}>
+                    Payment is verified, but the order has not been submitted to Techlink yet. You can send it now without waiting for the scheduler.
+                  </div>
+                )}
+                {needsPaymentVerification && (
+                  <div style={{ fontSize: 12, color: "var(--price)" }}>
+                    This checkout has not yet been verified as paid by the app. The button below re-checks Paystack first; Techlink is called only if Paystack confirms the exact amount.
+                  </div>
+                )}
+                {isQueued && (
+                  <div style={{ fontSize: 12, color: "var(--price)" }}>
+                    Techlink accepted this order. Confirm delivery with Techlink before marking it fulfilled. Do not retry a queued/bulk order.
+                  </div>
+                )}
+                {isRetryable && (
+                  <div style={{ fontSize: 12, color: "var(--price)" }}>
+                    Confirm the provider outcome before retrying. A retry is only appropriate after you have established that the previous provider attempt did not deliver.
+                  </div>
+                )}
+                {!isReady && !needsPaymentVerification && !isQueued && !isRetryable && (
+                  <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>
+                    {o.lastFulfillmentError || "This order is waiting for operator review."}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+                  {needsPaymentVerification && (
+                    <button
+                      className="nav-item"
+                      style={{ width: "auto", padding: "6px 10px" }}
+                      disabled={Boolean(actionBusy[`${o.reference}:verify_and_process`])}
+                      onClick={() => manualAction(o.reference, "verify_and_process")}
+                    >
+                      {actionBusy[`${o.reference}:verify_and_process`] ? "Verifying…" : "Verify payment & process"}
+                    </button>
+                  )}
+                  {isReady && (
+                    <button
+                      className="nav-item"
+                      style={{ width: "auto", padding: "6px 10px" }}
+                      disabled={Boolean(actionBusy[`${o.reference}:process_now`])}
+                      onClick={() => manualAction(o.reference, "process_now")}
+                    >
+                      {actionBusy[`${o.reference}:process_now`] ? "Sending to Techlink…" : "Process with Techlink"}
+                    </button>
+                  )}
+                  {(isQueued || isRetryable) && (
+                    <button
+                      className="nav-item"
+                      style={{ width: "auto", padding: "6px 10px" }}
+                      disabled={Boolean(actionBusy[`${o.reference}:confirm_fulfilled`])}
+                      onClick={() => manualAction(o.reference, "confirm_fulfilled")}
+                    >
+                      {actionBusy[`${o.reference}:confirm_fulfilled`] ? "Updating…" : "Mark fulfilled"}
+                    </button>
+                  )}
+                  {isRetryable && (
+                    <button
+                      className="nav-item"
+                      style={{ width: "auto", padding: "6px 10px" }}
+                      disabled={Boolean(actionBusy[`${o.reference}:retry`])}
+                      onClick={() => manualAction(o.reference, "retry")}
+                    >
+                      {actionBusy[`${o.reference}:retry`] ? "Authorizing…" : "Authorize retry"}
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
