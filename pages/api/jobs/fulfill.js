@@ -1,11 +1,40 @@
+import crypto from "crypto";
 import { isAdminAuthed } from "../../../lib/adminAuth";
 import { fulfillClaimedOrder, recoverAndListReadyOrders, checkQueuedOrders, checkTechlinkWalletBalance, alertStaleQueuedOrders } from "../../../lib/orderProcessing";
 import { processPaystackWebhookQueue } from "../../../lib/paystackWebhookQueue";
+import { listReadyOrders } from "../../../lib/store";
+
+// Constant-time comparison so the worker secret can't be guessed byte-by-byte
+// from response timing.
+function safeEqual(a, b) {
+  const x = Buffer.from(String(a || ""));
+  const y = Buffer.from(String(b || ""));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
 
 function authorized(req) {
   const secret = process.env.CRON_SECRET;
-  if (secret && req.headers.authorization === `Bearer ${secret}`) return true;
-  return isAdminAuthed(req);
+  if (secret && safeEqual(req.headers.authorization, `Bearer ${secret}`)) return true;
+  // isAdminAuthed can throw (e.g. ADMIN_SESSION_SECRET missing). That must
+  // read as "not authorized", never as an unhandled 500.
+  try {
+    return isAdminAuthed(req);
+  } catch {
+    return false;
+  }
+}
+
+// Every step of a worker run is independent. One failing step (a transient
+// Supabase or Techlink error) must not stop the others — above all it must
+// not stop fulfillment of orders that customers have already paid for.
+async function step(name, fn, fallback, failures) {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`Fulfillment worker step failed: ${name}`, err);
+    if (failures) failures.push({ step: name, error: String(err?.message || err) });
+    return typeof fallback === "function" ? await fallback() : fallback;
+  }
 }
 
 export default async function handler(req, res) {
@@ -13,41 +42,34 @@ export default async function handler(req, res) {
   if (!authorized(req)) return res.status(401).json({ error: "Unauthorized" });
   try {
     const batchSize = Math.max(1, Math.min(100, Number(process.env.FULFILLMENT_BATCH_SIZE || 3)));
-    // BUG FIX: the comment below has always claimed the wallet-balance check
-    // "runs FIRST so a slow/failed fulfillment loop... can never prevent it"
-    // — but processPaystackWebhookQueue() used to be called BEFORE this
-    // check, and unlike every other step here, it was never wrapped in its
-    // own try/catch. claimPaystackWebhookJobs() (inside it) throws a plain
-    // Error on any Supabase read/write failure during claiming, which is
-    // exactly the kind of transient incident this alert exists to survive.
-    // That uncaught throw would hit the outer catch below, return 500, and
-    // skip the wallet check, the stale-queued alert, the queued-order
-    // re-check, AND fulfillment itself for that entire 5-minute run — the
-    // opposite of "can never prevent it". Moved the wallet check first for
-    // real, and given webhook processing its own try/catch so one failing
-    // step degrades gracefully instead of taking the whole run down.
-    let walletCheck = null;
-    try {
-      walletCheck = await checkTechlinkWalletBalance();
-    } catch (err) {
-      console.error("Wallet balance check threw unexpectedly", err);
-    }
-    let paystackWebhookResults = [];
-    try {
-      paystackWebhookResults = await processPaystackWebhookQueue(batchSize);
-    } catch (err) {
-      console.error("Paystack webhook queue processing failed", err);
-    }
+    // Wallet check first so a slow or failing later step can never prevent
+    // the low-balance alert.
+    const failures = [];
+    const walletCheck = await step("wallet-balance", () => checkTechlinkWalletBalance(), null, failures);
+    const paystackWebhookResults = await step("paystack-webhook-queue", () => processPaystackWebhookQueue(batchSize), [], failures);
     // Long-waiting queued orders (incl. bulk ones that can't auto-resolve).
-    const staleQueued = await alertStaleQueuedOrders();
-    const queuedResults = await checkQueuedOrders(batchSize);
-    const recoveredReady = await recoverAndListReadyOrders(batchSize);
+    const staleQueued = await step("stale-queued-alerts", () => alertStaleQueuedOrders(), null, failures);
+    const queuedResults = await step("queued-order-checks", () => checkQueuedOrders(batchSize), [], failures);
+    // If recovery/escalation fails, still fall back to a plain list of ready
+    // orders so paid orders keep getting delivered. The fallback is a function
+    // so it only runs when it is actually needed.
+    const recoveredReady = await step(
+      "recover-and-list-ready",
+      () => recoverAndListReadyOrders(batchSize),
+      () => step("list-ready-fallback", () => listReadyOrders(batchSize), [], failures),
+      failures,
+    );
     const orders = recoveredReady.slice(0, batchSize);
     const results = [];
     for (const order of orders) {
-      results.push({ reference: order.reference, ...(await fulfillClaimedOrder(order.reference)) });
+      // One bad order must not block the rest of the batch.
+      const outcome = await step(`fulfill:${order.reference}`, () => fulfillClaimedOrder(order.reference), { kind: "worker_error" }, failures);
+      results.push({ reference: order.reference, ...outcome });
     }
-    return res.status(200).json({ processed: results.length + queuedResults.length + paystackWebhookResults.length, paystackWebhookProcessed: paystackWebhookResults.length, paystackWebhookResults, queuedChecked: queuedResults.length, queuedResults, results, walletCheck, staleQueued });
+    // Do all the work first, then report. A non-2xx status makes the GitHub
+    // Actions worker (curl --fail) go red, so a broken step is never silent.
+    const status = failures.length ? 500 : 200;
+    return res.status(status).json({ ...(failures.length ? { error: "One or more worker steps failed", failures } : {}), processed: results.length + queuedResults.length + paystackWebhookResults.length, paystackWebhookProcessed: paystackWebhookResults.length, paystackWebhookResults, queuedChecked: queuedResults.length, queuedResults, results, walletCheck, staleQueued });
   } catch (err) {
     console.error("Fulfillment worker error", err);
     return res.status(500).json({ error: "Fulfillment worker failed" });

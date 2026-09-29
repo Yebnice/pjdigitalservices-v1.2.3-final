@@ -3,11 +3,35 @@ import { enqueuePaystackWebhook } from "../../../lib/paystackWebhookQueue";
 
 export const config = { api: { bodyParser: false } };
 
+// Paystack events are a few KB. Cap the body so an unauthenticated caller
+// can't make the server buffer an arbitrarily large payload before the
+// signature check runs.
+const MAX_WEBHOOK_BYTES = 1024 * 1024;
+
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (chunk) => { data += chunk; });
-    req.on("end", () => resolve(data));
+    const chunks = [];
+    let size = 0;
+    let tooLarge = false;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > MAX_WEBHOOK_BYTES) {
+        // Stop storing, keep draining, so the 413 response can still be sent.
+        tooLarge = true;
+        chunks.length = 0;
+        return;
+      }
+      if (!tooLarge) chunks.push(chunk);
+    });
+    req.on("end", () => {
+      if (tooLarge) {
+        const err = new Error("Webhook body too large");
+        err.code = "BODY_TOO_LARGE";
+        reject(err);
+        return;
+      }
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    });
     req.on("error", reject);
   });
 }
@@ -30,6 +54,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ received: true, queued: true });
   } catch (err) {
+    if (err?.code === "BODY_TOO_LARGE") return res.status(413).json({ error: "Payload too large" });
     console.error("Paystack webhook enqueue error", err);
     // A non-2xx response tells Paystack to retry when the durable queue
     // could not be written.

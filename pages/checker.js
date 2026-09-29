@@ -117,7 +117,7 @@ export default function CheckerPage() {
             <div style={{ fontSize: 13, color: "var(--muted)" }}>
               {/* BUG FIX: this used to show the raw provider voucher price with
                   no business markup and no Paystack fee at all — /api/orders/create.js
-                  actually prices "checker" orders through getOrderPricing() (1% default
+                  actually prices "checker" orders through getOrderPricing() (2% default
                   margin) before adding the Paystack fee, so the real checkout total was
                   always higher than this line implied. previewCustomerTotal() mirrors
                   that server-side calculation, applied to the full quantity*price like

@@ -139,7 +139,7 @@ function OverviewTab({ orders, feedback, manualReview, walletBalance }) {
 
   // Product revenue is the customer-facing product price after any business
   // margin, but before the Paystack processing fee. Keep the fee separate so
-  // the dashboard makes the 1% business margin auditable instead of hiding it
+  // the dashboard makes the 2% business margin auditable instead of hiding it
   // inside a raw provider/service amount.
   const revenue = successInRange.reduce((s, o) => s + Number(o.customerProductAmount ?? o.amount ?? 0), 0);
   const businessMargin = successInRange.reduce((s, o) => s + Number(o.businessMarkupAmount ?? 0), 0);

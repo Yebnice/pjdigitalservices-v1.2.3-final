@@ -14,6 +14,9 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error("Techlink ECG lookup error", err);
     const status = Number(err?.status);
+    if (err?.code === "ECG_NAME_UNREADABLE") {
+      return res.status(502).json({ error: "We found this meter but could not read the account name, so we can't confirm the recipient. Please try again or contact support before paying." });
+    }
     if (status === 404) {
       return res.status(404).json({ error: "No ECG account matched that meter or phone." });
     }

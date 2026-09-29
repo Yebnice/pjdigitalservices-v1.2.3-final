@@ -14,7 +14,7 @@ export default function BillsPage() {
   const [receipt, setReceipt] = useState(null);
 
   // ECG: fraud-prevention lookup before topping up
-  const [ecgLookup, setEcgLookup] = useState(null); // { customerName, district } | "error" | null
+  const [ecgLookup, setEcgLookup] = useState(null); // { customerName, address, meterType, region } | { kind, message } | null
   const [lookingUp, setLookingUp] = useState(false);
 
   // Water: fixed bill amount, resolved from Techlink, not typed by the customer
@@ -74,7 +74,7 @@ export default function BillsPage() {
   }
 
   const ecgLookupResolved = ecgLookup && !ecgLookup.kind;
-  const ecgValid = ecgLookupResolved && meterNumber.length >= 4 && phone.length >= 10 && Number(amount) > 0 && email.includes("@");
+  const ecgValid = ecgLookupResolved && Boolean(ecgLookup.customerName) && meterNumber.length >= 4 && phone.length >= 10 && Number(amount) > 0 && email.includes("@");
   const waterResolved = waterBill && !waterBill.kind;
   const waterValid = waterResolved && phone.length >= 10 && email.includes("@");
 
@@ -140,11 +140,20 @@ export default function BillsPage() {
                 </button>
               </div>
             </Field>
+            {meterNumber.length >= 4 && phone.length < 10 && !ecgLookup && (
+              <p style={{ color: "var(--muted-dim)", fontSize: 13, margin: 0 }}>Enter your phone number below, then tap Look up to confirm the meter.</p>
+            )}
             {ecgLookup?.kind === "not_found" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{ecgLookup.message || "No ECG account matched that meter or phone."}</p>}
             {ecgLookup?.kind === "unavailable" && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{ecgLookup.message || "ECG lookup is temporarily unavailable. Please try again shortly."}</p>}
             {ecgLookup && !ecgLookup.kind && (
               <div className="card" style={{ padding: 12, fontSize: 13 }}>
-                Meter belongs to <strong>{ecgLookup.customerName}</strong>{ecgLookup.district ? ` · ${ecgLookup.district}` : ""}
+                <div>Meter belongs to <strong>{ecgLookup.customerName}</strong></div>
+                {ecgLookup.address ? <div style={{ color: "var(--muted-dim)", marginTop: 2 }}>{ecgLookup.address}</div> : null}
+                {(ecgLookup.meterType || ecgLookup.region) ? (
+                  <div style={{ color: "var(--muted-dim)", marginTop: 2 }}>
+                    {[ecgLookup.meterType, ecgLookup.region].filter(Boolean).join(" · ")}
+                  </div>
+                ) : null}
               </div>
             )}
             <Field label="Phone number">
