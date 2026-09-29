@@ -402,6 +402,7 @@ export default function AdminPage() {
   const [feedbackSearch, setFeedbackSearch] = useState("");
   const [walletBalance, setWalletBalance] = useState(null);
   const [walletError, setWalletError] = useState(null);
+  const [actionBusy, setActionBusy] = useState({});
 
   const canOperate = role === "operator" || role === "admin";
 
@@ -471,10 +472,35 @@ export default function AdminPage() {
   async function manualAction(reference, action) {
     const note = window.prompt(action === "confirm_fulfilled" ? "Confirm provider delivery and enter a brief note:" : "Confirm provider did not deliver and enter a brief note before retrying:");
     if (!note || note.trim().length < 5) return;
-    const r = await fetch("/api/orders/manual-review", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reference, action, note }) });
-    const d = await r.json();
-    if (!r.ok) return window.alert(d.error || "Could not update the order");
-    await load();
+    const key = `${reference}:${action}`;
+    setActionBusy((prev) => ({ ...prev, [key]: true }));
+    try {
+      const r = await fetch("/api/orders/manual-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reference, action, note }),
+      });
+      const raw = await r.text();
+      let d = {};
+      try { d = raw ? JSON.parse(raw) : {}; } catch { /* preserve useful HTTP error below */ }
+      if (!r.ok) {
+        if (r.status === 401) {
+          setAuth(false);
+          setRole(null);
+          return;
+        }
+        return window.alert(d.error || `Could not update the order (HTTP ${r.status})`);
+      }
+      await load();
+    } catch (err) {
+      window.alert(err?.message || "Could not reach the server to update the order");
+    } finally {
+      setActionBusy((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
   }
 
   async function logout() {
@@ -638,10 +664,30 @@ export default function AdminPage() {
                 {o.orderType === "airtime" && <span style={{ color: "var(--red)", fontWeight: 600 }}> · instant — should not normally sit here</span>}
               </div>
               <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>{o.lastFulfillmentError || "Provider outcome requires confirmation before any retry."}</div>
-              <div style={{ fontSize: 12, color: "var(--price)" }}>Confirm the provider outcome before taking action. The buttons below create an admin audit note.</div>
+              <div style={{ fontSize: 12, color: "var(--price)" }}>
+                {o.fulfillmentStatus === "queued_with_provider"
+                  ? "This order has already been submitted to Techlink. Confirm delivery with Techlink before marking it fulfilled. Do not retry a queued/bulk order."
+                  : "Confirm the provider outcome before taking action. The buttons below create an admin audit note."}
+              </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
-                <button className="nav-item" style={{ width: "auto", padding: "6px 10px" }} onClick={() => manualAction(o.reference, "confirm_fulfilled")}>Mark fulfilled</button>
-                <button className="nav-item" style={{ width: "auto", padding: "6px 10px" }} onClick={() => manualAction(o.reference, "retry")}>Authorize retry</button>
+                <button
+                  className="nav-item"
+                  style={{ width: "auto", padding: "6px 10px" }}
+                  disabled={Boolean(actionBusy[`${o.reference}:confirm_fulfilled`])}
+                  onClick={() => manualAction(o.reference, "confirm_fulfilled")}
+                >
+                  {actionBusy[`${o.reference}:confirm_fulfilled`] ? "Updating…" : "Mark fulfilled"}
+                </button>
+                {o.fulfillmentStatus !== "queued_with_provider" && (
+                  <button
+                    className="nav-item"
+                    style={{ width: "auto", padding: "6px 10px" }}
+                    disabled={Boolean(actionBusy[`${o.reference}:retry`])}
+                    onClick={() => manualAction(o.reference, "retry")}
+                  >
+                    {actionBusy[`${o.reference}:retry`] ? "Authorizing…" : "Authorize retry"}
+                  </button>
+                )}
               </div>
             </div>
           ))}
