@@ -1,4 +1,5 @@
 import { AIRTELTIGO_PREFIXES, getLikelyNetwork, isLikelyAirtelTigoNumber } from "../lib/networkValidation";
+import { getOrderStatusLabel } from "../lib/orderStatus";
 import { useEffect, useState } from "react";
 import { Loader2, Check, X, Bolt, Droplet, GraduationCap, Clock } from "lucide-react";
 
@@ -418,10 +419,17 @@ export function OrderList({ items }) {
               <div
                 style={{
                   fontSize: 12,
-                  color: o.status === "success" ? "var(--green)" : o.failReason === "payment_abandoned" ? "var(--muted)" : o.status === "failed" ? "var(--red)" : o.fulfillmentStatus === "queued_with_provider" ? "var(--gold)" : "var(--muted)",
+                  color: (
+                    o.fulfilled || o.status === "success" ? "var(--green)"
+                      : o.failReason === "payment_abandoned" ? "var(--muted)"
+                        : o.status === "payment_verified" && o.fulfillmentStatus === "failed" ? "var(--red)"
+                          : ["queued_with_provider", "processing", "ready", "manual_review"].includes(o.fulfillmentStatus) || ["pending", "payment_pending"].includes(o.status) ? "var(--gold)"
+                            : o.status === "failed" ? "var(--red)"
+                              : "var(--muted)"
+                  ),
                 }}
               >
-                {o.status === "success" ? "Delivered" : o.failReason === "payment_abandoned" ? "Payment cancelled" : o.status === "failed" ? "Failed" : o.fulfillmentStatus === "queued_with_provider" ? "Queued for delivery" : "Payment not completed"}
+                {getOrderStatusLabel(o)}
               </div>
             </div>
           </div>
