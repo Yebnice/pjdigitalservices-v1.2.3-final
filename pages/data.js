@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NETWORKS, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork } from "../components/ui";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NETWORKS, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork, phonePlaceholder } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
 import { withPaystackFee } from "../lib/pricing";
 
@@ -107,7 +107,7 @@ export default function DataPage() {
         </Field>
         <Field label="Recipient phone number">
           <div style={{ display: "flex", gap: 8, maxWidth: 320 }}>
-            <input className="input" style={{ flex: 1 }} value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder="024 000 0000" />
+            <input className="input" style={{ flex: 1 }} value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder={phonePlaceholder(network)} />
             <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={loadBundles} disabled={phone.length < 10 || loadingBundles}>
               {loadingBundles ? "..." : "Load bundles"}
             </button>

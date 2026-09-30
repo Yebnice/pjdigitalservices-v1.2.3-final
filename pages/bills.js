@@ -157,7 +157,7 @@ export default function BillsPage() {
               </div>
             )}
             <Field label="Phone number">
-              <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setEcgLookup(null); setWaterBill(null); }} placeholder="024 000 0000" />
+              <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setEcgLookup(null); setWaterBill(null); }} placeholder="0XX XXX XXXX" />
             </Field>
             <Field label="Amount to top up (GHS)">
               <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="50.00" type="number" />
@@ -186,7 +186,7 @@ export default function BillsPage() {
                 and it's still sent to the API immediately for the GWCL fallback
                 path in lib/techlink.js. */}
             <Field label="Phone number">
-              <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setWaterBill(null); }} placeholder="024 000 0000" />
+              <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setWaterBill(null); }} placeholder="0XX XXX XXXX" />
             </Field>
             <Field label="Ghana Water account / meter number">
               <div style={{ display: "flex", gap: 8 }}>

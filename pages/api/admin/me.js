@@ -1,4 +1,5 @@
 import { adminSessionActor } from "../../../lib/adminAuth";
+import { permissionsFor } from "../../../lib/adminPermissions";
 
 export default function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -7,5 +8,7 @@ export default function handler(req, res) {
     authenticated: Boolean(actor),
     role: actor?.role || null,
     username: actor?.username || null,
+    // The dashboard uses this only to hide buttons; the server re-checks every action.
+    permissions: actor ? permissionsFor(actor.role) : [],
   });
 }

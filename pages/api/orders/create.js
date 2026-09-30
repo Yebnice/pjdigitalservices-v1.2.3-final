@@ -14,6 +14,7 @@ import {
 import { TIERS } from "../../../lib/agentProducts";
 import { rateLimit } from "../../../lib/rateLimit";
 import { getOrderPricing } from "../../../lib/pricing";
+import { isValidGhanaNumber, toLocalGhanaNumber } from "../../../lib/networkValidation";
 
 // Every price here is resolved from Techlink itself at order time — never
 // from anything the browser sends — so a customer can never pay less (or
@@ -107,8 +108,11 @@ export default async function handler(req, res) {
     if (checkerRequiresSmsPhone && !phone) {
       return res.status(400).json({ error: "Phone number is required for SMS delivery" });
     }
-    if (!isBulk && phone && !/^[+0-9][0-9\s-]{7,20}$/.test(String(phone))) {
-      return res.status(400).json({ error: "Enter a valid phone number" });
+    // A malformed number is only discovered by Techlink AFTER the customer has
+    // paid, so reject it here, before checkout. Accepts 024 123 4567,
+    // +233 24 123 4567 and 233241234567.
+    if (!isBulk && phone && !isValidGhanaNumber(phone)) {
+      return res.status(400).json({ error: "Enter a valid 10-digit Ghana phone number, e.g. 0241234567" });
     }
     let resolvedNetwork = network; // may be overridden below for tier orders — see note there
 
@@ -299,12 +303,12 @@ export default async function handler(req, res) {
           const reference = await logFailedAttempt("tier_bulk_row_unavailable", { orderType, network: tier.network, phone: r.phone, email });
           return res.status(400).json({ error: `Could not price the line for ${r.phone || "an entry"} — check the size matches an available bundle` });
         }
-        if (!/^[+0-9][0-9\s-]{7,20}$/.test(String(r.phone))) {
+        if (!isValidGhanaNumber(r.phone)) {
           return res.status(400).json({ error: `Invalid phone number in bulk line: ${r.phone}` });
         }
         const rowPrice = Number(product.price ?? product.amount);
         if (!Number.isFinite(rowPrice) || rowPrice <= 0) return res.status(400).json({ error: `Invalid price for ${r.phone}` });
-        resolvedRows.push({ phone: String(r.phone).trim(), size: Number(r.size), name: product.name, price: rowPrice });
+        resolvedRows.push({ phone: toLocalGhanaNumber(r.phone), size: Number(r.size), name: product.name, price: rowPrice });
       }
       amount = resolvedRows.reduce((sum, r) => sum + r.price, 0);
       extra.tierDetails = { tierKey, category: tier.category, rows: resolvedRows };
@@ -318,11 +322,11 @@ export default async function handler(req, res) {
         if (!r.phone || !rowAmount || rowAmount <= 0) {
           return res.status(400).json({ error: `Invalid line for ${r.phone || "an entry"}` });
         }
-        if (!/^[+0-9][0-9\s-]{7,20}$/.test(String(r.phone))) {
+        if (!isValidGhanaNumber(r.phone)) {
           return res.status(400).json({ error: `Invalid phone number in bulk line: ${r.phone}` });
         }
         if (rowAmount > MAX_BULK_LINE_GHS) return res.status(400).json({ error: `Each bulk airtime line is limited to GHS ${MAX_BULK_LINE_GHS.toFixed(2)}` });
-        resolvedRows.push({ phone: String(r.phone).trim(), amount: rowAmount });
+        resolvedRows.push({ phone: toLocalGhanaNumber(r.phone), amount: rowAmount });
       }
       amount = resolvedRows.reduce((sum, r) => sum + r.amount, 0);
       // Bulk Airtime also has 0% business margin. The separate provider
@@ -375,7 +379,7 @@ export default async function handler(req, res) {
       reference,
       orderType,
       network: resolvedNetwork || orderType,
-      phone: isBulk ? `${rows.length} recipients` : phone,
+      phone: isBulk ? `${rows.length} recipients` : (phone ? (toLocalGhanaNumber(phone) || phone) : phone),
       email: normalizedEmail,
       amount,
       providerCost,

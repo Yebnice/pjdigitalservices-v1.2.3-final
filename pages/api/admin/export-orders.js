@@ -1,4 +1,4 @@
-import { requireAdminRole } from "../../../lib/adminAuth";
+import { requireAdminPermission } from "../../../lib/adminAuth";
 import { listOrders } from "../../../lib/store";
 import { recordAuditEvent } from "../../../lib/auditLog";
 
@@ -44,7 +44,8 @@ const COLUMNS = [
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
-  const actor = requireAdminRole(req, res, ["operator"]);
+  // Every customer's phone and email in one file: admin only.
+  const actor = requireAdminPermission(req, res, "orders.export");
   if (!actor) return;
   try {
     const orders = await listOrders();

@@ -77,7 +77,7 @@ export default function AfaPage() {
           <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Kwame Asante" />
         </Field>
         <Field label="Phone number">
-          <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" />
+          <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 123 4567" />
         </Field>
         <Field label="Ghana Card number">
           <input className="input" value={ghanaCard} onChange={(e) => setGhanaCard(e.target.value)} placeholder="GHA-000000000-0" />

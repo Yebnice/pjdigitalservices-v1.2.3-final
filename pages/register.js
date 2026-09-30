@@ -102,7 +102,7 @@ export default function RegisterPage() {
           <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" type="email" />
         </Field>
         <Field label="Phone number">
-          <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" />
+          <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0XX XXX XXXX" />
         </Field>
         <Field label="Password">
           <input className="input" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" type="password" autoComplete="new-password" />

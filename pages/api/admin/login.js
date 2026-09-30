@@ -32,7 +32,13 @@ export default async function handler(req, res) {
 
   const key = getKey(req);
   const identity = authenticateAdmin(req.body?.username, req.body?.password);
-  if (!identity) return res.status(401).json({ error: "Invalid admin credentials." });
+  if (!identity) {
+    // Failed sign-ins were invisible. Bounded by the 10-per-10-minutes limit
+    // above, so this cannot flood the log. The password is never recorded.
+    const tried = String(req.body?.username || "").replace(/[^A-Za-z0-9@._-]/g, "").slice(0, 40) || "(blank)";
+    await recordAuditEvent({ actor: "unauthenticated", action: "admin_login_failed", note: `Failed sign-in as "${tried}" from IP ${key}` });
+    return res.status(401).json({ error: "Invalid admin credentials." });
+  }
 
   try {
     createAdminSession(res, identity);

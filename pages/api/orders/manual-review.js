@@ -1,15 +1,23 @@
-import { requireAdminRole } from "../../../lib/adminAuth";
+import { requireAdminRole, adminHasRole } from "../../../lib/adminAuth";
+import { toAdminOrder } from "../../../lib/adminOrders";
 import { listManualReviewOrders, manuallyResolveOrder, getOrder } from "../../../lib/store";
 import { notifyCustomerOrderFulfilled, notifyCustomerOrderSms } from "../../../lib/notifications";
 import { verifyAndFulfillOrder, fulfillClaimedOrder } from "../../../lib/orderProcessing";
 import { recordAuditEvent } from "../../../lib/auditLog";
+
+// verifyAndFulfillOrder / fulfillClaimedOrder return an outcome that can carry
+// the full order (with provider secrets); only pass the safe view on.
+function toAdminResult(result) {
+  if (!result || typeof result !== "object") return result;
+  return { ...result, ...(result.order ? { order: toAdminOrder(result.order) } : {}) };
+}
 
 export default async function handler(req, res) {
   const actor = requireAdminRole(req, res, ["operator"]);
   if (!actor) return;
   if (req.method === "GET") {
     try {
-      return res.status(200).json({ orders: await listManualReviewOrders() });
+      return res.status(200).json({ orders: (await listManualReviewOrders()).map(toAdminOrder) });
     } catch (err) {
       console.error("Manual review list error", err);
       return res.status(500).json({ error: "Could not load manual review orders" });
@@ -21,6 +29,13 @@ export default async function handler(req, res) {
       if (!reference || !action || !note) return res.status(400).json({ error: "reference, action and confirmation note are required" });
 
       const cleanReference = String(reference).trim();
+
+      // Marking a paid order as delivered closes it out and tells the customer
+      // it arrived, with no provider proof — that is a money decision, so it
+      // needs the admin role. Operators can still re-check, process and retry.
+      if (action === "confirm_fulfilled" && !adminHasRole(req, ["admin"])) {
+        return res.status(403).json({ error: "Only an admin can mark an order as delivered manually" });
+      }
       const current = await getOrder(cleanReference);
       if (!current) return res.status(404).json({ error: "Order not found" });
 
@@ -39,7 +54,7 @@ export default async function handler(req, res) {
           reference: cleanReference,
           note: String(note).trim().slice(0, 2000),
         });
-        return res.status(200).json({ result });
+        return res.status(200).json({ result: toAdminResult(result) });
       }
 
       // A verified/ready order has a confirmed Paystack payment but has not
@@ -57,7 +72,7 @@ export default async function handler(req, res) {
           reference: cleanReference,
           note: String(note).trim().slice(0, 2000),
         });
-        return res.status(200).json({ result });
+        return res.status(200).json({ result: toAdminResult(result) });
       }
 
       const order = await manuallyResolveOrder(cleanReference, action, note);
@@ -76,7 +91,7 @@ export default async function handler(req, res) {
           console.error("Customer delivery SMS failed (manual review)", cleanReference, err);
         }
       }
-      return res.status(200).json({ order });
+      return res.status(200).json({ order: toAdminOrder(order) });
     } catch (err) {
       console.error("Manual review action error", err);
       return res.status(400).json({ error: err.message });

@@ -1,5 +1,22 @@
-import { useEffect, useState } from "react";
-import { OrderList, ORDER_TYPE_LABELS } from "../../components/ui";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { adminApi, ageText, ghs } from "../../lib/adminClient";
+import { Banner, EmptyState, NoteDialog, SearchBox, StatCard, TabButton } from "../../components/admin/AdminUi";
+import OverviewTab from "../../components/admin/OverviewTab";
+import OrdersTab from "../../components/admin/OrdersTab";
+import AttentionTab from "../../components/admin/AttentionTab";
+import AuditTab from "../../components/admin/AuditTab";
+
+const REFRESH_MS = 60000;
+// Techlink wallet warning level (GHS). Keep in sync with the server-side
+// TECHLINK_LOW_BALANCE_THRESHOLD used by the email/SMS alert in lib/orderProcessing.js.
+const LOW_WALLET_THRESHOLD = Number(process.env.NEXT_PUBLIC_TECHLINK_LOW_BALANCE_THRESHOLD || 200);
+
+const ACTION_COPY = {
+  confirm_fulfilled: { title: "Mark this order as delivered", message: "Only do this after you have confirmed with Techlink that it was delivered. The customer will be emailed/texted that it arrived.", confirmLabel: "Mark delivered", danger: true },
+  retry: { title: "Authorise a retry", message: "Confirm that Techlink did NOT deliver this order. A retry sends it to Techlink again.", confirmLabel: "Authorise retry", danger: true },
+  process_now: { title: "Send to Techlink now", message: "This order is paid and verified but has not been sent to Techlink yet.", confirmLabel: "Send now" },
+  verify_and_process: { title: "Verify payment and process", message: "Paystack is re-checked first. Techlink is only called if Paystack confirms the exact amount.", confirmLabel: "Verify & process" },
+};
 
 function PasswordGate({ onUnlock }) {
   const [username, setUsername] = useState("admin");
@@ -23,7 +40,7 @@ function PasswordGate({ onUnlock }) {
         throw new Error(`Server error (${r.status}). Check the deployment logs.`);
       }
       if (!r.ok) throw new Error(data.error || "Login failed");
-      onUnlock({ role: data.role || "admin" });
+      onUnlock();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -40,231 +57,6 @@ function PasswordGate({ onUnlock }) {
         <button className="primary-btn" onClick={tryUnlock} disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button>
         {error && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{error}</p>}
       </div>
-    </div>
-  );
-}
-
-function TabButton({ active, onClick, children }) {
-  return (
-    <button
-      className="nav-item"
-      style={{ width: "auto", padding: "6px 12px", background: active ? "var(--surface-raised)" : "transparent", borderColor: "var(--line)" }}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-}
-
-function SearchBox({ value, onChange, placeholder }) {
-  return (
-    <input
-      className="input"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      style={{ marginBottom: 12, maxWidth: 360 }}
-    />
-  );
-}
-
-// ---- Overview tab: revenue trend, top products, and a date-range filter.
-// Hand-rolled SVG bar chart rather than a charting library — there isn't
-// one in package.json, and pulling one in for a handful of bars isn't
-// worth the dependency weight.
-
-const RANGE_OPTIONS = [
-  { id: "today", label: "Today", days: 1 },
-  { id: "7d", label: "Last 7 days", days: 7 },
-  { id: "30d", label: "Last 30 days", days: 30 },
-  { id: "all", label: "All time", days: null },
-];
-
-function productLabel(order) {
-  const base = ORDER_TYPE_LABELS[order.orderType] || order.orderType || "Order";
-  const productName = order.tierDetails?.name;
-  const network = order.network && order.network !== order.orderType ? order.network.toUpperCase() : null;
-  if (productName) return `${productName}${network ? ` (${network})` : ""}`;
-  if (network && ["airtime", "data"].includes(order.orderType)) return `${base} — ${network}`;
-  return base;
-}
-
-function startOfRange(days) {
-  if (days == null) return null;
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - (days - 1));
-  return d;
-}
-
-function dayKey(dateLike) {
-  const d = new Date(dateLike);
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
-}
-
-function BarChart({ points, valueFormatter }) {
-  if (!points.length) return <div style={{ fontSize: 13, color: "var(--muted)", padding: 24, textAlign: "center" }}>No data in this range yet.</div>;
-  const max = Math.max(1, ...points.map((p) => p.value));
-  const w = 640, h = 160, padBottom = 22, barGap = 4;
-  const barW = Math.max(2, w / points.length - barGap);
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 160, display: "block" }} preserveAspectRatio="none">
-      {points.map((p, i) => {
-        const barH = ((h - padBottom) * p.value) / max;
-        const x = i * (w / points.length);
-        return (
-          <g key={p.key}>
-            <rect x={x} y={h - padBottom - barH} width={barW} height={Math.max(barH, p.value > 0 ? 2 : 0)} fill="var(--accent, #2563eb)" rx="2">
-              <title>{`${p.label}: ${valueFormatter ? valueFormatter(p.value) : p.value}`}</title>
-            </rect>
-            {(points.length <= 10 || i % Math.ceil(points.length / 8) === 0) && (
-              <text x={x + barW / 2} y={h - 6} fontSize="9" fill="var(--muted-dim)" textAnchor="middle">{p.label}</text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function OverviewTab({ orders, feedback, manualReview, walletBalance }) {
-  const [range, setRange] = useState("7d");
-
-  const rangeDef = RANGE_OPTIONS.find((r) => r.id === range);
-  const cutoff = startOfRange(rangeDef.days);
-  const inRange = cutoff ? orders.filter((o) => o.createdAt && new Date(o.createdAt) >= cutoff) : orders;
-  const successInRange = inRange.filter((o) => o.status === "success");
-  const paidInRange = inRange.filter((o) => ["payment_verified", "success"].includes(o.status));
-  const fulfilledInRange = inRange.filter((o) => o.fulfillmentStatus === "fulfilled");
-
-  // Product revenue is the customer-facing product price after any business
-  // margin, but before the Paystack processing fee. Keep the fee separate so
-  // the dashboard makes the 2% business margin auditable instead of hiding it
-  // inside a raw provider/service amount.
-  const revenue = successInRange.reduce((s, o) => s + Number(o.customerProductAmount ?? o.amount ?? 0), 0);
-  const businessMargin = successInRange.reduce((s, o) => s + Number(o.businessMarkupAmount ?? 0), 0);
-  const fees = successInRange.reduce((s, o) => s + Number(o.paystackFeeAmount || 0), 0);
-  const customerPayments = successInRange.reduce((s, o) => s + Number(o.checkoutAmount ?? o.customerProductAmount ?? o.amount ?? 0), 0);
-  const avgOrder = successInRange.length ? (customerPayments / successInRange.length) : 0;
-  // fulfillmentStatus is the authoritative state here — "failed" can happen
-  // whether the order-level `status` is "failed" (a payment-side reject) or
-  // still "payment_verified" (payment went through but fulfillment didn't).
-  // Keeping these two checks mutually exclusive matters: an earlier draft
-  // of this counted every failed order as "pending" too.
-  const failedInRange = inRange.filter((o) => o.fulfillmentStatus === "failed").length;
-  const pendingInRange = inRange.filter((o) => o.status !== "success" && o.fulfillmentStatus !== "failed").length;
-  const paymentSuccessRate = inRange.length ? Math.round((paidInRange.length / inRange.length) * 100) : 0;
-  const fulfillmentSuccessRate = paidInRange.length ? Math.round((fulfilledInRange.length / paidInRange.length) * 100) : 0;
-
-  // Daily revenue trend — bucket successful orders in range by calendar day.
-  const dayBuckets = {};
-  const trendDays = rangeDef.days && rangeDef.days <= 30 ? rangeDef.days : 30; // cap "all time" trend to last 30 days so bars stay readable
-  const trendStart = startOfRange(trendDays);
-  successInRange
-    .filter((o) => new Date(o.createdAt) >= trendStart)
-    .forEach((o) => {
-      const k = dayKey(o.createdAt);
-      dayBuckets[k] = (dayBuckets[k] || 0) + Number(o.customerProductAmount ?? o.amount ?? 0);
-    });
-  const trendPoints = [];
-  for (let i = trendDays - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - i);
-    const k = dayKey(d);
-    trendPoints.push({ key: k, label: d.toLocaleDateString(undefined, { day: "2-digit", month: "short" }).replace(" ", "\u00A0"), value: Math.round((dayBuckets[k] || 0) * 100) / 100 });
-  }
-
-  // Top 5 products by revenue, within the selected range.
-  const productMap = {};
-  successInRange.forEach((o) => {
-    const label = productLabel(o);
-    if (!productMap[label]) productMap[label] = { label, revenue: 0, count: 0 };
-    productMap[label].revenue += Number(o.customerProductAmount ?? o.amount ?? 0);
-    productMap[label].count += 1;
-  });
-  const topProducts = Object.values(productMap).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
-  const topProductsMax = Math.max(1, ...topProducts.map((p) => p.revenue));
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {RANGE_OPTIONS.map((r) => (
-          <TabButton key={r.id} active={range === r.id} onClick={() => setRange(r.id)}>{r.label}</TabButton>
-        ))}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 16 }}>
-        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Product sales</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {revenue.toFixed(2)}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Business margin</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {businessMargin.toFixed(2)}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Customer payments</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {customerPayments.toFixed(2)}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Orders</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>{inRange.length}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Payment success</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600, color: paymentSuccessRate < 90 && inRange.length > 0 ? "#dc2626" : undefined }}>{inRange.length ? `${paymentSuccessRate}%` : "—"}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Fulfillment success</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600, color: fulfillmentSuccessRate < 90 && paidInRange.length > 0 ? "#dc2626" : undefined }}>{paidInRange.length ? `${fulfillmentSuccessRate}%` : "—"}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Avg order value</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {avgOrder.toFixed(2)}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 13, color: "var(--muted)" }}>Paystack fees recovered</div><div className="heading-font" style={{ fontSize: 22, fontWeight: 600 }}>GHS {fees.toFixed(2)}</div></div>
-      </div>
-
-      {(failedInRange > 0 || pendingInRange > 0) && (
-        <div style={{ display: "flex", gap: 16, fontSize: 13 }}>
-          {failedInRange > 0 && <span style={{ color: "#dc2626", fontWeight: 600 }}>● {failedInRange} failed</span>}
-          {pendingInRange > 0 && <span style={{ color: "#b45309", fontWeight: 600 }}>● {pendingInRange} pending / processing</span>}
-        </div>
-      )}
-
-      <div className="card" style={{ padding: 20 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          Revenue — last {trendDays} day{trendDays === 1 ? "" : "s"}
-        </div>
-        <BarChart points={trendPoints} valueFormatter={(v) => `GHS ${v.toFixed(2)}`} />
-      </div>
-
-      <div className="card" style={{ padding: 20 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Top products ({rangeDef.label.toLowerCase()})</div>
-        {topProducts.length === 0 ? (
-          <div style={{ fontSize: 13, color: "var(--muted)", textAlign: "center", padding: 16 }}>No successful orders in this range yet.</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {topProducts.map((p) => (
-              <div key={p.label}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
-                  <span>{p.label} <span style={{ color: "var(--muted-dim)" }}>· {p.count} order{p.count === 1 ? "" : "s"}</span></span>
-                  <span style={{ fontWeight: 600 }}>GHS {p.revenue.toFixed(2)}</span>
-                </div>
-                <div style={{ background: "var(--surface-raised)", borderRadius: 4, height: 8, overflow: "hidden" }}>
-                  <div style={{ width: `${(p.revenue / topProductsMax) * 100}%`, background: "var(--accent, #2563eb)", height: "100%" }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, fontSize: 13, color: "var(--muted)" }}>
-        <div>Open feedback: <strong style={{ color: "var(--text)" }}>{feedback.filter((f) => f.status === "open").length}</strong></div>
-        <div>Needs attention: <strong style={{ color: "var(--text)" }}>{manualReview.length}</strong></div>
-      </div>
-    </div>
-  );
-}
-
-function AuditLogTab({ entries }) {
-  if (!entries || entries.length === 0) {
-    return <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)", fontSize: 14 }}>No audit entries yet.</div>;
-  }
-  return (
-    <div className="card" style={{ overflow: "hidden" }}>
-      {entries.map((e) => (
-        <div key={e.id} className="tx-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", width: "100%", gap: 12 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{e.action.replace(/_/g, " ")}</span>
-            <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{new Date(e.createdAt).toLocaleString()}</span>
-          </div>
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>
-            {e.actor}{e.reference ? ` · Ref ${e.reference}` : ""}{e.note ? ` · ${e.note}` : ""}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -389,443 +181,288 @@ function ReconciliationTab() {
   );
 }
 
-export default function AdminPage() {
-  const [auth, setAuth] = useState(null);
-  const [role, setRole] = useState(null);
-  const [orders, setOrders] = useState([]);
-  const [feedback, setFeedback] = useState([]);
-  const [manualReview, setManualReview] = useState([]);
-  const [auditLog, setAuditLog] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [tab, setTab] = useState("overview");
-  const [orderSearch, setOrderSearch] = useState("");
-  const [feedbackSearch, setFeedbackSearch] = useState("");
-  const [walletBalance, setWalletBalance] = useState(null);
-  const [walletError, setWalletError] = useState(null);
-  const [actionBusy, setActionBusy] = useState({});
+function FeedbackTab({ feedback, can, onChanged, onUnauthorized }) {
+  const [q, setQ] = useState("");
+  const [error, setError] = useState("");
+  const needle = q.trim().toLowerCase();
+  const shown = needle
+    ? feedback.filter((f) => [f.caseReference, f.orderReference, f.name, f.email, f.phone].some((v) => String(v || "").toLowerCase().includes(needle)))
+    : feedback;
 
-  const canOperate = role === "operator" || role === "admin";
-
-  async function load() {
-    const results = await Promise.all([
-      fetch("/api/orders/list"),
-      fetch("/api/feedback/list"),
-      fetch("/api/admin/audit-log"),
-      fetch("/api/admin/reviews"),
-      canOperate ? fetch("/api/orders/manual-review") : Promise.resolve(null),
-    ]);
-    const [ordersRes, feedbackRes, auditRes, reviewsRes, reviewRes] = results;
-    if ([ordersRes, feedbackRes, auditRes, reviewsRes].some((r) => r.status === 401)) {
-      setAuth(false);
-      setRole(null);
-      return;
+  async function setStatus(f, status) {
+    setError("");
+    try {
+      await adminApi("/api/feedback/status", { method: "POST", body: { id: f.id, status }, onUnauthorized });
+      onChanged();
+    } catch (err) {
+      setError(err.message);
     }
-    const ordersData = await ordersRes.json();
-    const feedbackData = await feedbackRes.json();
-    const auditData = await auditRes.json();
-    const reviewsData = await reviewsRes.json();
-    const reviewData = reviewRes ? await reviewRes.json() : { orders: [] };
-    setOrders(ordersData.orders || []);
-    setFeedback(feedbackData.feedback || []);
-    setManualReview(reviewData.orders || []);
-    setAuditLog(auditData.entries || []);
-    setReviews(reviewsData.reviews || []);
-    setAuth(true);
   }
 
-  useEffect(() => {
-    fetch("/api/admin/me").then((r) => r.json()).then((d) => {
-      setAuth(Boolean(d.authenticated));
-      setRole(d.role || null);
-    });
-  }, []);
-  useEffect(() => { if (auth && role) load(); }, [auth, role]);
+  return (
+    <div>
+      <SearchBox value={q} onChange={setQ} placeholder="Search by case, order ref, name, email, or phone…" style={{ marginBottom: 12 }} />
+      {error && <Banner tone="amber">{error}</Banner>}
+      <div className="card" style={{ overflow: "hidden" }}>
+        {shown.length === 0 && <EmptyState>No feedback yet.</EmptyState>}
+        {shown.map((f) => (
+          <div key={f.id} className="tx-row" style={{ alignItems: "flex-start", flexDirection: "column", gap: 4 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", width: "100%", gap: 12 }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{f.name} · <span style={{ color: "var(--muted)", fontWeight: 400 }}>{f.category}</span></span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {can("feedback.update") ? (
+                  <select className="input" style={{ width: "auto", padding: "4px 8px", fontSize: 12 }} value={f.status || "open"} onChange={(e) => setStatus(f, e.target.value)}>
+                    <option value="open">Open</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
+                ) : (
+                  <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{f.status || "open"}</span>
+                )}
+                <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{ageText(f.createdAt)} ago</span>
+              </div>
+            </div>
+            <div style={{ fontSize: 13, color: "var(--muted)" }}>{f.message}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5, marginTop: 2 }}>
+              <div><strong>Case:</strong> {f.caseReference || "—"} {f.orderReference ? <>· <strong>Order:</strong> {f.orderReference}</> : null}</div>
+              <div><strong>Service:</strong> {f.serviceType || "—"} · <strong>Transaction ID:</strong> {f.transactionId || "—"} · <strong>Amount:</strong> {f.transactionAmount != null ? ghs(f.transactionAmount) : "—"}</div>
+              {f.requestedData ? <div><strong>Requested:</strong> {f.requestedData}</div> : null}
+              {f.beneficiary ? <div><strong>Beneficiary:</strong> {f.beneficiary}</div> : null}
+              {f.transactionAt ? <div><strong>Transaction time:</strong> {new Date(f.transactionAt).toLocaleString()}</div> : null}
+              <div><strong>Transaction details:</strong> {f.transactionDetails || "—"}</div>
+            </div>
+            {(f.email || f.phone) && <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>{[f.email, f.phone].filter(Boolean).join(" · ")}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  // Independent of the main load() above — a Techlink hiccup here shouldn't
-  // break the rest of the dashboard. Re-checked every 2 minutes so a wallet
-  // that runs dry mid-shift shows up without a manual refresh.
-  useEffect(() => {
-    if (!auth || !canOperate) {
-      setWalletBalance(null);
-      setWalletError(null);
-      return;
-    }
-    let cancelled = false;
-    async function loadWallet() {
-      try {
-        const r = await fetch("/api/admin/wallet-balance");
-        const d = await r.json();
-        if (cancelled) return;
-        if (!r.ok) { setWalletError(d.error || "Could not check wallet balance"); return; }
-        if (d.balance == null) { setWalletError("Techlink responded in an unrecognized format — see server logs."); return; }
-        setWalletBalance(d.balance);
-        setWalletError(null);
-      } catch {
-        if (!cancelled) setWalletError("Could not reach Techlink");
-      }
-    }
-    loadWallet();
-    const interval = setInterval(loadWallet, 120000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [auth, canOperate]);
+function ReviewsTab({ can, refreshTick, onUnauthorized }) {
+  const [reviews, setReviews] = useState(null);
+  const [error, setError] = useState("");
+  const load = useCallback(() => {
+    adminApi("/api/admin/reviews", { onUnauthorized }).then((d) => { setReviews(d.reviews || []); setError(""); }).catch((err) => setError(err.message));
+  }, [onUnauthorized]);
+  useEffect(() => { load(); }, [load, refreshTick]);
 
-  async function manualAction(reference, action) {
-    const prompts = {
-      confirm_fulfilled: "Confirm the provider actually delivered this order and enter a brief audit note:",
-      retry: "Confirm Techlink did not deliver this order and enter a brief audit note before retrying:",
-      process_now: "Confirm this paid order has not yet been sent to Techlink and enter a brief audit note:",
-      verify_and_process: "Confirm this payment needs a fresh Paystack verification and enter a brief audit note:",
-    };
-    const note = window.prompt(prompts[action] || "Enter a brief audit note:");
-    if (!note || note.trim().length < 5) return;
-    const key = `${reference}:${action}`;
-    setActionBusy((prev) => ({ ...prev, [key]: true }));
+  async function toggle(r) {
     try {
-      const r = await fetch("/api/orders/manual-review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reference, action, note }),
-      });
-      const raw = await r.text();
-      let d = {};
-      try { d = raw ? JSON.parse(raw) : {}; } catch { /* preserve useful HTTP error below */ }
-      if (!r.ok) {
-        if (r.status === 401) {
-          setAuth(false);
-          setRole(null);
-          return;
-        }
-        return window.alert(d.error || `Could not update the order (HTTP ${r.status})`);
-      }
-      await load();
+      await adminApi("/api/admin/reviews", { method: "POST", body: { id: r.id, isHidden: !r.isHidden }, onUnauthorized });
+      load();
     } catch (err) {
-      window.alert(err?.message || "Could not reach the server to update the order");
-    } finally {
-      setActionBusy((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
+      setError(err.message);
     }
+  }
+
+  return (
+    <div>
+      {error && <Banner tone="amber">{error}</Banner>}
+      <div className="card" style={{ overflow: "hidden" }}>
+        {reviews && reviews.length === 0 && <EmptyState>No reviews yet.</EmptyState>}
+        {!reviews && !error && <EmptyState>Loading reviews…</EmptyState>}
+        {(reviews || []).map((r) => (
+          <div key={r.id} className="tx-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4, opacity: r.isHidden ? 0.5 : 1 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+              <strong style={{ fontSize: 14 }}>{r.customerName} — {"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</strong>
+              {can("reviews.moderate") && (
+                <button className="nav-item" style={{ width: "auto", padding: "4px 10px", fontSize: 12 }} onClick={() => toggle(r)}>{r.isHidden ? "Unhide" : "Hide"}</button>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>Order {r.orderReference} · {r.serviceType} · {new Date(r.createdAt).toLocaleString()}</div>
+            {r.comment && <div style={{ fontSize: 13, color: "var(--muted)" }}>{r.comment}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function AdminPage() {
+  const [auth, setAuth] = useState(null);
+  const [me, setMe] = useState(null);
+  const [tab, setTab] = useState("overview");
+  const [range, setRange] = useState("7d");
+  const [overview, setOverview] = useState(null);
+  const [manualReview, setManualReview] = useState([]);
+  const [feedback, setFeedback] = useState([]);
+  const [auditLog, setAuditLog] = useState([]);
+  const [walletBalance, setWalletBalance] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [loadingOverview, setLoadingOverview] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [actionBusy, setActionBusy] = useState({});
+  const [dialog, setDialog] = useState(null); // { order, action }
+  const [notice, setNotice] = useState("");
+  const loadId = useRef(0);
+
+  const can = useCallback((permission) => Boolean(me?.permissions?.includes(permission)), [me]);
+  const onUnauthorized = useCallback(() => { setAuth(false); setMe(null); }, []);
+
+  const loadMe = useCallback(async () => {
+    try {
+      const d = await fetch("/api/admin/me", { cache: "no-store" }).then((r) => r.json());
+      setAuth(Boolean(d.authenticated));
+      setMe(d.authenticated ? d : null);
+    } catch {
+      setAuth(false);
+    }
+  }, []);
+  useEffect(() => { loadMe(); }, [loadMe]);
+
+  // One refresh cycle. Each section loads independently and a failure only
+  // marks THAT section: the old dashboard turned any failed request into an
+  // empty list, so an outage looked like "no sales, nothing wrong".
+  const refreshAll = useCallback(async () => {
+    if (!me) return;
+    const id = ++loadId.current;
+    setLoadingOverview(true);
+    const jobs = {
+      overview: can("overview.view") ? adminApi(`/api/admin/overview?range=${range}`, { onUnauthorized }) : null,
+      review: can("orders.process") ? adminApi("/api/orders/manual-review", { onUnauthorized }) : null,
+      feedback: can("feedback.view") ? adminApi("/api/feedback/list", { onUnauthorized }) : null,
+      wallet: can("wallet.view") ? adminApi("/api/admin/wallet-balance", { onUnauthorized }) : null,
+      audit: can("audit.view") ? adminApi("/api/admin/audit-log", { onUnauthorized }) : null,
+    };
+    const keys = Object.keys(jobs);
+    const settled = await Promise.allSettled(keys.map((k) => jobs[k] || Promise.resolve(undefined)));
+    if (id !== loadId.current) return; // a newer refresh has started
+    const nextErrors = {};
+    settled.forEach((res, i) => {
+      const key = keys[i];
+      if (!jobs[key]) return;
+      if (res.status === "rejected") { nextErrors[key] = res.reason?.message || "failed"; return; }
+      const d = res.value;
+      if (key === "overview") setOverview(d);
+      if (key === "review") setManualReview(d.orders || []);
+      if (key === "feedback") setFeedback(d.feedback || []);
+      if (key === "audit") setAuditLog(d.entries || []);
+      if (key === "wallet") {
+        if (d.balance == null) nextErrors.wallet = "Techlink responded in an unrecognized format — see server logs.";
+        else setWalletBalance(d.balance);
+      }
+    });
+    setErrors(nextErrors);
+    setLoadingOverview(false);
+    setLastUpdated(new Date());
+    setRefreshTick((t) => t + 1);
+  }, [me, range, can, onUnauthorized]);
+
+  useEffect(() => { if (auth && me) refreshAll(); }, [auth, me, range, refreshAll]);
+
+  // Auto-refresh every minute, and straight away when the tab becomes visible
+  // again, so a dashboard left open all day never shows stale numbers.
+  useEffect(() => {
+    if (!auth || !me) return undefined;
+    const tick = () => { if (!document.hidden) refreshAll(); };
+    const interval = setInterval(tick, REFRESH_MS);
+    document.addEventListener("visibilitychange", tick);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", tick); };
+  }, [auth, me, refreshAll]);
+
+  async function runAction(order, action, note) {
+    const key = `${order.reference}:${action}`;
+    setActionBusy((prev) => ({ ...prev, [key]: true }));
+    setNotice("");
+    try {
+      if (action === "recheck") {
+        await adminApi("/api/admin/recheck-order", { method: "POST", body: { reference: order.reference }, onUnauthorized });
+      } else {
+        await adminApi("/api/orders/manual-review", { method: "POST", body: { reference: order.reference, action, note }, onUnauthorized });
+      }
+      setNotice(`Done: ${order.reference}`);
+      await refreshAll();
+    } catch (err) {
+      if (err.status !== 401) window.alert(err.message);
+    } finally {
+      setActionBusy((prev) => { const next = { ...prev }; delete next[key]; return next; });
+    }
+  }
+
+  function requestAction(order, action) {
+    if (action === "recheck") return runAction(order, action);
+    setDialog({ order, action });
   }
 
   async function logout() {
-    await fetch("/api/admin/logout", { method: "POST" });
-    setAuth(false);
-    setRole(null);
+    try { await fetch("/api/admin/logout", { method: "POST" }); } finally { setAuth(false); setMe(null); }
   }
 
   if (auth === null) return null;
-  if (!auth) return <PasswordGate onUnlock={({ role: nextRole }) => { setRole(nextRole); setAuth(true); }} />;
+  if (!auth) return <PasswordGate onUnlock={loadMe} />;
 
-  const successfulOrders = orders.filter((o) => o.status === "success");
-  // Keep product sales, business margin, Paystack fee recovery and the actual
-  // customer cash collected as separate audited figures.
-  const totalSales = successfulOrders.reduce((s, o) => s + Number(o.customerProductAmount ?? o.amount ?? 0), 0);
-  const totalBusinessMargin = successfulOrders.reduce((s, o) => s + Number(o.businessMarkupAmount ?? 0), 0);
-  const totalFeesCollected = successfulOrders.reduce((s, o) => s + Number(o.paystackFeeAmount ?? 0), 0);
-  const totalCustomerPayments = successfulOrders.reduce((s, o) => s + Number(o.checkoutAmount ?? o.customerProductAmount ?? o.amount ?? 0), 0);
-
-  const q = orderSearch.trim().toLowerCase();
-  const filteredOrders = q
-    ? orders.filter((o) => [o.reference, o.phone, o.email, o.orderType].some((v) => String(v || "").toLowerCase().includes(q)))
-    : orders;
-
-  const fq = feedbackSearch.trim().toLowerCase();
-  const filteredFeedback = fq
-    ? feedback.filter((f) => [f.caseReference, f.orderReference, f.name, f.email, f.phone].some((v) => String(v || "").toLowerCase().includes(fq)))
-    : feedback;
-
-  const LOW_WALLET_THRESHOLD = Number(process.env.NEXT_PUBLIC_TECHLINK_LOW_BALANCE_THRESHOLD || 200); // GHS — kept in sync with TECHLINK_LOW_BALANCE_THRESHOLD (server-side, used by the proactive email/SMS alert in lib/orderProcessing.js); change both together
+  const openFeedback = feedback.filter((f) => f.status === "open" || !f.status).length;
+  const oldestAttention = manualReview.reduce((min, o) => (o.createdAt && (min == null || new Date(o.createdAt) < min) ? new Date(o.createdAt) : min), null);
+  const walletLow = walletBalance != null && walletBalance < LOW_WALLET_THRESHOLD;
+  const dialogCopy = dialog ? ACTION_COPY[dialog.action] : null;
+  // Only sign-in failures from the last 24 hours, so an old burst does not nag forever.
+  const failedLogins = auditLog.filter((e) => e.action === "admin_login_failed" && Date.now() - new Date(e.createdAt).getTime() < 24 * 3600 * 1000).length;
 
   return (
     <div className="page-wrap">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 600, margin: "0 0 4px" }}>Admin</h1>
-          <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 0, marginBottom: 24 }}>Secure admin session expires after 8 hours · Role: <strong style={{ color: "var(--text)" }}>{role || "—"}</strong></p>
+          <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 0, marginBottom: 16 }}>
+            Signed in as <strong style={{ color: "var(--text)" }}>{me?.username}</strong> ({me?.role}) · session ends after 8 hours
+            {lastUpdated ? ` · updated ${lastUpdated.toLocaleTimeString()}` : ""}
+          </p>
         </div>
-        <button className="nav-item" onClick={logout} style={{ width: "auto", padding: "6px 12px" }}>Sign out</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="nav-item" onClick={refreshAll} style={{ width: "auto", padding: "6px 12px" }} disabled={loadingOverview}>{loadingOverview ? "Refreshing…" : "Refresh"}</button>
+          <button className="nav-item" onClick={logout} style={{ width: "auto", padding: "6px 12px" }}>Sign out</button>
+        </div>
       </div>
 
-      {walletError && (
-        <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 8, padding: "12px 16px", marginBottom: 16, fontSize: 14, color: "#92400e" }}>
-          ⚠️ Couldn't check your Techlink wallet balance ({walletError}). Orders may be failing silently at fulfillment — worth checking Techlink directly.
-        </div>
+      {notice && <Banner tone="blue">{notice}</Banner>}
+      {walletLow && <Banner tone="red"><strong>Low Techlink wallet: {ghs(walletBalance)}.</strong> Customers can still pay through Paystack, but orders will start failing at delivery if it runs out. Top up now.</Banner>}
+      {errors.wallet && <Banner tone="amber">Couldn't check the Techlink wallet ({errors.wallet}). Orders may be failing at delivery without warning — check Techlink directly.</Banner>}
+      {manualReview.length > 0 && can("orders.process") && (
+        <Banner tone="red" action={<button className="nav-item" style={{ width: "auto", padding: "4px 10px" }} onClick={() => setTab("review")}>Open</button>}>
+          <strong>{manualReview.length} order{manualReview.length === 1 ? "" : "s"} need attention</strong>{oldestAttention ? ` — oldest waiting ${ageText(oldestAttention.toISOString())}` : ""}.
+        </Banner>
       )}
-      {walletBalance != null && walletBalance < LOW_WALLET_THRESHOLD && (
-        <div style={{ background: "#fee2e2", border: "1px solid #ef4444", borderRadius: 8, padding: "12px 16px", marginBottom: 16, fontSize: 14, color: "#991b1b", fontWeight: 600 }}>
-          🔴 Low Techlink wallet balance: GHS {walletBalance.toFixed(2)}. Customers can still pay via Paystack, but orders will start failing at fulfillment if this runs out — top up now.
-        </div>
-      )}
+      {failedLogins >= 3 && <Banner tone="amber">{failedLogins} failed admin sign-in attempts in the last 24 hours (see the audit log). If that wasn't you, change your admin password and ADMIN_SESSION_SECRET.</Banner>}
+      {Object.entries(errors).filter(([k]) => !["wallet", "overview"].includes(k)).map(([k, msg]) => (
+        <Banner key={k} tone="amber">Couldn't refresh {k === "review" ? "needs-attention orders" : k === "audit" ? "the audit log" : k} ({msg}). What you see for that section may be out of date.</Banner>
+      ))}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 24 }}>
-        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Product sales</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>GHS {totalSales.toFixed(2)}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Business margin</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>GHS {totalBusinessMargin.toFixed(2)}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Customer payments</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>GHS {totalCustomerPayments.toFixed(2)}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Paystack fees recovered</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>GHS {totalFeesCollected.toFixed(2)}</div></div>
-        <div className="stat-card">
-          <div style={{ fontSize: 14, color: "var(--muted)" }}>Techlink wallet</div>
-          <div className="heading-font" style={{ fontSize: 24, fontWeight: 600, color: walletBalance != null && walletBalance < LOW_WALLET_THRESHOLD ? "#dc2626" : undefined }}>
-            {walletBalance != null ? `GHS ${walletBalance.toFixed(2)}` : walletError ? "—" : "…"}
-          </div>
-        </div>
-        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Orders</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>{orders.length}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Open feedback</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>{feedback.filter((f) => f.status === "open").length}</div></div>
-        <div className="stat-card"><div style={{ fontSize: 14, color: "var(--muted)" }}>Needs attention</div><div className="heading-font" style={{ fontSize: 24, fontWeight: 600 }}>{manualReview.length}</div></div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 20 }}>
+        {can("wallet.view") && <StatCard label="Techlink wallet" value={walletBalance != null ? ghs(walletBalance) : errors.wallet ? "—" : "…"} tone={walletLow ? "red" : undefined} />}
+        {can("orders.process") && <StatCard label="Needs attention" value={manualReview.length} tone={manualReview.length ? "red" : undefined} hint={oldestAttention ? `oldest ${ageText(oldestAttention.toISOString())}` : "all clear"} />}
+        {overview && <StatCard label="Paid, not delivered" value={overview.atRisk.count} tone={overview.atRisk.count ? "red" : undefined} hint={overview.atRisk.count ? ghs(overview.atRisk.value) : "none waiting"} />}
+        <StatCard label="Open feedback" value={openFeedback} tone={openFeedback ? "amber" : undefined} />
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>Overview</TabButton>
         <TabButton active={tab === "orders"} onClick={() => setTab("orders")}>Orders</TabButton>
-        <TabButton active={tab === "feedback"} onClick={() => setTab("feedback")}>Feedback</TabButton>
-        {canOperate && <TabButton active={tab === "review"} onClick={() => setTab("review")}>Needs Attention ({manualReview.length})</TabButton>}
-        {canOperate && <TabButton active={tab === "reconcile"} onClick={() => setTab("reconcile")}>Reconciliation</TabButton>}
-        <TabButton active={tab === "reviews"} onClick={() => setTab("reviews")}>Reviews ({reviews.length})</TabButton>
-        <TabButton active={tab === "audit"} onClick={() => setTab("audit")}>Audit Log</TabButton>
+        {can("orders.process") && <TabButton active={tab === "review"} onClick={() => setTab("review")} badge={manualReview.length || null}>Needs attention</TabButton>}
+        <TabButton active={tab === "feedback"} onClick={() => setTab("feedback")} badge={openFeedback || null}>Feedback</TabButton>
+        {can("reconcile.run") && <TabButton active={tab === "reconcile"} onClick={() => setTab("reconcile")}>Reconciliation</TabButton>}
+        <TabButton active={tab === "reviews"} onClick={() => setTab("reviews")}>Reviews</TabButton>
+        {can("audit.view") && <TabButton active={tab === "audit"} onClick={() => setTab("audit")}>Audit log</TabButton>}
       </div>
 
-      {tab === "overview" && (
-        <>
-          <OverviewTab orders={orders} feedback={feedback} manualReview={manualReview} walletBalance={walletBalance} />
-          <div className="card" style={{ padding: 18, marginTop: 20 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Operations snapshot</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, fontSize: 13 }}>
-              <div><span style={{ color: "var(--muted)" }}>Admin role</span><br /><strong>{role || "—"}</strong></div>
-              <div><span style={{ color: "var(--muted)" }}>Techlink wallet</span><br /><strong>{walletBalance != null ? `GHS ${Number(walletBalance).toFixed(2)}` : "Unavailable"}</strong></div>
-              <div><span style={{ color: "var(--muted)" }}>Needs attention</span><br /><strong>{manualReview.length}</strong></div>
-              <div><span style={{ color: "var(--muted)" }}>Open feedback</span><br /><strong>{feedback.filter((f) => f.status === "open").length}</strong></div>
-            </div>
-            {canOperate && (manualReview.length > 0 || feedback.filter((f) => f.status === "open").length > 0 || walletError) && (
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 13 }}>
-                <strong>Needs attention:</strong> {manualReview.length > 0 ? `${manualReview.length} fulfillment item(s)` : ""}{manualReview.length > 0 && feedback.filter((f) => f.status === "open").length > 0 ? ", " : ""}{feedback.filter((f) => f.status === "open").length > 0 ? `${feedback.filter((f) => f.status === "open").length} open customer case(s)` : ""}{walletError ? `${manualReview.length || feedback.filter((f) => f.status === "open").length ? ", " : ""}Techlink wallet check unavailable` : ""}.
-              </div>
-            )}
-          </div>
-        </>
-      )}
+      {tab === "overview" && <OverviewTab overview={overview} loading={loadingOverview} error={errors.overview} range={range} onRangeChange={setRange} />}
+      {tab === "orders" && <OrdersTab can={can} refreshTick={refreshTick} onUnauthorized={onUnauthorized} />}
+      {tab === "review" && can("orders.process") && <AttentionTab orders={manualReview} can={can} busy={actionBusy} onAction={requestAction} />}
+      {tab === "feedback" && <FeedbackTab feedback={feedback} can={can} onChanged={refreshAll} onUnauthorized={onUnauthorized} />}
+      {tab === "reconcile" && can("reconcile.run") && <ReconciliationTab />}
+      {tab === "reviews" && <ReviewsTab can={can} refreshTick={refreshTick} onUnauthorized={onUnauthorized} />}
+      {tab === "audit" && can("audit.view") && <AuditTab entries={auditLog} />}
 
-      {tab === "orders" && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-            <SearchBox value={orderSearch} onChange={setOrderSearch} placeholder="Search by reference, phone, email, or type…" />
-            <a href="/api/admin/export-orders" className="nav-item" style={{ width: "auto", padding: "8px 16px", textDecoration: "none" }}>
-              Export CSV
-            </a>
-          </div>
-          {orders.some((o) => o.fulfillmentStatus === "queued_with_provider") && (
-            <div className="card" style={{ padding: 14, marginBottom: 12, borderColor: "var(--gold)" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Queued with provider (normal for MTN Master, and for bulk orders awaiting your confirmation — not a failure)</div>
-              {orders.filter((o) => o.fulfillmentStatus === "queued_with_provider").map((o) => (
-                <div key={o.reference} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderTop: "1px solid var(--border)", fontSize: 12 }}>
-                  <span>{o.reference} · GHS {Number(o.amount).toFixed(2)} · queued {new Date(o.createdAt).toLocaleString()}</span>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button
-                      className="nav-item"
-                      style={{ width: "auto", padding: "4px 10px" }}
-                      onClick={async () => {
-                        const r = await fetch("/api/admin/recheck-order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reference: o.reference }) });
-                        if (r.ok) load();
-                        else window.alert((await r.json()).error || "Could not re-check this order");
-                      }}
-                    >
-                      Re-check with Techlink
-                    </button>
-                    {/* Re-check only works when Techlink gave back an orderId to verify
-                        against — bulk/Excel orders may not get one (the bulk response shape
-                        isn't documented), so a bulk order can sit here with nothing to
-                        auto-confirm it; since v1.3.1 you are alerted after QUEUED_ALERT_MINUTES. This is the manual
-                        escape hatch: only usable after confirming delivery with Techlink
-                        directly outside this app. */}
-                    <button
-                      className="nav-item"
-                      style={{ width: "auto", padding: "4px 10px" }}
-                      onClick={() => manualAction(o.reference, "confirm_fulfilled")}
-                    >
-                      Mark fulfilled manually
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <OrderList items={filteredOrders} />
-        </div>
-      )}
-
-      {tab === "review" && canOperate && (
-        <div className="card" style={{ overflow: "hidden" }}>
-          <div style={{ padding: "12px 16px 0", fontSize: 12, color: "var(--muted)" }}>
-            Includes both orders escalated automatically and orders that failed immediately (e.g. an instant airtime top-up that couldn't be delivered) — the latter never promote themselves further without a scheduled job, so they're shown here directly.
-          </div>
-          {manualReview.length === 0 && <div style={{ padding: 24, textAlign: "center", color: "var(--muted)", fontSize: 14 }}>Nothing needs attention right now.</div>}
-          {manualReview.map((o) => {
-            const isQueued = o.fulfillmentStatus === "queued_with_provider";
-            const isReady = o.status === "payment_verified" && o.fulfillmentStatus === "ready";
-            const needsPaymentVerification = ["pending", "payment_pending"].includes(o.status);
-            const isRetryable = ["manual_review", "failed"].includes(o.fulfillmentStatus);
-            return (
-              <div key={o.reference} className="tx-row" style={{ alignItems: "flex-start", flexDirection: "column", gap: 5 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                  <strong>{o.reference}</strong>
-                  <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{new Date(o.createdAt).toLocaleString()}</span>
-                </div>
-                <div style={{ fontSize: 13, color: "var(--muted)" }}>
-                  GHS {Number(o.checkoutAmount ?? o.amount).toFixed(2)} · {o.orderType} · {o.network || "service"}
-                  {o.status === "payment_verified" && <span style={{ color: "var(--green)", fontWeight: 600 }}> · payment verified</span>}
-                </div>
-                {isQueued && o.result?.orderId && (
-                  <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>Techlink order ID: {String(o.result.orderId)}</div>
-                )}
-                {isReady && (
-                  <div style={{ fontSize: 12, color: "var(--price)" }}>
-                    Payment is verified, but the order has not been submitted to Techlink yet. You can send it now without waiting for the scheduler.
-                  </div>
-                )}
-                {needsPaymentVerification && (
-                  <div style={{ fontSize: 12, color: "var(--price)" }}>
-                    This checkout has not yet been verified as paid by the app. The button below re-checks Paystack first; Techlink is called only if Paystack confirms the exact amount.
-                  </div>
-                )}
-                {isQueued && (
-                  <div style={{ fontSize: 12, color: "var(--price)" }}>
-                    Techlink accepted this order. Confirm delivery with Techlink before marking it fulfilled. Do not retry a queued/bulk order.
-                  </div>
-                )}
-                {isRetryable && (
-                  <div style={{ fontSize: 12, color: "var(--price)" }}>
-                    Confirm the provider outcome before retrying. A retry is only appropriate after you have established that the previous provider attempt did not deliver.
-                  </div>
-                )}
-                {!isReady && !needsPaymentVerification && !isQueued && !isRetryable && (
-                  <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>
-                    {o.lastFulfillmentError || "This order is waiting for operator review."}
-                  </div>
-                )}
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
-                  {needsPaymentVerification && (
-                    <button
-                      className="nav-item"
-                      style={{ width: "auto", padding: "6px 10px" }}
-                      disabled={Boolean(actionBusy[`${o.reference}:verify_and_process`])}
-                      onClick={() => manualAction(o.reference, "verify_and_process")}
-                    >
-                      {actionBusy[`${o.reference}:verify_and_process`] ? "Verifying…" : "Verify payment & process"}
-                    </button>
-                  )}
-                  {isReady && (
-                    <button
-                      className="nav-item"
-                      style={{ width: "auto", padding: "6px 10px" }}
-                      disabled={Boolean(actionBusy[`${o.reference}:process_now`])}
-                      onClick={() => manualAction(o.reference, "process_now")}
-                    >
-                      {actionBusy[`${o.reference}:process_now`] ? "Sending to Techlink…" : "Process with Techlink"}
-                    </button>
-                  )}
-                  {(isQueued || isRetryable) && (
-                    <button
-                      className="nav-item"
-                      style={{ width: "auto", padding: "6px 10px" }}
-                      disabled={Boolean(actionBusy[`${o.reference}:confirm_fulfilled`])}
-                      onClick={() => manualAction(o.reference, "confirm_fulfilled")}
-                    >
-                      {actionBusy[`${o.reference}:confirm_fulfilled`] ? "Updating…" : "Mark fulfilled"}
-                    </button>
-                  )}
-                  {isRetryable && (
-                    <button
-                      className="nav-item"
-                      style={{ width: "auto", padding: "6px 10px" }}
-                      disabled={Boolean(actionBusy[`${o.reference}:retry`])}
-                      onClick={() => manualAction(o.reference, "retry")}
-                    >
-                      {actionBusy[`${o.reference}:retry`] ? "Authorizing…" : "Authorize retry"}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {tab === "reconcile" && <ReconciliationTab />}
-
-      {tab === "reviews" && (
-        <div className="card" style={{ overflow: "hidden" }}>
-          {reviews.length === 0 && <div style={{ padding: 24, textAlign: "center", color: "var(--muted)", fontSize: 14 }}>No reviews yet.</div>}
-          {reviews.map((r) => (
-            <div key={r.id} className="tx-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4, opacity: r.isHidden ? 0.5 : 1 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                <strong style={{ fontSize: 14 }}>{r.customerName} — {"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</strong>
-                <button
-                  className="nav-item"
-                  style={{ width: "auto", padding: "4px 10px", fontSize: 12 }}
-                  onClick={async () => {
-                    const res = await fetch("/api/admin/reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: r.id, isHidden: !r.isHidden }) });
-                    if (res.ok) load();
-                  }}
-                >
-                  {r.isHidden ? "Unhide" : "Hide"}
-                </button>
-              </div>
-              <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>Order {r.orderReference} · {r.serviceType} · {new Date(r.createdAt).toLocaleString()}</div>
-              {r.comment && <div style={{ fontSize: 13, color: "var(--muted)" }}>{r.comment}</div>}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {tab === "audit" && <AuditLogTab entries={auditLog} />}
-
-      {tab === "feedback" && (
-        <div>
-          <SearchBox value={feedbackSearch} onChange={setFeedbackSearch} placeholder="Search by case, order ref, name, email, or phone…" />
-          <div className="card" style={{ overflow: "hidden" }}>
-            {filteredFeedback.length === 0 && <div style={{ padding: 24, textAlign: "center", color: "var(--muted)", fontSize: 14 }}>No feedback yet.</div>}
-            {filteredFeedback.map((f) => (
-              <div key={f.id} className="tx-row" style={{ alignItems: "flex-start", flexDirection: "column", gap: 4 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", width: "100%", gap: 12 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>{f.name} · <span style={{ color: "var(--muted)", fontWeight: 400 }}>{f.category}</span></span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {canOperate ? (                    <select
-                      className="input"
-                      style={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
-                      value={f.status || "open"}
-                      onChange={async (e) => {
-                        const r = await fetch("/api/feedback/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id, status: e.target.value }) });
-                        if (r.ok) {
-                          const d = await r.json();
-                          setFeedback((prev) => prev.map((x) => (x.id === f.id ? d.feedback : x)));
-                          load();
-                        }
-                      }}
-                    >
-                      <option value="open">Open</option>
-                      <option value="in_progress">In progress</option>
-                      <option value="resolved">Resolved</option>
-                    </select>) : (
-                      <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{f.status || "open"}</span>
-                    )}
-                    <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{new Date(f.createdAt).toLocaleString()}</span>
-                  </div>
-                </div>
-                <div style={{ fontSize: 13, color: "var(--muted)" }}>{f.message}</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5, marginTop: 2 }}>
-                  <div><strong>Case:</strong> {f.caseReference || "—"} {f.orderReference ? <>· <strong>Order:</strong> {f.orderReference}</> : null}</div>
-                  <div><strong>Service:</strong> {f.serviceType || "—"} · <strong>Transaction ID:</strong> {f.transactionId || "—"} · <strong>Amount:</strong> {f.transactionAmount != null ? `GHS ${Number(f.transactionAmount).toFixed(2)}` : "—"}</div>
-                  {f.requestedData ? <div><strong>Requested:</strong> {f.requestedData}</div> : null}
-                  {f.beneficiary ? <div><strong>Beneficiary:</strong> {f.beneficiary}</div> : null}
-                  {f.transactionAt ? <div><strong>Transaction time:</strong> {new Date(f.transactionAt).toLocaleString()}</div> : null}
-                  <div><strong>Transaction details:</strong> {f.transactionDetails || "—"}</div>
-                </div>
-                {(f.email || f.phone) && <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>{[f.email, f.phone].filter(Boolean).join(" · ")}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <NoteDialog
+        open={Boolean(dialog)}
+        title={dialogCopy ? `${dialogCopy.title} — ${dialog.order.reference}` : ""}
+        message={dialogCopy?.message}
+        confirmLabel={dialogCopy?.confirmLabel}
+        danger={dialogCopy?.danger}
+        onCancel={() => setDialog(null)}
+        onConfirm={(note) => { const { order, action } = dialog; setDialog(null); runAction(order, action, note); }}
+      />
     </div>
   );
 }

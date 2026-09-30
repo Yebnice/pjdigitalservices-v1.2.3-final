@@ -31,6 +31,13 @@ function parseCsv(text) {
 function findColumn(headerRow, candidates) {
   const normalized = headerRow.map((h) => String(h || "").toLowerCase().trim());
   for (const candidate of candidates) {
+    // An exact header name wins. Only then fall back to "contains", so a
+    // column such as "Amount Settled" or "Fees" cannot be picked ahead of
+    // the real "Amount" column just because it appears first.
+    const exact = normalized.findIndex((h) => h === candidate);
+    if (exact !== -1) return exact;
+  }
+  for (const candidate of candidates) {
     const idx = normalized.findIndex((h) => h.includes(candidate));
     if (idx !== -1) return idx;
   }
@@ -115,7 +122,10 @@ export default async function handler(req, res) {
     for (const p of paystackRows) {
       const order = orderByRef.get(p.reference);
       if (!order) {
-        paystackOnly.push(p);
+        // A failed, abandoned or reversed Paystack row with no order is
+        // expected (nothing was collected). Only a payment that actually
+        // succeeded, or one with no status column to tell, is a discrepancy.
+        if (!p.status || p.status === "success") paystackOnly.push(p);
         continue;
       }
       // Compare against checkoutAmount (what Paystack actually charged,

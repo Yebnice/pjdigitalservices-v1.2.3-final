@@ -116,7 +116,7 @@ export default function TvPage() {
           </div>
         )}
         <Field label="Phone number">
-          <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" />
+          <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0XX XXX XXXX" />
         </Field>
         <EmailField email={email} setEmail={setEmail} />
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>

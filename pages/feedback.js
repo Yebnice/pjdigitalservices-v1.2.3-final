@@ -38,7 +38,7 @@ export default function FeedbackPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Field label="Your name"><input className="input" value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" /></Field>
       <Field label="Email (or provide phone)"><input className="input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" type="email" /></Field>
-      <Field label="Phone (or provide email)"><input className="input" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="024 000 0000" /></Field>
+      <Field label="Phone (or provide email)"><input className="input" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="0XX XXX XXXX" /></Field>
       <Field label="Service / product"><select className="input" value={serviceType} onChange={e=>setServiceType(e.target.value)}>{SERVICES.map(s=><option key={s} value={s}>{s}</option>)}</select></Field>
       <Field label="Transaction ID"><input className="input" value={transactionId} onChange={e=>setTransactionId(e.target.value)} placeholder="Transaction / provider ID" /></Field>
       <Field label="Amount"><input className="input" value={transactionAmount} onChange={e=>setTransactionAmount(e.target.value)} placeholder="GHS 0.00" type="number" min="0" step="0.01" /></Field>

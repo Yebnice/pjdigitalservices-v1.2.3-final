@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork } from "../components/ui";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork, phonePlaceholder } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
 import { withPaystackFee } from "../lib/pricing";
 
@@ -60,7 +60,7 @@ export default function AirtimePage() {
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <Field label="Network"><NetworkPicker value={network} onChange={(value) => { setNetwork(value); setNetworkConfirmed(false); }} /></Field>
         <Field label="Recipient phone number">
-          <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder="024 000 0000" />
+          <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder={phonePlaceholder(network)} />
         </Field>
         <NetworkMismatchNotice network={network} phone={phone} acknowledged={networkConfirmed} onAcknowledge={setNetworkConfirmed} />
         <Field label="Amount (GHS)">
