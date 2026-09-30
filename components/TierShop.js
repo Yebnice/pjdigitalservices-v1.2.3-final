@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
-import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, NetworkBadge, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork, NETWORKS } from "./ui";
+import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, NetworkBadge, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork, phonePlaceholder, bulkPlaceholder, samplePhones, NETWORKS } from "./ui";
 import { payAndFulfil } from "../lib/payment";
 import { withPaystackFee, businessMarkup } from "../lib/pricing";
 import { TIERS, NETWORK_PAGES } from "../lib/agentProducts";
@@ -34,10 +34,11 @@ async function parseExcelFile(file) {
   return out;
 }
 
-function downloadSampleCsv(kind) {
+function downloadSampleCsv(kind, networkId) {
   const label = kind === "data" ? "size_gb" : "amount_ghs";
   const sample = kind === "data" ? [5, 10] : [10, 20];
-  const csv = `phone,${label}\n0240000001,${sample[0]}\n0240000002,${sample[1]}\n`;
+  const [p1, p2] = samplePhones(networkId);
+  const csv = `phone,${label}\n${p1},${sample[0]}\n${p2},${sample[1]}\n`;
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -177,7 +178,7 @@ function TierSingleForm({ tierKey, tier, networkId, email, setEmail, loading, se
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Field label="Recipient phone number">
-        <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder="024 000 0000" style={{ maxWidth: 260 }} />
+        <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder={phonePlaceholder(networkId)} style={{ maxWidth: 260 }} />
       </Field>
       <NetworkMismatchNotice
         network={networkId}
@@ -230,7 +231,7 @@ function EvdSingleForm({ networkId, email, setEmail, loading, setLoading, onDone
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 320 }}>
       <Field label="Phone number">
-        <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder="024 000 0000" />
+        <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder={phonePlaceholder(networkId)} />
       </Field>
       <NetworkMismatchNotice
         network={networkId}
@@ -297,7 +298,7 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
           rows={6}
           value={text}
           onChange={(e) => { setText(e.target.value); setNetworkConfirmed(false); }}
-          placeholder={kind === "data" ? "024XXXXXXX 5\n024YYYYYYY 10" : "024XXXXXXX 10\n024YYYYYYY 20"}
+          placeholder={bulkPlaceholder(networkId, kind)}
           style={{ fontFamily: "monospace", resize: "vertical" }}
         />
       </Field>
@@ -383,7 +384,7 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
         <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} />
       </Field>
       <button
-        onClick={() => downloadSampleCsv(kind)}
+        onClick={() => downloadSampleCsv(kind, networkId)}
         style={{ background: "none", border: "none", color: "var(--price)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}
       >
         Download sample template

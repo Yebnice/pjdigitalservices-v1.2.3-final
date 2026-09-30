@@ -1,4 +1,4 @@
-import { AIRTELTIGO_PREFIXES, getLikelyNetwork, isLikelyAirtelTigoNumber } from "../lib/networkValidation";
+import { AIRTELTIGO_PREFIXES, getLikelyNetwork, isLikelyAirtelTigoNumber, phonePlaceholder, bulkPlaceholder, samplePhones } from "../lib/networkValidation";
 import { getOrderStatusLabel } from "../lib/orderStatus";
 import { useEffect, useState } from "react";
 import { Loader2, Check, X, Bolt, Droplet, GraduationCap, Clock } from "lucide-react";
@@ -118,7 +118,7 @@ export function NetworkPicker({ value, onChange, palette = NETWORKS }) {
 
 // Network prefix helpers live in lib/networkValidation.js so they can be
 // tested without importing this JSX component module.
-export { AIRTELTIGO_PREFIXES, getLikelyNetwork, isLikelyAirtelTigoNumber };
+export { AIRTELTIGO_PREFIXES, getLikelyNetwork, isLikelyAirtelTigoNumber, phonePlaceholder, bulkPlaceholder, samplePhones };
 
 export function NetworkMismatchNotice({ network, phone, acknowledged, onAcknowledge }) {
   const likely = getLikelyNetwork(phone);

@@ -16,12 +16,30 @@ describe("admin hardening invariants", () => {
       "pages/api/orders/manual-review.js",
       "pages/api/feedback/status.js",
       "pages/api/admin/recheck-order.js",
-      "pages/api/admin/export-orders.js",
       "pages/api/admin/reconcile.js",
       "pages/api/admin/wallet-balance.js",
       "pages/api/admin/reviews.js",
     ]) {
       expect(read(file)).toContain('requireAdminRole(req, res, ["operator"])');
+    }
+  });
+
+  // Exporting every customer's phone and email is a bulk-PII action, and
+  // marking a paid order delivered closes it out without provider proof.
+  it("reserves bulk export and manual delivery confirmation for admins", () => {
+    expect(read("pages/api/admin/export-orders.js")).toContain('requireAdminPermission(req, res, "orders.export")');
+    expect(read("pages/api/orders/manual-review.js")).toContain('action === "confirm_fulfilled" && !adminHasRole(req, ["admin"])');
+    expect(read("lib/adminPermissions.js")).toContain('"orders.export": "admin"');
+    expect(read("lib/adminPermissions.js")).toContain('"orders.confirm_fulfilled": "admin"');
+  });
+
+  it("audits failed admin sign-ins", () => {
+    expect(read("pages/api/admin/login.js")).toContain('action: "admin_login_failed"');
+  });
+
+  it("strips sensitive fields from every admin order response", () => {
+    for (const file of ["pages/api/admin/orders.js", "pages/api/orders/list.js", "pages/api/orders/manual-review.js", "pages/api/admin/recheck-order.js"]) {
+      expect(read(file)).toContain("toAdminOrder");
     }
   });
 
@@ -40,7 +58,9 @@ describe("admin hardening invariants", () => {
   });
 
   it("does not make viewer wallet checks hit an operator-only endpoint", () => {
-    expect(read("pages/admin/index.js")).toContain("if (!auth || !canOperate)");
-    expect(read("pages/admin/index.js")).toContain("}, [auth, canOperate]);");
+    // The dashboard only calls an endpoint when the signed-in role has the
+    // permission for it; a viewer never hits the operator-only wallet route.
+    expect(read("pages/admin/index.js")).toContain('can("wallet.view") ? adminApi("/api/admin/wallet-balance"');
+    expect(read("pages/admin/index.js")).toContain('can("orders.process") ? adminApi("/api/orders/manual-review"');
   });
 });

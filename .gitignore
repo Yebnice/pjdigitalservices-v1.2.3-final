@@ -10,3 +10,13 @@ yarn-error.log*
 pnpm-debug.log*
 .DS_Store
 *.log
+
+# More env files and key material that must never be committed
+.env.production
+.env.development
+.env.test
+*.pem
+*.key
+.vercel
+coverage/
+release/

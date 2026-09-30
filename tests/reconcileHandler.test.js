@@ -98,4 +98,27 @@ describe("POST /api/admin/reconcile (crash regression)", () => {
     expect(res.body.counts.mismatched).toBe(1);
     expect(res.body.mismatched[0].reference).toBe("ORD-1");
   });
+
+  // Regression: a Paystack row that FAILED or was abandoned has no order in
+  // the app, correctly. It used to be reported as "Paid on Paystack, no
+  // matching order", a false alarm on every export that lists failures.
+  it("does not report failed or abandoned Paystack rows as paid-without-an-order", async () => {
+    const { default: handler } = await import("../pages/api/admin/reconcile.js");
+    const csv = "Reference,Amount,Status\nORD-1,101.99,success\nGHOST-FAILED,10.00,failed\nGHOST-ABANDONED,10.00,abandoned\nGHOST-PAID,25.00,success\n";
+    const res = makeRes();
+    await handler({ method: "POST", body: { csv } }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.counts.paystackOnly).toBe(1);
+    expect(res.body.paystackOnly[0].reference).toBe("GHOST-PAID");
+  });
+
+  it("reads the real Amount column, not an earlier column that merely contains the word", async () => {
+    const { default: handler } = await import("../pages/api/admin/reconcile.js");
+    const csv = "Reference,Amount Settled,Amount,Status\nORD-1,99.00,101.99,success\n";
+    const res = makeRes();
+    await handler({ method: "POST", body: { csv } }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.counts.matched).toBe(1);
+    expect(res.body.counts.mismatched).toBe(0);
+  });
 });

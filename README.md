@@ -483,3 +483,12 @@ The fulfillment worker automatically checks provider-queued orders on schedule a
 
 - GitHub Actions only runs workflows from `.github/workflows/`. The duplicate `ci.yml` and `background-worker.yml` files that used to sit in the repo root never ran and have been removed.
 - `vercel.json` limits Git-triggered deployments to `main`, so packaging or CI-only branches and pull requests no longer use up Vercel's daily deployment quota.
+
+### Admin dashboard
+
+- **Overview** is calculated on the server over every order in the chosen range: product sales, your margin, estimated net profit (payments − Paystack fee − Techlink cost), delivery and payment success, and a per-product profit table. Money is counted on delivered orders only. A red banner shows customers who have paid but not received their order.
+- **Orders** is filtered, searched and paged on the server (25 per page), with a details panel per order. AFA Ghana Card details and voucher PINs / electricity tokens are never sent to the browser.
+- **Needs attention** lists stuck orders oldest first. Each action asks for an audit note in a proper dialog. "Mark delivered" is admin-only.
+- **Audit log** (operators and admins) is searchable and now records failed sign-ins.
+- The page refreshes every minute and when you return to the tab; a section that fails to load shows a warning instead of silently showing "0".
+- Admin sessions are re-checked against `ADMIN_USERS_JSON` on every request, and state-changing admin requests from another website are refused.

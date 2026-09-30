@@ -249,7 +249,7 @@ Before deploying the hardened build:
 1. Add a separate `AFA_ENCRYPTION_KEY` environment variable (32+ random characters) to the Vercel Production environment. Do not reuse `CRON_SECRET`, `ADMIN_SESSION_SECRET`, or `CUSTOMER_SESSION_SECRET`.
 2. Run `supabase/migration_v1_3_5.sql` against the production database. It removes retained AFA identity payloads from already-fulfilled historical orders.
 3. Keep the same `CRON_SECRET` value in GitHub Actions, Supabase Vault (`pjd_cron_secret`), and Vercel. A Vercel environment-variable edit does not affect the running deployment until a new deployment is created.
-4. If using `ADMIN_USERS_JSON`, roles are hierarchical: `viewer < operator < admin`. Viewer is read-only; operator can perform operational reconciliation/recheck/wallet actions; admin has full access.
+4. If using `ADMIN_USERS_JSON`, roles are hierarchical: `viewer < operator < admin`. Viewer is read-only (overview, orders, feedback, reviews). Operator adds re-check / process / retry of orders, reconciliation, the wallet balance, the audit log, feedback updates and review moderation. Admin adds the two actions that move money or expose bulk customer data: manually marking a paid order as delivered, and the full orders CSV export. A user whose `role` is missing or misspelt is treated as a viewer. Sessions are re-checked against `ADMIN_USERS_JSON` on every request, so removing a user, adding `"disabled": true`, or lowering their role takes effect immediately; changing `ADMIN_SESSION_SECRET` signs everyone out at once. The full role-to-permission map is in `lib/adminPermissions.js`.
 5. Customer order and support-case lookups use POST bodies rather than query strings so email/phone values are not placed in URLs.
 
 ### Data retention
