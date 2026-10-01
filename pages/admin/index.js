@@ -432,14 +432,7 @@ export default function AdminPage() {
     setNotice("");
     try {
       const d = await adminApi("/api/admin/run-worker", { method: "POST", onUnauthorized });
-      const s = d.sweep || {};
-      const parts = [`checked ${s.checked ?? 0} unpaid checkout(s)`];
-      if (s.ready) parts.push(`${s.ready} were paid and are being delivered`);
-      if (s.closed) parts.push(`${s.closed} closed as abandoned`);
-      if (s.rejected) parts.push(`${s.rejected} charged but rejected (see Needs attention)`);
-      if (d.results?.length) parts.push(`${d.results.length} order(s) sent to Techlink`);
-      if (d.failures?.length) parts.push(`${d.failures.length} step(s) failed: ${d.failures.map((f) => f.step).join(", ")}`);
-      setNotice(`Worker ran: ${parts.join("; ")}.`);
+      setNotice(d.message || "Outstanding orders checked. No customer orders were processed.");
       await refreshAll();
     } catch (err) {
       if (err.status !== 401) window.alert(err.message);
@@ -476,7 +469,7 @@ export default function AdminPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {can("worker.run") && <button className="nav-item" onClick={runWorker} style={{ width: "auto", padding: "6px 12px" }} disabled={workerBusy} title="Checks unpaid checkouts with Paystack and sends paid orders to Techlink now">{workerBusy ? "Running worker…" : "Run worker now"}</button>}
+          {can("worker.run") && <button className="nav-item" onClick={runWorker} style={{ width: "auto", padding: "6px 12px" }} disabled={workerBusy} title="Checks outstanding orders and refreshes Needs attention. It does not fulfill customer orders.">{workerBusy ? "Checking…" : "Check outstanding orders"}</button>}
           <button className="nav-item" onClick={refreshAll} style={{ width: "auto", padding: "6px 12px" }} disabled={loadingOverview}>{loadingOverview ? "Refreshing…" : "Refresh"}</button>
           <button className="nav-item" onClick={logout} style={{ width: "auto", padding: "6px 12px" }}>Sign out</button>
         </div>
@@ -492,8 +485,8 @@ export default function AdminPage() {
       {walletLow && <Banner tone="red"><strong>Low Techlink wallet: {ghs(walletBalance)}.</strong> Customers can still pay through Paystack, but orders will start failing at delivery if it runs out. Top up now.</Banner>}
       {errors.wallet && <Banner tone="amber">Couldn't check the Techlink wallet ({errors.wallet}). Orders may be failing at delivery without warning — check Techlink directly.</Banner>}
       {workerStale && (
-        <Banner tone="red" action={can("worker.run") ? <button className="nav-item" style={{ width: "auto", padding: "4px 10px" }} disabled={workerBusy} onClick={runWorker}>{workerBusy ? "Running…" : "Run worker now"}</button> : null}>
-          <strong>{health.worker.lastRunAt ? `The background worker last ran ${ageText(health.worker.lastRunAt)} ago.` : "The background worker has not reported in yet."}</strong> While it is not running, customers who paid may not be getting their orders. Check the GitHub Actions tab (scheduled workflows are switched off after 60 days without repository activity) and the CRON_SECRET secret.
+        <Banner tone="red" action={can("worker.run") ? <button className="nav-item" style={{ width: "auto", padding: "4px 10px" }} disabled={workerBusy} onClick={runWorker}>{workerBusy ? "Checking…" : "Check outstanding orders"}</button> : null}>
+          <strong>{health.worker.lastRunAt ? `The background worker last ran ${ageText(health.worker.lastRunAt)} ago.` : "The background worker has not reported in yet."}</strong> While it is not running, automatic delivery may be delayed. Check the GitHub Actions tab and the CRON_SECRET secret. Use <strong>Check outstanding orders</strong> to refresh the review queue; it does not fulfill orders.
         </Banner>
       )}
       {health?.worker?.lastRunOk === false && !workerStale && <Banner tone="amber">The last worker run had problems in: {health.worker.failedSteps.join(", ") || "unknown steps"}. See Vercel logs.</Banner>}
