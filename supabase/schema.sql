@@ -108,6 +108,8 @@ create table if not exists orders (
 alter table orders add column if not exists provider_cost numeric;
 alter table orders add column if not exists checkout_amount numeric;
 alter table orders add column if not exists paystack_fee_amount numeric;
+alter table orders add column if not exists paystack_fee_actual numeric;
+alter table orders add column if not exists paystack_net_settled numeric;
 alter table orders add column if not exists customer_product_amount numeric;
 alter table orders add column if not exists business_markup_amount numeric;
 alter table orders add column if not exists idempotency_key text;
@@ -294,6 +296,10 @@ create index if not exists reviews_created_at_idx
   on reviews (created_at desc);
 
 create index if not exists reviews_order_reference_idx
+  on reviews (order_reference);
+
+-- One review per order, enforced by the database (see migration_v1_3_6.sql).
+create unique index if not exists reviews_order_reference_uq
   on reviews (order_reference);
 
 create index if not exists audit_log_created_at_idx

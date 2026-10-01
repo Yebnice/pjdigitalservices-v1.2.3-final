@@ -93,6 +93,10 @@ export default function FaqPage() {
         </p>
       </div>
       <input
+        id="faq-search"
+        name="q"
+        aria-label="Search questions"
+        autoComplete="off"
         className="input"
         value={query}
         onChange={(e) => setQuery(e.target.value)}

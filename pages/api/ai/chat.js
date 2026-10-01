@@ -189,6 +189,6 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error("AI chat error", err);
-    return res.status(200).json({ reply: faqReply(req.body?.messages?.at?.(-1)?.content || "", req.body?.messages || []), source: "faq", model: null });
+    return res.status(200).json({ reply: faqReply(String(req.body?.messages?.at?.(-1)?.content || "").slice(0, 2000), Array.isArray(req.body?.messages) ? req.body.messages : []), source: "faq", model: null });
   }
 }

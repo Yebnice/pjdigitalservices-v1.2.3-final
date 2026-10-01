@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork, phonePlaceholder } from "../components/ui";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, OrderReceipt, PriceBreakdown, NetworkMismatchNotice, getLikelyNetwork, phonePlaceholder } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
-import { withPaystackFee } from "../lib/pricing";
+import { previewBreakdown } from "../lib/pricing";
 
 export default function AirtimePage() {
   const [network, setNetwork] = useState("mtn");
@@ -22,6 +22,8 @@ export default function AirtimePage() {
   const networkMismatch = Boolean(likelyNetwork && likelyNetwork !== network);
   const valid = phone.length >= 10 && Number(amount) > 0 && email.includes("@") && (!networkMismatch || networkConfirmed);
 
+  const breakdown = previewBreakdown(Number(amount) || 0, { orderType: "airtime", network });
+
   function submit() {
     setLoading(true);
     payAndFulfil({
@@ -30,6 +32,7 @@ export default function AirtimePage() {
       phone,
       email,
       airtimeAmount: Number(amount),
+      expectedAmount: breakdown.total || undefined,
       onDone: (order, paidAmount) => {
         setLoading(false);
         window.sessionStorage.setItem("pj_email", email);
@@ -64,11 +67,12 @@ export default function AirtimePage() {
         </Field>
         <NetworkMismatchNotice network={network} phone={phone} acknowledged={networkConfirmed} onAcknowledge={setNetworkConfirmed} />
         <Field label="Amount (GHS)">
-          <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10.00" type="number" />
+          <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10.00" type="number" inputMode="decimal" min="1" step="0.01" onWheel={(e) => e.currentTarget.blur()} />
         </Field>
         <EmailField email={email} setEmail={setEmail} />
+        <PriceBreakdown {...breakdown} productLabel="Airtime" />
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
-          Pay GHS {(amount ? withPaystackFee(Number(amount)) : 0).toFixed(2)} with Paystack
+          Pay GHS {breakdown.total.toFixed(2)} with Paystack
         </PrimaryButton>
       </div>
       <Toast toast={toast} />

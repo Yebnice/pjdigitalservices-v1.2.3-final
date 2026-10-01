@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, NetworkBadge, OrderReceipt } from "../components/ui";
+import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, NetworkBadge, OrderReceipt, PriceBreakdown } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
-import { previewCustomerTotal } from "../lib/pricing";
+import { previewCustomerTotal, previewBreakdown } from "../lib/pricing";
 
 const PROVIDERS = {
   DSTV: { label: "DSTV", color: "#0f4fa8", initial: "D", logo: "/icons/tv/dstv.png" },
@@ -49,6 +49,9 @@ export default function TvPage() {
 
   const valid = validation && validation !== "error" && phone.length >= 10 && email.includes("@");
 
+  const tvAmount = validation && validation !== "error" ? Number(validation.balance ?? validation.amountDue ?? validation.amount) : 0;
+  const breakdown = previewBreakdown(Number.isFinite(tvAmount) ? tvAmount : 0, { orderType: "tv" });
+
   function submit() {
     setLoading(true);
     payAndFulfil({
@@ -57,6 +60,7 @@ export default function TvPage() {
       email,
       meterNumber: account,
       tvDetails: { service },
+      expectedAmount: breakdown.total || undefined,
       onDone: (order, paidAmount) => {
         setLoading(false);
         window.sessionStorage.setItem("pj_email", email);
@@ -119,6 +123,7 @@ export default function TvPage() {
           <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0XX XXX XXXX" />
         </Field>
         <EmailField email={email} setEmail={setEmail} />
+        <PriceBreakdown {...breakdown} productLabel="Subscription" />
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
           {validation && validation !== "error"
             ? // Server-side (pages/api/orders/create.js), a "tv" order never

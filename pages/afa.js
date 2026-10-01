@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, OrderReceipt } from "../components/ui";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, OrderReceipt, PriceBreakdown } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
-import { withPaystackFee, previewCustomerTotal } from "../lib/pricing";
+import { previewCustomerTotal, previewBreakdown } from "../lib/pricing";
 
 const REGIONS = [
   "Greater Accra", "Ashanti", "Western", "Western North", "Central", "Eastern",
@@ -34,6 +34,8 @@ export default function AfaPage() {
 
   const valid = fullName && ghanaCard && phone.length >= 10 && dob && region && location && occupation && email.includes("@");
 
+  const breakdown = fee != null ? previewBreakdown(fee, { orderType: "afa", network }) : null;
+
   function submit() {
     setLoading(true);
     payAndFulfil({
@@ -42,6 +44,7 @@ export default function AfaPage() {
       phone,
       email,
       afaDetails: { fullName, ghanaCard, dob, region, location, occupation },
+      expectedAmount: breakdown?.total || undefined,
       onDone: (order, paidAmount) => {
         setLoading(false);
         window.sessionStorage.setItem("pj_email", email);
@@ -101,6 +104,7 @@ export default function AfaPage() {
           </select>
         </Field>
         <EmailField email={email} setEmail={setEmail} />
+        {breakdown && <PriceBreakdown {...breakdown} productLabel="Registration fee" />}
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
           {fee != null ? `Pay GHS ${previewCustomerTotal(fee, { orderType: "afa", network }).toFixed(2)} & submit registration` : "Submit registration"}
         </PrimaryButton>

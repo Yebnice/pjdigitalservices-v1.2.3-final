@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NETWORKS, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork, phonePlaceholder } from "../components/ui";
+import { useEffect, useRef, useState } from "react";
+import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, NETWORKS, OrderReceipt, PriceBreakdown, NetworkMismatchNotice, getLikelyNetwork, phonePlaceholder } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
-import { withPaystackFee } from "../lib/pricing";
+import { previewBreakdown } from "../lib/pricing";
 
 // Techlink's bundle catalogue is live and network/phone-specific (see
 // lib/techlink.js listDataBundles) — there is deliberately no hardcoded
@@ -35,7 +35,11 @@ export default function DataPage() {
     setPhone(window.sessionStorage.getItem("pj_phone") || "");
   }, []);
 
+  // Ignore a slow earlier response if the customer has since loaded bundles again.
+  const bundleRequest = useRef(0);
+
   function loadBundles() {
+    const requestId = ++bundleRequest.current;
     setLoadingBundles(true);
     setLoadError("");
     setBundles(null);
@@ -44,6 +48,7 @@ export default function DataPage() {
     fetch(`/api/techlink/data-bundles?network=${network}&phone=${encodeURIComponent(phone)}`)
       .then((r) => r.json())
       .then((d) => {
+        if (requestId !== bundleRequest.current) return;
         if (d.error) {
           setLoadError(d.error);
           setBundles([]);
@@ -52,10 +57,13 @@ export default function DataPage() {
         }
       })
       .catch(() => {
+        if (requestId !== bundleRequest.current) return;
         setLoadError("Could not reach the server.");
         setBundles([]);
       })
-      .finally(() => setLoadingBundles(false));
+      .finally(() => {
+        if (requestId === bundleRequest.current) setLoadingBundles(false);
+      });
   }
 
   const selected = (bundles || []).find((b) => (b.id || b.bundleId) === bundleId);
@@ -63,6 +71,7 @@ export default function DataPage() {
   const networkMismatch = Boolean(likelyNetwork && likelyNetwork !== network);
   const valid = phone.length >= 10 && selected && email.includes("@") && (!networkMismatch || networkConfirmed);
   const grouped = bundles ? groupBundles(bundles) : {};
+  const breakdown = selected ? previewBreakdown(Number(selected.price ?? selected.amount), { orderType: "data", network }) : null;
 
   function submit() {
     setLoading(true);
@@ -72,6 +81,7 @@ export default function DataPage() {
       phone,
       email,
       bundleId: selected.id || selected.bundleId,
+      expectedAmount: breakdown?.total || undefined,
       onDone: (order, paidAmount) => {
         setLoading(false);
         window.sessionStorage.setItem("pj_email", email);
@@ -107,7 +117,7 @@ export default function DataPage() {
         </Field>
         <Field label="Recipient phone number">
           <div style={{ display: "flex", gap: 8, maxWidth: 320 }}>
-            <input className="input" style={{ flex: 1 }} value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder={phonePlaceholder(network)} />
+            <input className="input" style={{ flex: 1 }} value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); if (bundles) { bundleRequest.current += 1; setBundles(null); setBundleId(null); setLoadingBundles(false); } }} placeholder={phonePlaceholder(network)} type="tel" inputMode="tel" autoComplete="off" />
             <button className="primary-btn" style={{ width: "auto", padding: "0 16px" }} onClick={loadBundles} disabled={phone.length < 10 || loadingBundles}>
               {loadingBundles ? "..." : "Load bundles"}
             </button>
@@ -159,9 +169,10 @@ export default function DataPage() {
         )}
 
         <div style={{ maxWidth: 300 }}><EmailField email={email} setEmail={setEmail} /></div>
-        <div style={{ maxWidth: 300 }}>
+        <div style={{ maxWidth: 300, display: "flex", flexDirection: "column", gap: 12 }}>
+          {breakdown && <PriceBreakdown {...breakdown} productLabel="Data bundle" />}
           <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
-            {selected ? `Pay GHS ${withPaystackFee(Number(selected.price ?? selected.amount)).toFixed(2)} with Paystack` : "Select a bundle"}
+            {breakdown ? `Pay GHS ${breakdown.total.toFixed(2)} with Paystack` : "Select a bundle"}
           </PrimaryButton>
         </div>
       </div>

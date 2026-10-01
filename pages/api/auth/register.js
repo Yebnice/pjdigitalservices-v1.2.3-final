@@ -13,6 +13,12 @@ export default async function handler(req, res) {
     if (!name || !username || !email || !phone || !password) {
       return res.status(400).json({ error: "Name, username, email, phone, and password are all required" });
     }
+    if ([name, username, email, phone, password].some((v) => typeof v !== "string")) {
+      return res.status(400).json({ error: "Invalid registration details" });
+    }
+    if (name.trim().length > 100 || email.length > 254 || phone.trim().length > 20 || password.length > 200) {
+      return res.status(400).json({ error: "One of the fields is too long" });
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) {
       return res.status(400).json({ error: "Enter a valid email address" });
     }
@@ -24,7 +30,7 @@ export default async function handler(req, res) {
     }
 
     const passwordHash = hashPassword(password);
-    const { customer, verificationToken } = await registerCustomerAccount({ name, username, email, phone, passwordHash });
+    const { customer, verificationToken } = await registerCustomerAccount({ name: name.trim(), username, email: email.trim(), phone: phone.trim(), passwordHash });
 
     // Best-effort: the account is already created either way — a failed
     // verification email shouldn't block the person from existing, just

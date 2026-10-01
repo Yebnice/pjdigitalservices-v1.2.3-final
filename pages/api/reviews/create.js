@@ -34,6 +34,7 @@ export default async function handler(req, res) {
     await recordAuditEvent({ action: "review_submitted", reference: order.reference, note: `${ratingNumber} stars` });
     return res.status(200).json({ review });
   } catch (err) {
+    if (err?.message === "This order has already been reviewed") return res.status(400).json({ error: err.message });
     console.error("Review submission error", err);
     return res.status(500).json({ error: "Something went wrong submitting your review. Please try again." });
   }

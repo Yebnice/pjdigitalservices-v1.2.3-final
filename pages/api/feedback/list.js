@@ -7,6 +7,7 @@ export default async function handler(req, res) {
   try {
     res.status(200).json({ feedback: await listFeedback() });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Feedback list error", err);
+    res.status(500).json({ error: "Could not load feedback" });
   }
 }

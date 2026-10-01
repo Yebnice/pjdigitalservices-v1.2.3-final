@@ -22,7 +22,7 @@ const FORMULA_TRIGGER_CHARS = ["=", "+", "-", "@", "\t", "\r"];
 function csvField(value) {
   let str = value == null ? "" : String(value);
   if (FORMULA_TRIGGER_CHARS.includes(str[0])) str = `'${str}`;
-  if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+  if (/[",\r\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
   return str;
 }
 

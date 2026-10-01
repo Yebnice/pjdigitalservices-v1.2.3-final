@@ -104,8 +104,8 @@ export default function DashboardPage() {
         <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 4 }}>Use the reference and checkout email to view one order securely.</p>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
-        <input className="input" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Order reference" />
-        <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Checkout email" />
+        <input id="order-reference" name="reference" aria-label="Order reference" className="input" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Order reference" />
+        <input id="order-email" name="email" aria-label="Checkout email" autoComplete="email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Checkout email" />
       </div>
       <button className="primary-btn" onClick={loadOne} disabled={!reference || !email.includes("@") || loading}>{loading ? "Checking…" : "Check order"}</button>
       {error && <p style={{ color: "var(--red)", fontSize: 13 }}>{error}</p>}

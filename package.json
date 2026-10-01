@@ -9,7 +9,9 @@
     "check:rate-limit": "node scripts/check-rate-limit.js",
     "check:production": "node scripts/check-production-contracts.js",
     "test": "vitest run",
-    "check:secrets": "node scripts/check-secret-leakage.js"
+    "check:secrets": "node scripts/check-secret-leakage.js",
+    "admin:user": "node scripts/admin-user.mjs",
+    "test:e2e": "node --import ./tests/e2e/loader/register.mjs tests/e2e/payment-recovery.e2e.mjs && node --import ./tests/e2e/loader/register.mjs tests/e2e/admin-login.e2e.mjs && node --import ./tests/e2e/loader/register.mjs tests/e2e/fee-recording.e2e.mjs && node --import ./tests/e2e/loader/register.mjs tests/e2e/price-guard.e2e.mjs && node --import ./tests/e2e/loader/register-real-rate-limit.mjs tests/e2e/login-limits.e2e.mjs"
   },
   "engines": {
     "node": "24.x"

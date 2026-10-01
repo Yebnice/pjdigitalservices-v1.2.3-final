@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Field, EmailField, PrimaryButton, Toast, EXAM_TYPES, NetworkBadge, OrderReceipt } from "../components/ui";
+import { Field, EmailField, PrimaryButton, Toast, EXAM_TYPES, NetworkBadge, OrderReceipt, PriceBreakdown } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
-import { previewCustomerTotal } from "../lib/pricing";
+import { previewCustomerTotal, previewBreakdown } from "../lib/pricing";
 
 // Defensive: Techlink's docs don't publish a sample response body for
 // GET /products/checker-prices or GET /result-check-service/prices, so this
@@ -45,6 +45,8 @@ export default function CheckerPage() {
   const voucherValid = email.includes("@") && (deliveryMethod === "email" || phone.length >= 10);
   const lookupValid = indexNumber && /^\d{4}$/.test(String(examYear)) && candidateName.trim().length >= 2 && email.includes("@");
   const valid = mode === "voucher" ? voucherValid : lookupValid;
+  const checkerBase = mode === "voucher" ? (voucherPrice != null ? voucherPrice * quantity : 0) : (lookupPrice ?? 0);
+  const breakdown = previewBreakdown(checkerBase, { orderType: "checker" });
 
   function submit() {
     setLoading(true);
@@ -56,6 +58,7 @@ export default function CheckerPage() {
         mode === "voucher"
           ? { mode: "voucher", type, quantity, deliveryMethod }
           : { mode: "lookup", type: type.toLowerCase(), indexNumber, examYear, candidateName },
+      expectedAmount: breakdown.total || undefined,
       onDone: (order, paidAmount) => {
         setLoading(false);
         window.sessionStorage.setItem("pj_email", email);
@@ -163,6 +166,7 @@ export default function CheckerPage() {
           </>
         )}
 
+        <PriceBreakdown {...breakdown} productLabel={mode === "voucher" ? `Voucher${quantity > 1 ? "s" : ""}` : "Result check"} />
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
           {mode === "voucher"
             ? voucherPrice != null

@@ -8,7 +8,10 @@ export default async function handler(req, res) {
   if (!rl.allowed) return res.status(429).setHeader("Retry-After", rl.retryAfter).json({ error: "Too many attempts. Please wait a moment and try again." });
   try {
     const { email } = req.body || {};
-    if (!email) return res.status(400).json({ error: "Enter your email address" });
+    if (!email || typeof email !== "string" || email.length > 254) return res.status(400).json({ error: "Enter your email address" });
+    // Per-address cap (in addition to per-IP) so one inbox can't be flooded.
+    const rlEmail = await rateLimit(req, { limit: 3, windowMs: 15 * 60_000, keySuffix: "forgot-password-email", subject: email.trim().toLowerCase() });
+    if (!rlEmail.allowed) return res.status(200).json({ message: "If an account exists with that email, a reset link has been sent." });
     const result = await setPasswordResetToken(email);
     // Always the same response whether or not an account exists — telling
     // the truth here ("no account with that email") would let anyone

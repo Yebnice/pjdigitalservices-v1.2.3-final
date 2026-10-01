@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { PrimaryButton } from "../components/ui";
 
@@ -6,9 +6,14 @@ export default function VerifyEmailPage() {
   const router = useRouter();
   const [status, setStatus] = useState("checking"); // checking | ok | error
   const [error, setError] = useState("");
+  // The token is single-use. React StrictMode runs effects twice in development,
+  // and the second request would fail and replace the success message.
+  const requestedFor = useRef(null);
 
   useEffect(() => {
     if (!router.isReady) return;
+    if (requestedFor.current === router.query.token) return;
+    requestedFor.current = router.query.token;
     const token = router.query.token;
     if (!token) {
       setStatus("error");
@@ -25,7 +30,7 @@ export default function VerifyEmailPage() {
         if (ok) setStatus("ok");
         else {
           setStatus("error");
-          setError(d.error);
+          setError(d.error || "This verification link is invalid or has expired.");
         }
       })
       .catch(() => {

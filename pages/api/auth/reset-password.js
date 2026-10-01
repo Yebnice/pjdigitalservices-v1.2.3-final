@@ -10,6 +10,7 @@ export default async function handler(req, res) {
     const { token, password } = req.body || {};
     if (!token || !password) return res.status(400).json({ error: "Missing token or new password" });
     if (String(password).length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
+    if (typeof password !== "string" || password.length > 200) return res.status(400).json({ error: "Password is too long" });
     const customer = await resetPasswordWithToken(String(token), hashPassword(password));
     if (!customer) return res.status(400).json({ error: "This reset link is invalid or has expired. Request a new one from the login page." });
     return res.status(200).json({ customer });

@@ -492,3 +492,6 @@ The fulfillment worker automatically checks provider-queued orders on schedule a
 - **Audit log** (operators and admins) is searchable and now records failed sign-ins.
 - The page refreshes every minute and when you return to the tab; a section that fails to load shows a warning instead of silently showing "0".
 - Admin sessions are re-checked against `ADMIN_USERS_JSON` on every request, and state-changing admin requests from another website are refused.
+- **Two-factor sign-in** (authenticator app), named accounts, and per-account login limits. See DEPLOYMENT.md.
+- **Needs attention** is sorted into: customers charged but not delivered, paid orders needing a decision (with a one-click “Check Techlink” that shows whether Techlink already delivered it), and unpaid checkouts. Admins also get **Manual control** on every order.
+- A **system health** banner appears if the background worker stops, and **Run worker now** forces a pass.

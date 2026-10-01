@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   const rl = await rateLimit(req, { limit: 20, windowMs: 60_000, keySuffix: "techlink-water-validate" });
   if (!rl.allowed) return res.status(429).setHeader("Retry-After", rl.retryAfter).json({ error: "Too many requests. Please try again shortly." });
 
-  const { account, phone } = req.body;
+  const { account, phone } = req.body || {};
   if (!account) return res.status(400).json({ error: "account is required" });
 
   try {

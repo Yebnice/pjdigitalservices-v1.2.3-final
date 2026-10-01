@@ -16,11 +16,18 @@ const ACTION_COPY = {
   retry: { title: "Authorise a retry", message: "Confirm that Techlink did NOT deliver this order. A retry sends it to Techlink again.", confirmLabel: "Authorise retry", danger: true },
   process_now: { title: "Send to Techlink now", message: "This order is paid and verified but has not been sent to Techlink yet.", confirmLabel: "Send now" },
   verify_and_process: { title: "Verify payment and process", message: "Paystack is re-checked first. Techlink is only called if Paystack confirms the exact amount.", confirmLabel: "Verify & process" },
+  confirm_from_techlink: { title: "Close: Techlink shows this delivered", message: "The server re-checks Techlink's order history and only closes the order if it really shows it as delivered. The customer is told it arrived.", confirmLabel: "Confirm delivered" },
+  accept_charged: { title: "Accept this payment and send the order", message: "The customer paid at least the order price but the amount did not match exactly. Paystack is re-checked; if it is fine, the order is sent to Techlink now.", confirmLabel: "Accept & send" },
+  mark_delivered: { title: "Mark this order as delivered", message: "You are confirming the customer HAS received it (or that you delivered it yourself). The order is closed as delivered and counted in your sales.", warning: "If this order was never paid, marking it delivered also records it as paid. Only do that if you have confirmed the payment yourself (for example in the Paystack dashboard).", confirmLabel: "Mark delivered", danger: true, options: [{ key: "notifyCustomer", label: "Tell the customer it was delivered (email / SMS)", defaultChecked: true }] },
+  mark_resolved: { title: "Mark this issue as resolved", message: "Closes the order WITHOUT delivering it: for example the customer was refunded, the checkout was abandoned, or you settled it another way. It is removed from Needs attention and is not counted as a sale.", confirmLabel: "Mark resolved" },
+  mark_paid_send: { title: "Mark as paid and send to Techlink", message: "You are confirming you have verified the customer's payment yourself. The order is marked paid and sent to Techlink now, which spends wallet balance. The server first checks Techlink's history so it does not deliver twice.", warning: "Only use this when Paystack's own check cannot confirm a payment you know was made.", confirmLabel: "Mark paid & send", danger: true },
+  close_charged: { title: "Close this charged order", message: "Use this only after you have refunded the customer or otherwise dealt with it outside the app. Nothing will be sent.", confirmLabel: "Close order", danger: true },
 };
 
 function PasswordGate({ onUnlock }) {
   const [username, setUsername] = useState("admin");
   const [value, setValue] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -31,7 +38,7 @@ function PasswordGate({ onUnlock }) {
       const r = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password: value }),
+        body: JSON.stringify({ username, password: value, code: code.replace(/\s+/g, "") }),
       });
       let data = {};
       try {
@@ -52,8 +59,10 @@ function PasswordGate({ onUnlock }) {
     <div className="page-wrap" style={{ maxWidth: 360 }}>
       <h1 style={{ fontSize: 20, fontWeight: 600, margin: "0 0 16px" }}>Admin login</h1>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <input className="input" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Admin username" autoComplete="username" style={{ marginBottom: 12 }} />
-        <input className="input" type="password" value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => e.key === "Enter" && tryUnlock()} placeholder="Admin password" autoComplete="current-password" />
+        <input id="admin-username" name="username" aria-label="Admin username" className="input" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Admin username" autoComplete="username" style={{ marginBottom: 12 }} />
+        <input id="admin-password" name="password" aria-label="Admin password" className="input" type="password" value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => e.key === "Enter" && tryUnlock()} placeholder="Admin password" autoComplete="current-password" />
+        <input id="admin-code" name="otp" aria-label="Authenticator code" className="input" value={code} onChange={(e) => setCode(e.target.value.replace(/[^0-9 ]/g, "").slice(0, 7))} onKeyDown={(e) => e.key === "Enter" && tryUnlock()} placeholder="6-digit authenticator code" inputMode="numeric" autoComplete="one-time-code" />
+        <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: "-4px 0 0" }}>Enter the code from your authenticator app. Leave it blank only if two-factor is not set up for your account.</p>
         <button className="primary-btn" onClick={tryUnlock} disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button>
         {error && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{error}</p>}
       </div>
@@ -106,10 +115,10 @@ function ReconciliationTab() {
           In Paystack: Dashboard → Transactions → Export CSV. Upload that file here — it's matched exactly
           against your orders table (by reference, amount, and status). Exact reconciliation runs inside the app. No transaction-level results are sent to Gemini unless you explicitly enable the optional AI summary.
         </p>
-        <input type="file" accept=".csv" onChange={handleFile} />
+        <input id="reconcile-csv" name="reconcileCsv" aria-label="Paystack transactions CSV" type="file" accept=".csv" onChange={handleFile} />
         {fileName && <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: "8px 0 0" }}>Loaded: {fileName}</p>}
         <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13, color: "var(--muted)" }}>
-          <input type="checkbox" checked={generateAiSummary} onChange={(e) => setGenerateAiSummary(e.target.checked)} />
+          <input type="checkbox" name="generateAiSummary" checked={generateAiSummary} onChange={(e) => setGenerateAiSummary(e.target.checked)} />
           Generate optional AI summary (sends the computed reconciliation result to Gemini)
         </label>
         <div style={{ marginTop: 12 }}>
@@ -211,7 +220,7 @@ function FeedbackTab({ feedback, can, onChanged, onUnauthorized }) {
               <span style={{ fontSize: 14, fontWeight: 600 }}>{f.name} · <span style={{ color: "var(--muted)", fontWeight: 400 }}>{f.category}</span></span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {can("feedback.update") ? (
-                  <select className="input" style={{ width: "auto", padding: "4px 8px", fontSize: 12 }} value={f.status || "open"} onChange={(e) => setStatus(f, e.target.value)}>
+                  <select name="status" aria-label="Case status" className="input" style={{ width: "auto", padding: "4px 8px", fontSize: 12 }} value={f.status || "open"} onChange={(e) => setStatus(f, e.target.value)}>
                     <option value="open">Open</option>
                     <option value="in_progress">In progress</option>
                     <option value="resolved">Resolved</option>
@@ -289,6 +298,12 @@ export default function AdminPage() {
   const [feedback, setFeedback] = useState([]);
   const [auditLog, setAuditLog] = useState([]);
   const [walletBalance, setWalletBalance] = useState(null);
+  const [attentionCounts, setAttentionCounts] = useState(null);
+  const [attentionTruncated, setAttentionTruncated] = useState(false);
+  const [health, setHealth] = useState(null);
+  const [checks, setChecks] = useState({});
+  const [payments, setPayments] = useState({});
+  const [workerBusy, setWorkerBusy] = useState(false);
   const [errors, setErrors] = useState({});
   const [loadingOverview, setLoadingOverview] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -325,6 +340,7 @@ export default function AdminPage() {
       feedback: can("feedback.view") ? adminApi("/api/feedback/list", { onUnauthorized }) : null,
       wallet: can("wallet.view") ? adminApi("/api/admin/wallet-balance", { onUnauthorized }) : null,
       audit: can("audit.view") ? adminApi("/api/admin/audit-log", { onUnauthorized }) : null,
+      health: can("system.view") ? adminApi("/api/admin/health", { onUnauthorized }) : null,
     };
     const keys = Object.keys(jobs);
     const settled = await Promise.allSettled(keys.map((k) => jobs[k] || Promise.resolve(undefined)));
@@ -336,7 +352,8 @@ export default function AdminPage() {
       if (res.status === "rejected") { nextErrors[key] = res.reason?.message || "failed"; return; }
       const d = res.value;
       if (key === "overview") setOverview(d);
-      if (key === "review") setManualReview(d.orders || []);
+      if (key === "review") { setManualReview(d.orders || []); setAttentionCounts(d.counts || null); setAttentionTruncated(Boolean(d.truncated)); }
+      if (key === "health") setHealth(d);
       if (key === "feedback") setFeedback(d.feedback || []);
       if (key === "audit") setAuditLog(d.entries || []);
       if (key === "wallet") {
@@ -362,28 +379,73 @@ export default function AdminPage() {
     return () => { clearInterval(interval); document.removeEventListener("visibilitychange", tick); };
   }, [auth, me, refreshAll]);
 
-  async function runAction(order, action, note) {
+  async function runAction(order, action, note, opts = {}) {
     const key = `${order.reference}:${action}`;
     setActionBusy((prev) => ({ ...prev, [key]: true }));
     setNotice("");
+    let forceAgain = false;
     try {
       if (action === "recheck") {
         await adminApi("/api/admin/recheck-order", { method: "POST", body: { reference: order.reference }, onUnauthorized });
       } else {
-        await adminApi("/api/orders/manual-review", { method: "POST", body: { reference: order.reference, action, note }, onUnauthorized });
+        await adminApi("/api/orders/manual-review", { method: "POST", body: { reference: order.reference, action, note, ...(opts.force ? { force: true } : {}), ...(opts.notifyCustomer === false ? { notifyCustomer: false } : {}) }, onUnauthorized });
       }
       setNotice(`Done: ${order.reference}`);
       await refreshAll();
     } catch (err) {
-      if (err.status !== 401) window.alert(err.message);
+      if (err.status === 409 && err.data?.canForce && window.confirm(`${err.message}\n\nForce it anyway?`)) forceAgain = true;
+      else if (err.status !== 401) window.alert(err.message);
     } finally {
       setActionBusy((prev) => { const next = { ...prev }; delete next[key]; return next; });
     }
+    // Outside the try/finally so the busy flag of the second attempt is not cleared by the first.
+    if (forceAgain) await runAction(order, action, note, { ...opts, force: true });
   }
 
-  function requestAction(order, action) {
+  function requestAction(order, action, opts = {}) {
     if (action === "recheck") return runAction(order, action);
-    setDialog({ order, action });
+    setDialog({ order, action, opts });
+  }
+
+  async function checkTechlink(order) {
+    setChecks((prev) => ({ ...prev, [order.reference]: { loading: true } }));
+    try {
+      const d = await adminApi(`/api/admin/techlink-check?reference=${encodeURIComponent(order.reference)}`, { onUnauthorized });
+      setChecks((prev) => ({ ...prev, [order.reference]: { evidence: d.evidence } }));
+    } catch (err) {
+      setChecks((prev) => ({ ...prev, [order.reference]: { error: err.message } }));
+    }
+  }
+
+  async function inspectPayment(order) {
+    setPayments((prev) => ({ ...prev, [order.reference]: { loading: true } }));
+    try {
+      const d = await adminApi(`/api/admin/payment-check?reference=${encodeURIComponent(order.reference)}`, { onUnauthorized });
+      setPayments((prev) => ({ ...prev, [order.reference]: { payment: d } }));
+    } catch (err) {
+      setPayments((prev) => ({ ...prev, [order.reference]: { error: err.message } }));
+    }
+  }
+
+  async function runWorker() {
+    setWorkerBusy(true);
+    setNotice("");
+    try {
+      const d = await adminApi("/api/admin/run-worker", { method: "POST", onUnauthorized });
+      const s = d.sweep || {};
+      const parts = [`checked ${s.checked ?? 0} unpaid checkout(s)`];
+      if (s.ready) parts.push(`${s.ready} were paid and are being delivered`);
+      if (s.closed) parts.push(`${s.closed} closed as abandoned`);
+      if (s.rejected) parts.push(`${s.rejected} charged but rejected (see Needs attention)`);
+      if (d.results?.length) parts.push(`${d.results.length} order(s) sent to Techlink`);
+      if (d.failures?.length) parts.push(`${d.failures.length} step(s) failed: ${d.failures.map((f) => f.step).join(", ")}`);
+      setNotice(`Worker ran: ${parts.join("; ")}.`);
+      await refreshAll();
+    } catch (err) {
+      if (err.status !== 401) window.alert(err.message);
+    } finally {
+      setWorkerBusy(false);
+    }
   }
 
   async function logout() {
@@ -394,7 +456,10 @@ export default function AdminPage() {
   if (!auth) return <PasswordGate onUnlock={loadMe} />;
 
   const openFeedback = feedback.filter((f) => f.status === "open" || !f.status).length;
-  const oldestAttention = manualReview.reduce((min, o) => (o.createdAt && (min == null || new Date(o.createdAt) < min) ? new Date(o.createdAt) : min), null);
+  const paidNeedingAction = attentionCounts?.paidNeedingAction ?? manualReview.length;
+  const unpaidCount = attentionCounts?.unpaid ?? 0;
+  const workerStale = health && (health.worker.lastRunAt == null || health.worker.ageMinutes > 20);
+  const webhookStuck = health?.webhooks && !health.webhooks.error && health.webhooks.pending > 0 && health.webhooks.oldestPendingAt && (Date.now() - new Date(health.webhooks.oldestPendingAt).getTime()) > 15 * 60000;
   const walletLow = walletBalance != null && walletBalance < LOW_WALLET_THRESHOLD;
   const dialogCopy = dialog ? ACTION_COPY[dialog.action] : null;
   // Only sign-in failures from the last 24 hours, so an old burst does not nag forever.
@@ -411,27 +476,42 @@ export default function AdminPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          {can("worker.run") && <button className="nav-item" onClick={runWorker} style={{ width: "auto", padding: "6px 12px" }} disabled={workerBusy} title="Checks unpaid checkouts with Paystack and sends paid orders to Techlink now">{workerBusy ? "Running worker…" : "Run worker now"}</button>}
           <button className="nav-item" onClick={refreshAll} style={{ width: "auto", padding: "6px 12px" }} disabled={loadingOverview}>{loadingOverview ? "Refreshing…" : "Refresh"}</button>
           <button className="nav-item" onClick={logout} style={{ width: "auto", padding: "6px 12px" }}>Sign out</button>
         </div>
       </div>
 
       {notice && <Banner tone="blue">{notice}</Banner>}
+      {me?.mode === "shared" && (
+        <Banner tone="amber"><strong>Everyone who uses this login is recorded as "admin".</strong> If more than one person has access, give each person their own account so the audit log shows who did what: run <code>npm run admin:user</code> and put the result in <code>ADMIN_USERS_JSON</code> (see DEPLOYMENT.md).</Banner>
+      )}
+      {me && !me.twoFactor && me.role === "admin" && (
+        <Banner tone="blue">Two-factor sign-in is <strong>off</strong> for this account. Anyone who learns the password can open this dashboard and move money. {me.mode === "shared" ? "Set ADMIN_TOTP_SECRET" : "Add a totpSecret to your account"} (generate one with <code>npm run admin:user</code>) and set <code>ADMIN_REQUIRE_2FA=true</code> to make it mandatory.</Banner>
+      )}
       {walletLow && <Banner tone="red"><strong>Low Techlink wallet: {ghs(walletBalance)}.</strong> Customers can still pay through Paystack, but orders will start failing at delivery if it runs out. Top up now.</Banner>}
       {errors.wallet && <Banner tone="amber">Couldn't check the Techlink wallet ({errors.wallet}). Orders may be failing at delivery without warning — check Techlink directly.</Banner>}
-      {manualReview.length > 0 && can("orders.process") && (
+      {workerStale && (
+        <Banner tone="red" action={can("worker.run") ? <button className="nav-item" style={{ width: "auto", padding: "4px 10px" }} disabled={workerBusy} onClick={runWorker}>{workerBusy ? "Running…" : "Run worker now"}</button> : null}>
+          <strong>{health.worker.lastRunAt ? `The background worker last ran ${ageText(health.worker.lastRunAt)} ago.` : "The background worker has not reported in yet."}</strong> While it is not running, customers who paid may not be getting their orders. Check the GitHub Actions tab (scheduled workflows are switched off after 60 days without repository activity) and the CRON_SECRET secret.
+        </Banner>
+      )}
+      {health?.worker?.lastRunOk === false && !workerStale && <Banner tone="amber">The last worker run had problems in: {health.worker.failedSteps.join(", ") || "unknown steps"}. See Vercel logs.</Banner>}
+      {webhookStuck && <Banner tone="red">{health.webhooks.pending} Paystack payment notification(s) are waiting to be processed, the oldest for {ageText(health.webhooks.oldestPendingAt)}. Run the worker now.</Banner>}
+      {health?.webhooks && !health.webhooks.error && health.webhooks.failed > 0 && <Banner tone="amber">{health.webhooks.failed} Paystack payment notification(s) failed permanently. Those customers may have paid without being delivered: check the Needs attention tab.</Banner>}
+      {paidNeedingAction > 0 && can("orders.process") && (
         <Banner tone="red" action={<button className="nav-item" style={{ width: "auto", padding: "4px 10px" }} onClick={() => setTab("review")}>Open</button>}>
-          <strong>{manualReview.length} order{manualReview.length === 1 ? "" : "s"} need attention</strong>{oldestAttention ? ` — oldest waiting ${ageText(oldestAttention.toISOString())}` : ""}.
+          <strong>{paidNeedingAction} paid order{paidNeedingAction === 1 ? "" : "s"} need{paidNeedingAction === 1 ? "s" : ""} a decision</strong>{attentionCounts?.charged_rejected ? ` — including ${attentionCounts.charged_rejected} where the customer was charged but nothing was delivered` : ""}.
         </Banner>
       )}
       {failedLogins >= 3 && <Banner tone="amber">{failedLogins} failed admin sign-in attempts in the last 24 hours (see the audit log). If that wasn't you, change your admin password and ADMIN_SESSION_SECRET.</Banner>}
-      {Object.entries(errors).filter(([k]) => !["wallet", "overview"].includes(k)).map(([k, msg]) => (
+      {Object.entries(errors).filter(([k]) => !["wallet", "overview", "health"].includes(k)).map(([k, msg]) => (
         <Banner key={k} tone="amber">Couldn't refresh {k === "review" ? "needs-attention orders" : k === "audit" ? "the audit log" : k} ({msg}). What you see for that section may be out of date.</Banner>
       ))}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 20 }}>
         {can("wallet.view") && <StatCard label="Techlink wallet" value={walletBalance != null ? ghs(walletBalance) : errors.wallet ? "—" : "…"} tone={walletLow ? "red" : undefined} />}
-        {can("orders.process") && <StatCard label="Needs attention" value={manualReview.length} tone={manualReview.length ? "red" : undefined} hint={oldestAttention ? `oldest ${ageText(oldestAttention.toISOString())}` : "all clear"} />}
+        {can("orders.process") && <StatCard label="Paid — need a decision" value={paidNeedingAction} tone={paidNeedingAction ? "red" : undefined} hint={unpaidCount ? `+ ${unpaidCount} unpaid checkouts` : "all clear"} />}
         {overview && <StatCard label="Paid, not delivered" value={overview.atRisk.count} tone={overview.atRisk.count ? "red" : undefined} hint={overview.atRisk.count ? ghs(overview.atRisk.value) : "none waiting"} />}
         <StatCard label="Open feedback" value={openFeedback} tone={openFeedback ? "amber" : undefined} />
       </div>
@@ -439,7 +519,7 @@ export default function AdminPage() {
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>Overview</TabButton>
         <TabButton active={tab === "orders"} onClick={() => setTab("orders")}>Orders</TabButton>
-        {can("orders.process") && <TabButton active={tab === "review"} onClick={() => setTab("review")} badge={manualReview.length || null}>Needs attention</TabButton>}
+        {can("orders.process") && <TabButton active={tab === "review"} onClick={() => setTab("review")} badge={paidNeedingAction || null}>Needs attention</TabButton>}
         <TabButton active={tab === "feedback"} onClick={() => setTab("feedback")} badge={openFeedback || null}>Feedback</TabButton>
         {can("reconcile.run") && <TabButton active={tab === "reconcile"} onClick={() => setTab("reconcile")}>Reconciliation</TabButton>}
         <TabButton active={tab === "reviews"} onClick={() => setTab("reviews")}>Reviews</TabButton>
@@ -448,7 +528,7 @@ export default function AdminPage() {
 
       {tab === "overview" && <OverviewTab overview={overview} loading={loadingOverview} error={errors.overview} range={range} onRangeChange={setRange} />}
       {tab === "orders" && <OrdersTab can={can} refreshTick={refreshTick} onUnauthorized={onUnauthorized} />}
-      {tab === "review" && can("orders.process") && <AttentionTab orders={manualReview} can={can} busy={actionBusy} onAction={requestAction} />}
+      {tab === "review" && can("orders.process") && <AttentionTab orders={manualReview} counts={attentionCounts} truncated={attentionTruncated} can={can} busy={actionBusy} checks={checks} payments={payments} onAction={requestAction} onCheck={checkTechlink} onInspect={inspectPayment} onRunWorker={runWorker} workerBusy={workerBusy} />}
       {tab === "feedback" && <FeedbackTab feedback={feedback} can={can} onChanged={refreshAll} onUnauthorized={onUnauthorized} />}
       {tab === "reconcile" && can("reconcile.run") && <ReconciliationTab />}
       {tab === "reviews" && <ReviewsTab can={can} refreshTick={refreshTick} onUnauthorized={onUnauthorized} />}
@@ -458,10 +538,12 @@ export default function AdminPage() {
         open={Boolean(dialog)}
         title={dialogCopy ? `${dialogCopy.title} — ${dialog.order.reference}` : ""}
         message={dialogCopy?.message}
+        warning={dialogCopy?.warning}
+        options={dialogCopy?.options || []}
         confirmLabel={dialogCopy?.confirmLabel}
         danger={dialogCopy?.danger}
         onCancel={() => setDialog(null)}
-        onConfirm={(note) => { const { order, action } = dialog; setDialog(null); runAction(order, action, note); }}
+        onConfirm={(note, picked) => { const { order, action, opts } = dialog; setDialog(null); runAction(order, action, note, { ...opts, ...picked }); }}
       />
     </div>
   );

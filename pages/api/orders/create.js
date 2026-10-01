@@ -10,18 +10,36 @@ import {
   getResultCheckServicePrices,
   listProducts,
   getAirtimeFee,
+  lookupEcgMeter,
 } from "../../../lib/techlink";
 import { TIERS } from "../../../lib/agentProducts";
 import { rateLimit } from "../../../lib/rateLimit";
-import { getOrderPricing } from "../../../lib/pricing";
+import { getOrderPricing, DEFAULT_AIRTIME_PROVIDER_FEE_RATE, resolveAirtimeFeeRate } from "../../../lib/pricing";
 import { isValidGhanaNumber, toLocalGhanaNumber } from "../../../lib/networkValidation";
+
+// Smallest airtime / bill top-up accepted. Anything lower is rejected by the
+// provider *after* the customer has already paid, which means a manual refund.
+const MIN_ORDER_AMOUNT_GHS = (() => {
+  const raw = String(process.env.MIN_ORDER_AMOUNT_GHS ?? "").trim();
+  const n = raw === "" ? NaN : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+})();
+
+// A customer-typed money amount must be a real value in whole pesewas.
+// Returns an error message, or null if the amount is acceptable.
+function checkMoneyAmount(value) {
+  if (!Number.isFinite(value) || value <= 0) return "Invalid amount";
+  if (Math.abs(Math.round(value * 100) - value * 100) > 1e-6) return "Amount can have at most 2 decimal places";
+  if (value < MIN_ORDER_AMOUNT_GHS) return `The minimum amount is GHS ${MIN_ORDER_AMOUNT_GHS.toFixed(2)}`;
+  return null;
+}
 
 // Every price here is resolved from Techlink itself at order time — never
 // from anything the browser sends — so a customer can never pay less (or
 // more) than what Techlink will actually charge your wallet.
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  const rl = await rateLimit(req, { limit: 12, windowMs: 60_000, keySuffix: "orders-create" });
+  const rl = await rateLimit(req, { limit: 30, windowMs: 60_000, keySuffix: "orders-create" });
   if (!rl.allowed) return res.status(429).setHeader("Retry-After", rl.retryAfter).json({ error: "Too many order attempts. Please wait a moment and try again." });
   const rawIdempotency = req.headers["idempotency-key"] || req.body?.idempotencyKey || "";
   const idempotencyKey = String(Array.isArray(rawIdempotency) ? rawIdempotency[0] : rawIdempotency).trim();
@@ -88,7 +106,7 @@ export default async function handler(req, res) {
       tvDetails,
       checkerDetails,
       tierKey, size, rows,
-    } = req.body;
+    } = req.body || {};
 
     if (!orderType || !email) {
       return res.status(400).json({ error: "Missing required fields" });
@@ -117,6 +135,11 @@ export default async function handler(req, res) {
     let resolvedNetwork = network; // may be overridden below for tier orders — see note there
 
     const normalizedEmail = String(email).trim().toLowerCase();
+    if (normalizedEmail.length > 254) return res.status(400).json({ error: "Email address is too long" });
+    // Per-email cap as well as per-IP: many customers share one mobile-carrier
+    // IP, so an IP-only limit is both too strict for them and too weak for abuse.
+    const rlEmail = await rateLimit(req, { limit: 15, windowMs: 60_000, keySuffix: "orders-create-email", subject: normalizedEmail });
+    if (!rlEmail.allowed) return res.status(429).json({ error: "Too many attempts for this email. Please wait a minute and try again." });
     let amount;
     let providerCost;
     let extra = {};
@@ -125,17 +148,16 @@ export default async function handler(req, res) {
       if (!network) return res.status(400).json({ error: "Network is required" });
       amount = Number(airtimeAmount);
       if (!amount || amount <= 0) return res.status(400).json({ error: "Invalid amount" });
+      const airtimeAmountError = checkMoneyAmount(amount);
+      if (airtimeAmountError) return res.status(400).json({ error: airtimeAmountError });
       // Techlink's airtime wallet-fee endpoint is useful for internal
       // cost accounting, but it is not required to price the customer:
       // Airtime has 0% PjDigitalServices business margin. Do not make a
       // working Airtime purchase depend on a separate fee-information call.
-      let airtimeFeeRate = 0;
+      let airtimeFeeRate = DEFAULT_AIRTIME_PROVIDER_FEE_RATE;
       try {
-        const airtimeFeeData = await getAirtimeFee();
-        const resolvedRate = Number(airtimeFeeData.rate ?? airtimeFeeData.percent / 100 ?? 0);
-        if (Number.isFinite(resolvedRate) && resolvedRate >= 0 && resolvedRate <= 1) {
-          airtimeFeeRate = resolvedRate;
-        }
+        const resolvedRate = resolveAirtimeFeeRate(await getAirtimeFee());
+        if (resolvedRate != null) airtimeFeeRate = resolvedRate;
       } catch (feeErr) {
         console.warn("Airtime fee lookup unavailable; continuing checkout with provider cost fallback:", feeErr.message);
       }
@@ -161,6 +183,17 @@ export default async function handler(req, res) {
       if (!afaDetails?.fullName || !afaDetails?.ghanaCard || !afaDetails?.dob || !afaDetails?.region || !afaDetails?.location || !afaDetails?.occupation) {
         return res.status(400).json({ error: "Missing AFA registration details" });
       }
+      // Keep only the fields fulfilment uses, trimmed to sane lengths, so a direct
+      // API call can't store arbitrary JSON on the order.
+      const clip = (v, n) => String(v ?? "").trim().slice(0, n);
+      extra.afaDetails = {
+        fullName: clip(afaDetails.fullName, 100),
+        ghanaCard: clip(afaDetails.ghanaCard, 30),
+        dob: clip(afaDetails.dob, 20),
+        region: clip(afaDetails.region, 60),
+        location: clip(afaDetails.location, 120),
+        occupation: clip(afaDetails.occupation, 80),
+      };
       const priceData = await getAfaPrice();
       amount = Number(priceData.price ?? priceData.amount);
 
@@ -168,6 +201,20 @@ export default async function handler(req, res) {
       if (!meterNumber) return res.status(400).json({ error: "Meter number is required" });
       amount = Number(billAmount);
       if (!amount || amount <= 0) return res.status(400).json({ error: "Invalid amount" });
+      const ecgAmountError = checkMoneyAmount(amount);
+      if (ecgAmountError) return res.status(400).json({ error: ecgAmountError });
+      // Enforce "verify the meter before paying" on the server too. The page does
+      // this lookup, but a direct API call could skip it and pay for a mistyped meter.
+      try {
+        await lookupEcgMeter({ meter: String(meterNumber).trim(), phone });
+      } catch (lookupErr) {
+        const lookupStatus = Number(lookupErr?.status);
+        if (lookupStatus === 400 || lookupStatus === 404 || lookupStatus === 422) {
+          return res.status(400).json({ error: "We could not verify that ECG meter. Check the meter number and phone, then look it up again." });
+        }
+        console.error("ECG meter verification unavailable at order creation:", lookupErr?.message);
+        return res.status(503).json({ error: "ECG meter verification is temporarily unavailable. Please try again shortly." });
+      }
 
     } else if (orderType === "water") {
       if (!meterNumber) return res.status(400).json({ error: "Account number is required" });
@@ -208,7 +255,7 @@ export default async function handler(req, res) {
         const reference = await logFailedAttempt("tv_amount_unresolved", { orderType, network: tvDetails?.service, phone, email });
         return res.status(400).json({ error: "Could not resolve an amount due for that smartcard" });
       }
-      extra.tvDetails = { ...tvDetails, customerName: validation.customerName || null, package: validation.packageName || validation.package || null };
+      extra.tvDetails = { service: String(tvDetails.service).slice(0, 40), customerName: validation.customerName || null, package: validation.packageName || validation.package || null };
 
     } else if (orderType === "checker") {
       const checkerType = String(checkerDetails?.type || "").toUpperCase();
@@ -266,7 +313,6 @@ export default async function handler(req, res) {
         const reference = await logFailedAttempt("checker_price_unresolved", { orderType, network: checkerDetails?.type, phone, email });
         return res.status(400).json({ error: "Could not resolve a price for that checker" });
       }
-      extra.checkerDetails = checkerDetails;
 
     } else if (orderType === "tierData") {
       const tier = TIERS[tierKey];
@@ -310,7 +356,7 @@ export default async function handler(req, res) {
         if (!Number.isFinite(rowPrice) || rowPrice <= 0) return res.status(400).json({ error: `Invalid price for ${r.phone}` });
         resolvedRows.push({ phone: toLocalGhanaNumber(r.phone), size: Number(r.size), name: product.name, price: rowPrice });
       }
-      amount = resolvedRows.reduce((sum, r) => sum + r.price, 0);
+      amount = Math.round(resolvedRows.reduce((sum, r) => sum + r.price, 0) * 100) / 100;
       extra.tierDetails = { tierKey, category: tier.category, rows: resolvedRows };
 
     } else if (orderType === "tierBulkAirtime") {
@@ -325,20 +371,19 @@ export default async function handler(req, res) {
         if (!isValidGhanaNumber(r.phone)) {
           return res.status(400).json({ error: `Invalid phone number in bulk line: ${r.phone}` });
         }
+        const rowAmountError = checkMoneyAmount(rowAmount);
+        if (rowAmountError) return res.status(400).json({ error: `${rowAmountError} (line for ${r.phone})` });
         if (rowAmount > MAX_BULK_LINE_GHS) return res.status(400).json({ error: `Each bulk airtime line is limited to GHS ${MAX_BULK_LINE_GHS.toFixed(2)}` });
         resolvedRows.push({ phone: toLocalGhanaNumber(r.phone), amount: rowAmount });
       }
-      amount = resolvedRows.reduce((sum, r) => sum + r.amount, 0);
+      amount = Math.round(resolvedRows.reduce((sum, r) => sum + r.amount, 0) * 100) / 100;
       // Bulk Airtime also has 0% business margin. The separate provider
       // fee lookup is best-effort because it is not required to charge the
       // customer or submit the Airtime batch.
-      let airtimeFeeRate = 0;
+      let airtimeFeeRate = DEFAULT_AIRTIME_PROVIDER_FEE_RATE;
       try {
-        const airtimeFeeData = await getAirtimeFee();
-        const resolvedRate = Number(airtimeFeeData.rate ?? airtimeFeeData.percent / 100 ?? 0);
-        if (Number.isFinite(resolvedRate) && resolvedRate >= 0 && resolvedRate <= 1) {
-          airtimeFeeRate = resolvedRate;
-        }
+        const resolvedRate = resolveAirtimeFeeRate(await getAirtimeFee());
+        if (resolvedRate != null) airtimeFeeRate = resolvedRate;
       } catch (feeErr) {
         console.warn("Bulk Airtime fee lookup unavailable; continuing with provider cost fallback:", feeErr.message);
       }
@@ -388,10 +433,10 @@ export default async function handler(req, res) {
       customerProductAmount: pricing.customerProductAmount,
       businessMarkupAmount: pricing.markupAmount,
       idempotencyKey: idempotencyKey || null,
-      bundleId: bundleId || null,
-      afaDetails: afaDetails || null,
-      meterNumber: meterNumber || null,
-      tvDetails: extra.tvDetails || tvDetails || null,
+      bundleId: orderType === "data" && bundleId ? String(bundleId).slice(0, 100) : null,
+      afaDetails: extra.afaDetails || null,
+      meterNumber: ["ecg", "water", "tv"].includes(orderType) && meterNumber ? String(meterNumber).trim().slice(0, 40) : null,
+      tvDetails: extra.tvDetails || null,
       checkerDetails: extra.checkerDetails || null,
       tierDetails: extra.tierDetails || null,
       status: "pending",

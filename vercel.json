@@ -5,5 +5,9 @@
       "**": false,
       "main": true
     }
+  },
+  "functions": {
+    "pages/api/jobs/fulfill.js": { "maxDuration": 60 },
+    "pages/api/admin/run-worker.js": { "maxDuration": 60 }
   }
 }

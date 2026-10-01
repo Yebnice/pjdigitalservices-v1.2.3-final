@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Field, EmailField, PrimaryButton, Toast, BILL_PROVIDERS, NoRefundNotice, NetworkBadge, OrderReceipt } from "../components/ui";
+import { Field, EmailField, PrimaryButton, Toast, BILL_PROVIDERS, NoRefundNotice, NetworkBadge, OrderReceipt, PriceBreakdown } from "../components/ui";
 import { payAndFulfil } from "../lib/payment";
-import { withPaystackFee, previewCustomerTotal } from "../lib/pricing";
+import { previewCustomerTotal, previewBreakdown } from "../lib/pricing";
 
 export default function BillsPage() {
   const [provider, setProvider] = useState("ecg");
@@ -78,6 +78,10 @@ export default function BillsPage() {
   const waterResolved = waterBill && !waterBill.kind;
   const waterValid = waterResolved && phone.length >= 10 && email.includes("@");
 
+  const waterAmount = waterResolved ? Number(waterBill.balance ?? waterBill.amountDue ?? waterBill.amount) : 0;
+  const ecgBreakdown = previewBreakdown(Number(amount) || 0, { orderType: "ecg" });
+  const waterBreakdown = previewBreakdown(Number.isFinite(waterAmount) ? waterAmount : 0, { orderType: "water" });
+
   function submit() {
     setLoading(true);
     payAndFulfil({
@@ -86,6 +90,7 @@ export default function BillsPage() {
       email,
       meterNumber,
       billAmount: provider === "ecg" ? Number(amount) : undefined,
+      expectedAmount: (provider === "ecg" ? ecgBreakdown.total : waterBreakdown.total) || undefined,
       onDone: (order, paidAmount) => {
         setLoading(false);
         window.sessionStorage.setItem("pj_email", email);
@@ -160,9 +165,10 @@ export default function BillsPage() {
               <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setEcgLookup(null); setWaterBill(null); }} placeholder="0XX XXX XXXX" />
             </Field>
             <Field label="Amount to top up (GHS)">
-              <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="50.00" type="number" />
+              <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="50.00" type="number" inputMode="decimal" min="1" step="0.01" onWheel={(e) => e.currentTarget.blur()} />
             </Field>
             <EmailField email={email} setEmail={setEmail} />
+            <PriceBreakdown {...ecgBreakdown} productLabel="Top-up" />
             <PrimaryButton disabled={!ecgValid} loading={loading} onClick={submit}>
               Pay GHS {(amount ? previewCustomerTotal(Number(amount), { orderType: "ecg" }) : 0).toFixed(2)} with Paystack
             </PrimaryButton>
@@ -205,6 +211,7 @@ export default function BillsPage() {
               </div>
             )}
             <EmailField email={email} setEmail={setEmail} />
+            <PriceBreakdown {...waterBreakdown} productLabel="Water bill" />
             <PrimaryButton disabled={!waterValid} loading={loading} onClick={submit}>
               {waterBill && waterBill !== "error"
                 ? `Pay GHS ${previewCustomerTotal(Number(waterBill.balance ?? waterBill.amountDue ?? waterBill.amount), { orderType: "water" }).toFixed(2)} with Paystack`

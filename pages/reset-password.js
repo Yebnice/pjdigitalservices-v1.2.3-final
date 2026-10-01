@@ -13,6 +13,10 @@ export default function ResetPasswordPage() {
   const valid = password.length >= 8 && password === confirmPassword;
 
   function submit() {
+    if (!router.query.token) {
+      setError("This reset link is missing its token. Please request a new password reset email.");
+      return;
+    }
     setLoading(true);
     setError("");
     fetch("/api/auth/reset-password", {
@@ -23,7 +27,7 @@ export default function ResetPasswordPage() {
       .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
       .then(({ ok, d }) => {
         if (ok) setDone(true);
-        else setError(d.error);
+        else setError(d.error || "This reset link is invalid or has expired. Please request a new one.");
       })
       .catch(() => setError("Could not reach the server — try again."))
       .finally(() => setLoading(false));

@@ -36,7 +36,7 @@ export default function LoginPage() {
       <h1 style={{ fontSize: 22, fontWeight: 600, margin: "0 0 20px" }}>Log in</h1>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <Field label="Email or username">
-          <input className="input" value={identifier} onChange={(e) => setIdentifier(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="you@example.com" />
+          <input className="input" value={identifier} onChange={(e) => setIdentifier(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="you@example.com" autoComplete="username" />
         </Field>
         <Field label="Password">
           <input className="input" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Your password" type="password" autoComplete="current-password" />

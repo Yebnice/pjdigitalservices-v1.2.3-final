@@ -268,3 +268,45 @@ Before a production deployment, the repository CI should pass all of these gates
 5. Live verification — one controlled Paystack transaction followed by confirmed Techlink fulfillment/status handling.
 
 A release should not be treated as fully production-ready until the CI build and the controlled end-to-end transaction both pass.
+
+## Admin sign-in: named accounts and two-factor
+
+1. **Give each person their own account** so the audit log shows who did what. For each person run
+   `npm run admin:user -- --username kofi --role operator` (roles: `viewer`, `operator`, `admin`).
+   It asks for a password (hidden) and prints a JSON object. Put every object in the one-line
+   `ADMIN_USERS_JSON` array in Vercel and redeploy. Once any account exists the shared `ADMIN_PASSWORD` stops working.
+2. **Two-factor** is included in that object (`totpSecret`). Type the printed secret into an authenticator
+   app (Google Authenticator, Microsoft Authenticator, Authy, 1Password). Sign-in then asks for the 6-digit code.
+   Each code works once. For the single shared login instead, run `npm run admin:user -- --shared-totp` and set
+   `ADMIN_TOTP_SECRET`.
+3. Set `ADMIN_REQUIRE_2FA=true` once everyone has an authenticator. After that an account without one cannot sign in.
+4. Lost phone? Generate a new secret for that person and replace their `totpSecret`. To sign everyone out at once,
+   change `ADMIN_SESSION_SECRET`.
+
+## Making sure paid customers get delivered
+
+The scheduled worker (`.github/workflows/background-worker.yml`, every 5 minutes) is what turns a Paystack payment
+into a delivery when the customer's own browser did not finish the job. It now also re-checks every checkout still
+marked unpaid with Paystack, so a customer who paid and closed the tab is delivered automatically.
+
+- The dashboard shows a red banner when the worker has not run for 20 minutes, and shows the webhook backlog.
+- **GitHub switches scheduled workflows off after 60 days with no activity in a public repository.** If the banner
+  appears, open the repository's **Actions** tab, check the workflow is enabled and that the `CRON_SECRET` secret matches
+  Vercel. Meanwhile, **Run worker now** on the dashboard does the same work immediately.
+- Scheduled runs on GitHub can be delayed by many minutes. If you are on a Vercel plan that allows frequent cron jobs,
+  adding a Vercel cron for `/api/jobs/fulfill` is more reliable (it needs the same `Authorization: Bearer $CRON_SECRET`).
+
+## Manual control (admin role)
+
+Every order on **Needs attention** has the Paystack and Techlink checks, and a separate **Manual control** row
+that works whatever the APIs say: **Mark delivered**, **Mark paid & send to Techlink**, **Mark resolved / close**.
+Each needs a note, is written to the audit log with the person's name, and "Mark delivered" can optionally
+tell the customer. Before sending to Techlink the server checks Techlink's own order history so it does not
+deliver twice; only an admin can override that, knowingly.
+
+## Tests
+
+`npm test` runs the unit tests. `npm run test:e2e` runs the real worker, sweep and admin handlers against an
+in-memory database with fake Paystack and Techlink (Node 22+): paid-but-missed recovery, charged-but-rejected
+payments, manual control, and two-factor sign-in.
+
