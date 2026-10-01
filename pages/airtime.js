@@ -3,6 +3,9 @@ import { NetworkPicker, Field, EmailField, PrimaryButton, Toast, OrderReceipt, N
 import { payAndFulfil } from "../lib/payment";
 import { withPaystackFee } from "../lib/pricing";
 
+// Network mismatch confirmation is intentionally required only when the
+// entered prefix points to a different common network; ported numbers remain
+// valid when the customer confirms the recipient's current network.
 export default function AirtimePage() {
   const [network, setNetwork] = useState("mtn");
   const [phone, setPhone] = useState("");
