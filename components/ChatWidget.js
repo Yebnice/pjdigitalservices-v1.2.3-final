@@ -191,8 +191,8 @@ export default function ChatWidget() {
               <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
                 For privacy, provide both details. They are used only for this lookup.
               </div>
-              <input className="input" value={orderReference} onChange={(e) => setOrderReference(e.target.value)} placeholder="Order reference" style={{ marginBottom: 8 }} />
-              <input className="input" type="email" value={orderEmail} onChange={(e) => setOrderEmail(e.target.value)} placeholder="Checkout email" style={{ marginBottom: 8 }} />
+              <input id="chat-order-reference" name="reference" aria-label="Order reference" className="input" value={orderReference} onChange={(e) => setOrderReference(e.target.value)} placeholder="Order reference" style={{ marginBottom: 8 }} />
+              <input id="chat-order-email" name="email" aria-label="Checkout email" autoComplete="email" className="input" type="email" value={orderEmail} onChange={(e) => setOrderEmail(e.target.value)} placeholder="Checkout email" style={{ marginBottom: 8 }} />
               <button className="primary-btn" onClick={checkOrder} disabled={!orderReference || !orderEmail.includes("@")}>
                 <Search size={14} style={{ marginRight: 6 }} /> Check securely
               </button>
@@ -211,16 +211,19 @@ export default function ChatWidget() {
               <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
                 Data and airtime complaints require all transaction fields. Other products still require transaction details.
               </div>
-              <input className="input" value={complaint.name} onChange={(e) => setC("name", e.target.value)} placeholder="Your name" style={{ marginBottom: 8 }} />
-              <input className="input" value={complaint.email} onChange={(e) => setC("email", e.target.value)} placeholder="Email" style={{ marginBottom: 8 }} />
-              <input className="input" value={complaint.phone} onChange={(e) => setC("phone", e.target.value)} placeholder="Phone" style={{ marginBottom: 8 }} />
-              <select className="input" value={complaint.serviceType} onChange={(e) => setC("serviceType", e.target.value)} style={{ marginBottom: 8 }}>
+              <input id="chat-name" name="name" aria-label="Your name" autoComplete="name" className="input" value={complaint.name} onChange={(e) => setC("name", e.target.value)} placeholder="Your name" style={{ marginBottom: 8 }} />
+              <input id="chat-email" name="email" aria-label="Email" autoComplete="email" className="input" value={complaint.email} onChange={(e) => setC("email", e.target.value)} placeholder="Email" style={{ marginBottom: 8 }} />
+              <input id="chat-phone" name="phone" aria-label="Phone" autoComplete="tel" className="input" value={complaint.phone} onChange={(e) => setC("phone", e.target.value)} placeholder="Phone" style={{ marginBottom: 8 }} />
+              <select id="chat-serviceType" name="serviceType" aria-label="Service" className="input" value={complaint.serviceType} onChange={(e) => setC("serviceType", e.target.value)} style={{ marginBottom: 8 }}>
                 {SERVICES.map((s) => <option key={s}>{s}</option>)}
               </select>
-              <input className="input" value={complaint.transactionId} onChange={(e) => setC("transactionId", e.target.value)} placeholder="Transaction ID" style={{ marginBottom: 8 }} />
-              <input className="input" type="number" min="0" step="0.01" value={complaint.transactionAmount} onChange={(e) => setC("transactionAmount", e.target.value)} placeholder="Amount (GHS)" style={{ marginBottom: 8 }} />
+              <input id="chat-transactionId" name="transactionId" aria-label="Transaction ID" className="input" value={complaint.transactionId} onChange={(e) => setC("transactionId", e.target.value)} placeholder="Transaction ID" style={{ marginBottom: 8 }} />
+              <input id="chat-transactionAmount" name="transactionAmount" aria-label="Amount (GHS)" className="input" type="number" min="0" step="0.01" value={complaint.transactionAmount} onChange={(e) => setC("transactionAmount", e.target.value)} placeholder="Amount (GHS)" style={{ marginBottom: 8 }} />
               {isDataOrAirtime && (
                 <input
+                  id="chat-requestedData"
+                  name="requestedData"
+                  aria-label="Data or airtime requested"
                   className="input"
                   value={complaint.requestedData}
                   onChange={(e) => setC("requestedData", e.target.value)}
@@ -228,11 +231,11 @@ export default function ChatWidget() {
                   style={{ marginBottom: 8 }}
                 />
               )}
-              <input className="input" value={complaint.beneficiary} onChange={(e) => setC("beneficiary", e.target.value)} placeholder="Recipient / beneficiary" style={{ marginBottom: 8 }} />
-              <input className="input" type="datetime-local" value={complaint.transactionAt} onChange={(e) => setC("transactionAt", e.target.value)} style={{ marginBottom: 8 }} />
-              <input className="input" value={complaint.orderReference} onChange={(e) => setC("orderReference", e.target.value)} placeholder="Order reference (if available)" style={{ marginBottom: 8 }} />
-              <textarea className="input" rows={2} value={complaint.transactionDetails} onChange={(e) => setC("transactionDetails", e.target.value)} placeholder="Transaction details" style={{ marginBottom: 8 }} />
-              <textarea className="input" rows={3} value={complaint.message} onChange={(e) => setC("message", e.target.value)} placeholder="Describe the complaint" style={{ marginBottom: 8 }} />
+              <input id="chat-beneficiary" name="beneficiary" aria-label="Recipient / beneficiary" className="input" value={complaint.beneficiary} onChange={(e) => setC("beneficiary", e.target.value)} placeholder="Recipient / beneficiary" style={{ marginBottom: 8 }} />
+              <input id="chat-transactionAt" name="transactionAt" aria-label="Transaction date and time" className="input" type="datetime-local" value={complaint.transactionAt} onChange={(e) => setC("transactionAt", e.target.value)} style={{ marginBottom: 8 }} />
+              <input id="chat-orderReference" name="orderReference" aria-label="Order reference (if available)" className="input" value={complaint.orderReference} onChange={(e) => setC("orderReference", e.target.value)} placeholder="Order reference (if available)" style={{ marginBottom: 8 }} />
+              <textarea id="chat-transactionDetails" name="transactionDetails" aria-label="Transaction details" className="input" rows={2} value={complaint.transactionDetails} onChange={(e) => setC("transactionDetails", e.target.value)} placeholder="Transaction details" style={{ marginBottom: 8 }} />
+              <textarea id="chat-message" name="message" aria-label="Complaint description" className="input" rows={3} value={complaint.message} onChange={(e) => setC("message", e.target.value)} placeholder="Describe the complaint" style={{ marginBottom: 8 }} />
               <button className="primary-btn" onClick={submitComplaint} disabled={complaintBusy}>
                 {complaintBusy ? "Submitting…" : "Submit complaint"}
               </button>
@@ -242,6 +245,10 @@ export default function ChatWidget() {
           <div className="chat-input-wrap">
             <input
               ref={inputRef}
+              id="chat-message-input"
+              name="chatMessage"
+              aria-label="Message Annette"
+              autoComplete="off"
               className="input"
               style={{ flex: 1 }}
               value={input}

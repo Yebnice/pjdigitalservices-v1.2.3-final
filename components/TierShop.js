@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
-import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, NetworkBadge, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork, phonePlaceholder, bulkPlaceholder, samplePhones, NETWORKS } from "./ui";
+import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, PriceBreakdown, NetworkBadge, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork, phonePlaceholder, bulkPlaceholder, samplePhones, NETWORKS } from "./ui";
 import { payAndFulfil } from "../lib/payment";
-import { withPaystackFee, businessMarkup } from "../lib/pricing";
+import { withPaystackFee, businessMarkup, previewBreakdown } from "../lib/pricing";
 import { TIERS, NETWORK_PAGES } from "../lib/agentProducts";
 
 /* ---------- shared helpers ---------- */
@@ -170,6 +170,7 @@ function TierSingleForm({ tierKey, tier, networkId, email, setEmail, loading, se
       email,
       tierKey,
       size,
+      expectedAmount: selected.checkoutPrice ?? undefined,
       onDone: (order, paidAmount) => onDone(order, paidAmount),
       onError,
     });
@@ -177,8 +178,8 @@ function TierSingleForm({ tierKey, tier, networkId, email, setEmail, loading, se
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Field label="Recipient phone number">
-        <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder={phonePlaceholder(networkId)} style={{ maxWidth: 260 }} />
+      <Field label="Recipient phone number" id="recipient-phone" name="recipientPhone">
+        <input className="input" value={phone} onChange={(e) => { setPhone(e.target.value); setNetworkConfirmed(false); }} placeholder={phonePlaceholder(networkId)} style={{ maxWidth: 260 }} type="tel" inputMode="tel" autoComplete="off" />
       </Field>
       <NetworkMismatchNotice
         network={networkId}
@@ -191,9 +192,14 @@ function TierSingleForm({ tierKey, tier, networkId, email, setEmail, loading, se
       <NoRefundNotice />
       <div style={{ maxWidth: 300 }}>
         {selected?.checkoutPrice != null && (
-          <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
-            Paystack processing fee included in the total below.
-          </p>
+          <div style={{ marginBottom: 12 }}>
+            <PriceBreakdown
+              productAmount={selected.price}
+              feeAmount={Math.round((selected.checkoutPrice - selected.price) * 100) / 100}
+              total={selected.checkoutPrice}
+              productLabel="Data bundle"
+            />
+          </div>
         )}
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
           {selected?.checkoutPrice != null
@@ -214,6 +220,7 @@ function EvdSingleForm({ networkId, email, setEmail, loading, setLoading, onDone
   const likelyNetwork = getLikelyNetwork(phone);
   const networkMismatch = Boolean(likelyNetwork && likelyNetwork !== networkId);
   const valid = phone.length >= 10 && Number(amount) > 0 && email.includes("@") && (!networkMismatch || networkConfirmed);
+  const breakdown = previewBreakdown(Number(amount) || 0, { orderType: "airtime", network: networkId });
 
   function submit() {
     setLoading(true);
@@ -223,6 +230,7 @@ function EvdSingleForm({ networkId, email, setEmail, loading, setLoading, onDone
       phone,
       email,
       airtimeAmount: Number(amount),
+      expectedAmount: breakdown.total || undefined,
       onDone: (order, paidAmount) => onDone(order, paidAmount),
       onError,
     });
@@ -240,17 +248,13 @@ function EvdSingleForm({ networkId, email, setEmail, loading, setLoading, onDone
         onAcknowledge={setNetworkConfirmed}
       />
       <Field label="Amount (GHS)">
-        <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10.00" type="number" />
+        <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10.00" type="number" inputMode="decimal" min="1" step="0.01" onWheel={(e) => e.currentTarget.blur()} />
       </Field>
       <EmailField email={email} setEmail={setEmail} />
       <NoRefundNotice />
-      {Number(amount) > 0 && (
-        <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
-          Includes a GHS {(withPaystackFee(Number(amount)) - Number(amount)).toFixed(2)} Paystack processing fee.
-        </p>
-      )}
+      <PriceBreakdown {...breakdown} productLabel="Airtime" />
       <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
-        Pay GHS {(amount ? withPaystackFee(Number(amount)) : 0).toFixed(2)} with Paystack
+        Pay GHS {breakdown.total.toFixed(2)} with Paystack
       </PrimaryButton>
     </div>
   );
@@ -275,6 +279,10 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
         email,
         tierKey,
         rows: rows.map((r) => ({ phone: r.phone, size: r.value })),
+        // Bulk data is summed from per-line catalogue prices that already include
+        // rounded markup, so allow up to half a pesewa of rounding drift per line.
+        expectedAmount: total > 0 ? withPaystackFee(total) : undefined,
+        expectedTolerance: 0.01 + 0.005 * rows.length,
         onDone: (order, paidAmount) => onDone(order, paidAmount),
         onError,
       });
@@ -284,6 +292,7 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
         network: networkId,
         email,
         rows: rows.map((r) => ({ phone: r.phone, amount: r.value })),
+        expectedAmount: total > 0 ? withPaystackFee(total) : undefined,
         onDone: (order, paidAmount) => onDone(order, paidAmount),
         onError,
       });
@@ -312,7 +321,7 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
             {mismatches.length} recipient number{mismatches.length === 1 ? "" : "s"} start with a prefix commonly associated with another network. Please confirm that each recipient is currently on {NETWORKS[networkId]?.label || networkId}. Ported numbers can keep their original prefix.
           </div>
           <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
-            <input type="checkbox" checked={networkConfirmed} onChange={(e) => setNetworkConfirmed(e.target.checked)} style={{ marginTop: 2 }} />
+            <input type="checkbox" name="networkConfirmed" checked={networkConfirmed} onChange={(e) => setNetworkConfirmed(e.target.checked)} style={{ marginTop: 2 }} />
             <span>I confirm the listed recipients are currently on {NETWORKS[networkId]?.label || networkId}.</span>
           </label>
         </div>
@@ -363,6 +372,10 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
         email,
         tierKey,
         rows: rows.map((r) => ({ phone: r.phone, size: r.value })),
+        // Bulk data is summed from per-line catalogue prices that already include
+        // rounded markup, so allow up to half a pesewa of rounding drift per line.
+        expectedAmount: total > 0 ? withPaystackFee(total) : undefined,
+        expectedTolerance: 0.01 + 0.005 * rows.length,
         onDone: (order, paidAmount) => onDone(order, paidAmount),
         onError,
       });
@@ -372,6 +385,7 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
         network: networkId,
         email,
         rows: rows.map((r) => ({ phone: r.phone, amount: r.value })),
+        expectedAmount: total > 0 ? withPaystackFee(total) : undefined,
         onDone: (order, paidAmount) => onDone(order, paidAmount),
         onError,
       });
@@ -403,7 +417,7 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
             {mismatches.length} recipient number{mismatches.length === 1 ? "" : "s"} start with a prefix commonly associated with another network. Please confirm that each recipient is currently on {NETWORKS[networkId]?.label || networkId}. Ported numbers can keep their original prefix.
           </div>
           <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
-            <input type="checkbox" checked={networkConfirmed} onChange={(e) => setNetworkConfirmed(e.target.checked)} style={{ marginTop: 2 }} />
+            <input type="checkbox" name="networkConfirmed" checked={networkConfirmed} onChange={(e) => setNetworkConfirmed(e.target.checked)} style={{ marginTop: 2 }} />
             <span>I confirm the listed recipients are currently on {NETWORKS[networkId]?.label || networkId}.</span>
           </label>
         </div>

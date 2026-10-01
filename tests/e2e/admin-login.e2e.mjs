@@ -1,0 +1,46 @@
+// End-to-end: admin sign-in with two-factor (TOTP), replay protection, session revocation
+// Run with: npm run test:e2e   (Node 22+; uses tests/e2e/loader to run the real app code against an in-memory database)
+import { fileURLToPath, pathToFileURL } from "node:url";
+const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const load = (rel) => import(pathToFileURL(ROOT + rel).href);
+import assert from "node:assert";
+process.env.NODE_ENV = "test"; process.env.ADMIN_SESSION_SECRET = "s".repeat(48);
+const crypto = await import("node:crypto");
+const PW = "correct horse battery staple";
+const { generateTotpSecret } = await import("../../lib/totp.js");
+const s0 = "ab12";
+const entry = { username: "kofi", role: "operator", passwordHash: `${s0}$${crypto.scryptSync(PW, s0, 32).toString("hex")}`, totpSecret: generateTotpSecret() };
+const salt = "ab12"; const nohash = `${salt}$${crypto.scryptSync("ama-password-123", salt, 32).toString("hex")}`;
+const setUsers = () => { process.env.ADMIN_USERS_JSON = JSON.stringify([entry, { username: "ama", role: "admin", passwordHash: nohash }]); };
+const totp = await load("lib/totp.js"); const memdb = await import("./loader/memdb.mjs");
+const auth = await load("lib/adminAuth.js");
+const login = (await load("pages/api/admin/login.js")).default;
+const me = (await load("pages/api/admin/me.js")).default;
+const out = []; const t = async (n, f) => { memdb.reset(); delete process.env.ADMIN_REQUIRE_2FA; delete process.env.ADMIN_TOTP_SECRET; setUsers(); try { await f(); out.push("PASS " + n); } catch (e) { out.push("FAIL " + n + " -> " + (e.stack||e.message).split("\n").slice(0,3).join(" | ")); } };
+const mkRes = () => ({ code: null, body: null, headers: {}, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; }, setHeader(k, v) { this.headers[k] = v; } });
+let ipn = 0; const doLogin = async (body, ip) => { const res = mkRes(); await login({ method: "POST", body, headers: { "x-forwarded-for": ip || `198.51.100.${(ipn++ % 200) + 1}` } }, res); return res; };
+const cookieOf = (res) => String(res.headers["Set-Cookie"] || "").split(";")[0];
+const actor = (cookie) => auth.adminSessionActor({ headers: { cookie, host: "h" } });
+const codeAt = (offset = 0) => totp.totpCode(entry.totpSecret, totp.totpCounter() + offset);
+console.error = () => {};
+
+await t("correct password + correct code signs in, with an MFA session", async () => { const r = await doLogin({ username: "kofi", password: PW, code: codeAt() }); assert.equal(r.code, 200, JSON.stringify(r.body)); assert.equal(r.body.twoFactor, true); const a = actor(cookieOf(r)); assert.equal(a.role, "operator"); assert.equal(a.mfa, true); });
+await t("correct password but NO code is refused with the generic message", async () => { const r = await doLogin({ username: "kofi", password: PW }); assert.equal(r.code, 401); assert.equal(r.body.error, "Invalid admin credentials or code."); assert.equal(r.headers["Set-Cookie"], undefined); });
+await t("correct password, WRONG code is refused", async () => { const bad = String((Number(codeAt()) + 1) % 1000000).padStart(6, "0"); const r = await doLogin({ username: "kofi", password: PW, code: bad }); assert.equal(r.code, 401); assert.equal(r.headers["Set-Cookie"], undefined); });
+await t("WRONG password with a valid code is refused, and the code is NOT consumed", async () => { const c = codeAt(); const r = await doLogin({ username: "kofi", password: "wrong wrong wrong", code: c }); assert.equal(r.code, 401); const ok = await doLogin({ username: "kofi", password: PW, code: c }); assert.equal(ok.code, 200, "the real owner can still use that code"); });
+await t("REPLAY: the same code cannot sign in twice", async () => { const c = codeAt(); assert.equal((await doLogin({ username: "kofi", password: PW, code: c })).code, 200); const again = await doLogin({ username: "kofi", password: PW, code: c }); assert.equal(again.code, 401); assert.ok(memdb.db.tables.audit_log.some((a) => /already used/.test(a.note || ""))); });
+await t("an OLDER code is refused after a newer one was used; the next one works", async () => { assert.equal((await doLogin({ username: "kofi", password: PW, code: codeAt(0) })).code, 200); assert.equal((await doLogin({ username: "kofi", password: PW, code: codeAt(-1) })).code, 401); assert.equal((await doLogin({ username: "kofi", password: PW, code: codeAt(1) })).code, 200); });
+await t("a code typed with a space ('123 456') works", async () => { const c = codeAt(); const r = await doLogin({ username: "kofi", password: PW, code: c.slice(0, 3) + " " + c.slice(3) }); assert.equal(r.code, 200); });
+await t("accounts WITHOUT a secret still sign in normally while 2FA is optional", async () => { const r = await doLogin({ username: "ama", password: "ama-password-123" }); assert.equal(r.code, 200); assert.equal(r.body.twoFactor, false); assert.equal(actor(cookieOf(r)).role, "admin"); });
+await t("ADMIN_REQUIRE_2FA=true: an account with no secret CANNOT sign in, and it is audited", async () => { process.env.ADMIN_REQUIRE_2FA = "true"; const r = await doLogin({ username: "ama", password: "ama-password-123" }); assert.equal(r.code, 403); assert.ok(/required/i.test(r.body.error)); assert.equal(r.headers["Set-Cookie"], undefined); assert.ok(memdb.db.tables.audit_log.some((a) => a.action === "admin_login_blocked_no_2fa")); });
+await t("ADMIN_REQUIRE_2FA=true: an account WITH a secret signs in normally", async () => { process.env.ADMIN_REQUIRE_2FA = "true"; assert.equal((await doLogin({ username: "kofi", password: PW, code: codeAt() })).code, 200); });
+await t("ENABLING 2FA ends sessions that were opened without it", async () => { const r = await doLogin({ username: "ama", password: "ama-password-123" }); const cookie = cookieOf(r); assert.equal(actor(cookie).role, "admin"); process.env.ADMIN_REQUIRE_2FA = "true"; assert.equal(actor(cookie), null); });
+await t("giving an account a secret ends its old non-MFA session", async () => { const r = await doLogin({ username: "ama", password: "ama-password-123" }); const cookie = cookieOf(r); assert.ok(actor(cookie)); const entry2 = { username: "ama", role: "admin", passwordHash: nohash, totpSecret: totp.generateTotpSecret() }; process.env.ADMIN_USERS_JSON = JSON.stringify([entry, entry2]); assert.equal(actor(cookie), null); });
+await t("a forged cookie claiming mfa:true cannot be made without the signing secret", async () => { const r = await doLogin({ username: "ama", password: "ama-password-123" }); const [payload, sig] = cookieOf(r).split("=")[1].split("."); const forged = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(payload, "base64url")), mfa: true })).toString("base64url"); assert.equal(actor(`pj_admin_session=${forged}.${sig}`), null); });
+await t("a garbled secret in the config fails CLOSED (nobody is let in via that account)", async () => { process.env.ADMIN_USERS_JSON = JSON.stringify([{ ...entry, totpSecret: "!!!not-base32!!!" }]); const r = await doLogin({ username: "kofi", password: PW, code: "123456" }); assert.equal(r.code, 401); assert.equal(r.headers["Set-Cookie"], undefined); });
+await t("shared-password mode + ADMIN_TOTP_SECRET: code required, then works", async () => { delete process.env.ADMIN_USERS_JSON; process.env.ADMIN_PASSWORD = "shared-password-xyz"; process.env.ADMIN_TOTP_SECRET = entry.totpSecret;
+  assert.equal((await doLogin({ username: "admin", password: "shared-password-xyz" })).code, 401); const r = await doLogin({ username: "admin", password: "shared-password-xyz", code: codeAt() }); assert.equal(r.code, 200); assert.equal(actor(cookieOf(r)).mfa, true); });
+await t("/api/admin/me reports mode and 2FA state", async () => { const r = await doLogin({ username: "kofi", password: PW, code: codeAt() }); const res = mkRes(); me({ method: "GET", headers: { cookie: cookieOf(r), host: "h" } }, res); assert.equal(res.body.mode, "accounts"); assert.equal(res.body.twoFactor, true); assert.equal(res.body.twoFactorAvailable, true);
+  delete process.env.ADMIN_USERS_JSON; process.env.ADMIN_PASSWORD = "shared-password-xyz"; const r2 = await doLogin({ username: "admin", password: "shared-password-xyz" }); const res2 = mkRes(); me({ method: "GET", headers: { cookie: cookieOf(r2), host: "h" } }, res2); assert.equal(res2.body.mode, "shared"); assert.equal(res2.body.twoFactor, false); });
+await t("audit log records sign-ins with two-factor and never the password or code", async () => { const c = codeAt(); await doLogin({ username: "kofi", password: PW, code: c }); await doLogin({ username: "kofi", password: "nope nope nope nope" }); const blob = JSON.stringify(memdb.db.tables.audit_log); assert.ok(blob.includes("with two-factor")); assert.ok(blob.includes("admin_login_failed")); assert.ok(!blob.includes(PW) && !blob.includes("nope nope") && !blob.includes(c)); });
+console.log(out.join("\n")); process.exit(out.some((x) => x.startsWith("FAIL")) ? 1 : 0);

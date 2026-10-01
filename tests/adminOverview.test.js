@@ -81,4 +81,11 @@ describe("computeOverview", () => {
   it("falls back to 7 days for an unknown range", () => {
     expect(computeOverview([], { range: "forever", now: NOW }).range).toBe("7d");
   });
+
+  it("does not count an order an admin closed without delivery as a failed delivery", () => {
+    const resolved = order({ status: "payment_verified", fulfilled: false, fulfillmentStatus: "resolved" });
+    const o = computeOverview([order(), resolved], { range: "7d", now: NOW, feeRate: FEE });
+    expect(o.counts.delivered).toBe(1);
+    expect(o.rates.fulfillment).toBe(100);
+  });
 });

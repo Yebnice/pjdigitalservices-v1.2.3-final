@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ORDER_FILTERS, fetchAllRows, normalizePageParams, parseIsoDate, sanitizeSearchTerm, toAdminOrder } from "../lib/adminOrders.js";
+import { ORDER_FILTERS, attentionCategory, attentionCounts, fetchAllRows, normalizePageParams, parseIsoDate, sanitizeSearchTerm, toAdminOrder } from "../lib/adminOrders.js";
 
 describe("toAdminOrder", () => {
   const order = {
@@ -106,5 +106,35 @@ describe("fetchAllRows", () => {
   it("stops at the safety cap", async () => {
     const rows = await fetchAllRows(pager(table(5000)), 1000, 2000);
     expect(rows.length).toBe(2000);
+  });
+});
+
+// Regression: the Orders tab showed "Customer paid GHS 510.00" for a GHS 5.10
+// order. orders.payment_amount is Paystack's figure in PESEWAS.
+describe("payment amount units", () => {
+  it("converts Paystack pesewas to cedis once, on the server", () => {
+    expect(toAdminOrder({ reference: "A", paymentAmount: 510 }).paymentAmountGhs).toBe(5.1);
+    expect(toAdminOrder({ reference: "B", paymentAmount: 2237 }).paymentAmountGhs).toBe(22.37);
+    expect(toAdminOrder({ reference: "C", paymentAmount: 10403 }).paymentAmountGhs).toBe(104.03);
+    expect(toAdminOrder({ reference: "D" }).paymentAmountGhs).toBeNull();
+  });
+});
+
+describe("needs-attention categories", () => {
+  it("separates customers who were charged from unpaid checkouts and from paid orders", () => {
+    expect(attentionCategory({ status: "payment_failed", failReason: "amount_mismatch" })).toBe("charged_rejected");
+    expect(attentionCategory({ status: "payment_failed", failReason: "currency_mismatch" })).toBe("charged_rejected");
+    expect(attentionCategory({ status: "pending" })).toBe("unpaid");
+    expect(attentionCategory({ status: "payment_pending" })).toBe("unpaid");
+    expect(attentionCategory({ status: "payment_verified", fulfillmentStatus: "ready" })).toBe("ready");
+    expect(attentionCategory({ status: "payment_verified", fulfillmentStatus: "queued_with_provider" })).toBe("queued");
+    expect(attentionCategory({ status: "payment_verified", fulfillmentStatus: "manual_review" })).toBe("retryable");
+    expect(attentionCategory({ status: "payment_verified", fulfillmentStatus: "failed" })).toBe("retryable");
+  });
+
+  it("counts only paid orders toward 'need a decision', not abandoned checkouts", () => {
+    const counts = attentionCounts([{ status: "pending" }, { status: "pending" }, { status: "payment_verified", fulfillmentStatus: "ready" }, { status: "payment_failed", failReason: "amount_mismatch" }]);
+    expect(counts.unpaid).toBe(2);
+    expect(counts.paidNeedingAction).toBe(2);
   });
 });

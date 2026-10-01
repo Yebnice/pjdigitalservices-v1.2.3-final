@@ -1,7 +1,7 @@
 import { AIRTELTIGO_PREFIXES, getLikelyNetwork, isLikelyAirtelTigoNumber, phonePlaceholder, bulkPlaceholder, samplePhones } from "../lib/networkValidation";
 import { getOrderStatusLabel } from "../lib/orderStatus";
-import { useEffect, useState } from "react";
-import { Loader2, Check, X, Bolt, Droplet, GraduationCap, Clock } from "lucide-react";
+import { Children, cloneElement, isValidElement, useEffect, useId, useState } from "react";
+import { Loader2, Check, X, Bolt, Droplet, Clock } from "lucide-react";
 
 export const NETWORKS = {
   mtn: { label: "MTN", color: "var(--gold)", initial: "M", logo: "/icons/networks/mtn.png" },
@@ -147,6 +147,7 @@ export function NetworkMismatchNotice({ network, phone, acknowledged, onAcknowle
       <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
         <input
           type="checkbox"
+          name="networkConfirmed"
           checked={Boolean(acknowledged)}
           onChange={(e) => onAcknowledge?.(e.target.checked)}
           style={{ marginTop: 2 }}
@@ -160,6 +161,28 @@ export function NetworkMismatchNotice({ network, phone, acknowledged, onAcknowle
 // Shown near the phone/account field on every purchase page — Techlink's
 // documented rule is that a wrong number is not refunded, so this needs to
 // be visible before checkout, not buried in a terms page.
+// "Price + processing fee = total", shown before the customer taps Pay so the
+// number on the Pay button never comes as a surprise. Feed it from
+// previewBreakdown() (lib/pricing.js), which uses the same formula as the server.
+export function PriceBreakdown({ productAmount, feeAmount, total, productLabel = "Price" }) {
+  const t = Number(total);
+  if (!Number.isFinite(t) || t <= 0) return null;
+  const money = (v) => `GHS ${Number(v || 0).toFixed(2)}`;
+  const row = { display: "flex", justifyContent: "space-between", gap: 12 };
+  return (
+    <div
+      aria-label="Price breakdown"
+      style={{ border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: 13, lineHeight: 1.6, background: "var(--surface-raised)", color: "var(--muted)" }}
+    >
+      <div style={row}><span>{productLabel}</span><span>{money(productAmount)}</span></div>
+      <div style={row}><span>Payment processing fee</span><span>{money(feeAmount)}</span></div>
+      <div style={{ ...row, borderTop: "1px solid var(--line-soft)", marginTop: 4, paddingTop: 4, color: "var(--text)", fontWeight: 600 }}>
+        <span>Total to pay</span><span>{money(t)}</span>
+      </div>
+    </div>
+  );
+}
+
 export function NoRefundNotice({ children }) {
   return (
     <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0, lineHeight: 1.5 }}>
@@ -187,19 +210,60 @@ export function BeforeYouBuyNotice() {
   );
 }
 
-export function Field({ label, children }) {
+const FORM_CONTROLS = new Set(["input", "select", "textarea"]);
+
+function slugifyName(text) {
+  const slug = String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return slug || "field";
+}
+
+// Finds the first <input>/<select>/<textarea> inside `children` (even when it
+// is wrapped in a layout <div>, e.g. an input next to a "Check" button) and
+// gives it an id + name unless it already has them. `found.id` reports the id
+// the control ended up with so the <label> can point at it.
+function wireControl(children, id, name, found) {
+  return Children.map(children, (child) => {
+    if (found.done || !isValidElement(child) || typeof child.type !== "string") return child;
+    if (FORM_CONTROLS.has(child.type)) {
+      found.done = true;
+      found.id = child.props.id || id;
+      const extra = {};
+      if (!child.props.id) extra.id = id;
+      if (!child.props.name) extra.name = name;
+      if (child.props.type === "email" && !child.props.autoComplete) extra.autoComplete = "email";
+      return cloneElement(child, extra);
+    }
+    if (child.props.children) {
+      return cloneElement(child, undefined, wireControl(child.props.children, id, name, found));
+    }
+    return child;
+  });
+}
+
+// Label + control. The label is tied to the control with htmlFor/id, and the
+// control gets an id and name automatically (useId keeps ids unique even when
+// the same form renders more than once). Pass `id` / `name` to override.
+export function Field({ label, children, id, name }) {
+  const autoId = useId();
+  const found = { done: false, id: id || autoId };
+  const fieldName = name || (typeof label === "string" ? slugifyName(label) : "field");
+  const wired = wireControl(children, id || autoId, fieldName, found);
   return (
     <div className="field">
-      <label>{label}</label>
-      {children}
+      <label htmlFor={found.done ? found.id : undefined}>{label}</label>
+      {wired}
     </div>
   );
 }
 
 export function EmailField({ email, setEmail }) {
   return (
-    <Field label="Your email (for the payment receipt)">
-      <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" type="email" />
+    <Field label="Your email (for the payment receipt)" name="email">
+      <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" type="email" autoComplete="email" />
     </Field>
   );
 }
@@ -332,7 +396,7 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
     ? Number(order.paystackFeeAmount)
     : (order.checkoutAmount != null ? Math.round((totalPaid - productPrice) * 100) / 100 : null);
   const showFeeBreakdown = feePaid != null && feePaid > 0;
-  const showRecipient = order.phone && order.phone !== "—" && !String(order.phone).includes("recipient");
+  const showRecipient = order.phone && order.phone !== "—" && order.phone !== "N/A" && !String(order.phone).includes("recipient");
   return (
     <div className="card" style={{ padding: "32px 28px", textAlign: "center", maxWidth: 420, margin: "0 auto" }}>
       <div
@@ -361,6 +425,8 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
         <ReceiptRow label="Order number" value={order.reference} />
         <ReceiptRow label="Product" value={label} />
         {showRecipient && <ReceiptRow label="Recipient" value={order.phone} />}
+        {order.result?.token && <ReceiptRow label="Electricity token" value={String(order.result.token)} />}
+        {order.result?.units && <ReceiptRow label="Units" value={String(order.result.units)} />}
         {showFeeBreakdown ? (
           <>
             <ReceiptRow label="Product price" value={`GHS ${productPrice.toFixed(2)}`} />
@@ -403,7 +469,7 @@ export function OrderList({ items }) {
               <div>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{labelFor[o.orderType] || o.orderType}</div>
                 <div style={{ fontSize: 12, color: "var(--muted-dim)", marginTop: 2 }}>
-                  {o.phone} · Ref {o.reference} · {new Date(o.createdAt).toLocaleString()}
+                  {o.phone ? `${o.phone} · ` : ""}Ref {o.reference} · {new Date(o.createdAt).toLocaleString()}
                 </div>
               </div>
             </div>
@@ -412,8 +478,12 @@ export function OrderList({ items }) {
               {o.customerProductAmount != null && (
                 <div style={{ fontSize: 11, color: "var(--muted-dim)", marginTop: 2 }}>
                   Product GHS {Number(o.customerProductAmount).toFixed(2)}
-                  {" · "}Margin GHS {Number(o.businessMarkupAmount ?? 0).toFixed(2)}
                   {" · "}Fee GHS {Number(o.paystackFeeAmount ?? 0).toFixed(2)}
+                </div>
+              )}
+              {o.result?.token && (
+                <div style={{ fontSize: 12, marginTop: 2 }}>
+                  Token: <strong style={{ userSelect: "all" }}>{String(o.result.token)}</strong>
                 </div>
               )}
               <div

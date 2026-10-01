@@ -28,8 +28,9 @@ describe("pricing policy", () => {
   });
 
   it("computes the Paystack fee consistently from the gross checkout amount", () => {
+    // Paystack's formula: Price / (1 - 0.0195) + 0.01
     const total = withPaystackFee(100);
-    expect(total).toBeCloseTo(101.99, 2);
+    expect(total).toBeCloseTo(102.0, 2);
     const pricing = getOrderPricing({
       providerCost: 100,
       customerBaseAmount: 100,
@@ -37,7 +38,7 @@ describe("pricing policy", () => {
       network: "ecg",
     });
     expect(pricing.customerProductAmount).toBe(102);
-    expect(pricing.checkoutAmount).toBeCloseTo(104.03, 2);
+    expect(pricing.checkoutAmount).toBeCloseTo(104.04, 2);
     expect(pricing.checkoutAmount).toBeGreaterThan(pricing.customerProductAmount);
   });
 
@@ -74,5 +75,27 @@ describe("pricing policy", () => {
     for (const { file, mustContain } of checks) {
       expect(read(file)).toContain(mustContain);
     }
+  });
+});
+
+// Regression: a failed airtime-fee lookup silently assumed a 0% Techlink fee,
+// so the recorded cost was too low and airtime profit was overstated.
+describe("Techlink airtime fee resolution", () => {
+  it("reads either form of Techlink's fee response", async () => {
+    const { resolveAirtimeFeeRate } = await import("../lib/pricing.js");
+    expect(resolveAirtimeFeeRate({ percent: 2, rate: 0.02 })).toBe(0.02);
+    expect(resolveAirtimeFeeRate({ percent: 2 })).toBe(0.02);
+    expect(resolveAirtimeFeeRate({ rate: 0.03 })).toBe(0.03);
+    expect(resolveAirtimeFeeRate({ rate: 0 })).toBe(0);
+  });
+
+  it("returns null for anything unusable instead of guessing zero", async () => {
+    const { resolveAirtimeFeeRate } = await import("../lib/pricing.js");
+    for (const bad of [{}, null, undefined, { percent: "abc" }, { rate: 5 }, { percent: -1 }]) expect(resolveAirtimeFeeRate(bad)).toBeNull();
+  });
+
+  it("falls back to the documented 2% rather than 0%", async () => {
+    const { DEFAULT_AIRTIME_PROVIDER_FEE_RATE } = await import("../lib/pricing.js");
+    expect(DEFAULT_AIRTIME_PROVIDER_FEE_RATE).toBe(0.02);
   });
 });

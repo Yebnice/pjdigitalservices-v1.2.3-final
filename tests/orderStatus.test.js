@@ -26,4 +26,17 @@ describe("customer order status labels", () => {
     expect(getOrderStatusLabel({ status: "failed", fulfillmentStatus: "pending" }))
       .toBe("Payment failed");
   });
+
+  // Regression: "payment_failed" fell through to "Processing", so a customer
+  // Paystack had charged (amount/currency mismatch) was told nothing useful.
+  it("never tells a charged-but-rejected customer their order is just 'Processing'", () => {
+    expect(getOrderStatusLabel({ status: "payment_failed", failReason: "amount_mismatch" })).toBe("Payment received — under review");
+    expect(getOrderStatusLabel({ status: "payment_failed", failReason: "currency_mismatch" })).toBe("Payment received — under review");
+    expect(getOrderStatusLabel({ status: "payment_failed", failReason: "declined" })).toBe("Payment failed");
+    expect(getOrderStatusLabel({ status: "payment_failed", failReason: "payment_abandoned" })).toBe("Payment cancelled");
+  });
+
+  it("labels an order an admin closed without delivery", () => {
+    expect(getOrderStatusLabel({ status: "payment_verified", fulfillmentStatus: "resolved" })).toBe("Closed by support");
+  });
 });

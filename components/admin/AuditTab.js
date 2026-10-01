@@ -20,7 +20,7 @@ export default function AuditTab({ entries }) {
     <div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
         <SearchBox value={q} onChange={setQ} placeholder="Search actor, reference or note…" style={{ flex: 1, minWidth: 220 }} />
-        <select className="input" style={{ width: "auto" }} value={action} onChange={(e) => setAction(e.target.value)}>
+        <select name="action" aria-label="Filter by action" className="input" style={{ width: "auto" }} value={action} onChange={(e) => setAction(e.target.value)}>
           <option value="">All actions</option>
           {actions.map((a) => <option key={a} value={a}>{a.replace(/_/g, " ")}</option>)}
         </select>

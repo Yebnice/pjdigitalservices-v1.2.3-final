@@ -59,7 +59,7 @@ function OrderRow({ order, open, onToggle }) {
           <Detail label="Business margin">{order.businessMarkupAmount != null ? ghs(order.businessMarkupAmount) : null}</Detail>
           <Detail label="Paystack fee (charged)">{order.paystackFeeAmount != null ? ghs(order.paystackFeeAmount) : null}</Detail>
           <Detail label="Techlink cost">{order.providerCost != null ? ghs(order.providerCost) : null}</Detail>
-          <Detail label="Customer paid">{order.paymentAmount != null ? ghs(order.paymentAmount) : null}</Detail>
+          <Detail label="Customer paid">{order.paymentAmountGhs != null ? ghs(order.paymentAmountGhs) : null}</Detail>
           <Detail label="Created">{when(order.createdAt)}</Detail>
           <Detail label="Payment verified">{when(order.paymentVerifiedAt)}</Detail>
           <Detail label="Delivered">{when(order.fulfilledAt)}</Detail>

@@ -82,6 +82,9 @@ export default function Layout({ children }) {
       .catch(() => {});
   }, [router.pathname]);
 
+  // A logged-in customer has no use for "Create Account".
+  const accountLinks = customer ? ACCOUNT_LINKS.filter((l) => l.href !== "/register") : ACCOUNT_LINKS;
+
   async function adminSignOut() {
     await fetch("/api/admin/logout", { method: "POST" });
     setIsAdmin(false);
@@ -89,8 +92,11 @@ export default function Layout({ children }) {
   }
 
   async function customerSignOut() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {}
     setCustomer(null);
+    setMobileOpen(false);
     router.push("/");
   }
 
@@ -124,7 +130,7 @@ export default function Layout({ children }) {
             Log in
           </Link>
         )}
-        <NavList links={ACCOUNT_LINKS} router={router} />
+        <NavList links={accountLinks} router={router} />
 
         <div className="sidebar-footer">
           <NavList links={LEGAL_LINKS} router={router} />
@@ -154,6 +160,9 @@ export default function Layout({ children }) {
             <div className="brand-word"><span className="pj">Pj</span><span className="rest">DigitalServices</span></div>
           </Link>
           <button
+            type="button"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((v) => !v)}
             style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 8, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text)" }}
           >
@@ -162,7 +171,25 @@ export default function Layout({ children }) {
         </div>
         {mobileOpen && (
           <nav className="mobile-nav">
-            <NavList links={[...MAIN_LINKS, ...ACCOUNT_LINKS]} router={router} onNavigate={() => setMobileOpen(false)} />
+            <NavList links={MAIN_LINKS} router={router} onNavigate={() => setMobileOpen(false)} />
+            {/* The sidebar (which holds log in / log out) is hidden on phones, so the
+                mobile menu has to offer them itself. */}
+            {customer ? (
+              <button
+                onClick={customerSignOut}
+                className="nav-item"
+                style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", cursor: "pointer" }}
+              >
+                <LogOut size={16} />
+                Log out ({customer.name?.split(" ")[0] || customer.username})
+              </button>
+            ) : (
+              <Link href="/login" className={`nav-item ${router.pathname === "/login" ? "active" : ""}`} onClick={() => setMobileOpen(false)}>
+                <LogIn size={16} />
+                Log in
+              </Link>
+            )}
+            <NavList links={[...accountLinks, ...LEGAL_LINKS]} router={router} onNavigate={() => setMobileOpen(false)} />
             {isAdmin && (
               <button
                 onClick={() => { setMobileOpen(false); adminSignOut(); }}

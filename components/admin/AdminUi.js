@@ -16,7 +16,7 @@ export function TabButton({ active, onClick, children, badge }) {
 
 export function SearchBox({ value, onChange, placeholder, style }) {
   return (
-    <input className="input" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={{ maxWidth: 360, ...style }} />
+    <input name="search" aria-label={placeholder || "Search"} className="input" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={{ maxWidth: 360, ...style }} />
   );
 }
 
@@ -85,21 +85,35 @@ export function BarChart({ points, format }) {
 
 // A proper confirmation dialog for actions that need an audit note. The old
 // window.prompt() silently did nothing when the note was under 5 characters.
-export function NoteDialog({ open, title, message, confirmLabel = "Confirm", danger, onConfirm, onCancel }) {
+export function NoteDialog({ open, title, message, warning, confirmLabel = "Confirm", danger, options = [], onConfirm, onCancel }) {
   const [note, setNote] = useState("");
-  useEffect(() => { if (open) setNote(""); }, [open]);
+  const [picked, setPicked] = useState({});
+  useEffect(() => {
+    if (open) {
+      setNote("");
+      setPicked(Object.fromEntries(options.map((o) => [o.key, o.defaultChecked !== false])));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   if (!open) return null;
   const ok = note.trim().length >= 5;
   return (
     <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
-      <div className="card" style={{ padding: 20, maxWidth: 460, width: "100%", background: "var(--surface, #fff)" }}>
+      <div className="card" style={{ padding: 20, maxWidth: 480, width: "100%", background: "var(--surface, #fff)", maxHeight: "92vh", overflowY: "auto" }}>
         <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>{title}</div>
-        <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 12px", lineHeight: 1.5 }}>{message}</p>
-        <textarea className="input" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Audit note (at least 5 characters) — recorded with your name" style={{ resize: "vertical" }} autoFocus />
-        <div style={{ fontSize: 11, color: ok ? "var(--muted-dim)" : "#b45309", margin: "4px 0 12px" }}>{ok ? "This note is saved to the audit log." : `${Math.max(0, 5 - note.trim().length)} more character(s) needed`}</div>
+        <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 10px", lineHeight: 1.5 }}>{message}</p>
+        {warning && <p style={{ fontSize: 12, color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 10px", margin: "0 0 10px", lineHeight: 1.5 }}>{warning}</p>}
+        <textarea id="audit-note" name="note" aria-label="Audit note" className="input" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (at least 5 characters) — saved to the audit log with your name" style={{ resize: "vertical" }} autoFocus />
+        <div style={{ fontSize: 11, color: ok ? "var(--muted-dim)" : "#b45309", margin: "4px 0 10px" }}>{ok ? "This note is saved to the audit log." : `${Math.max(0, 5 - note.trim().length)} more character(s) needed`}</div>
+        {options.map((o) => (
+          <label key={o.key} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, margin: "0 0 10px", cursor: "pointer" }}>
+            <input type="checkbox" name={o.key} checked={Boolean(picked[o.key])} onChange={(e) => setPicked((prev) => ({ ...prev, [o.key]: e.target.checked }))} style={{ marginTop: 3 }} />
+            <span>{o.label}</span>
+          </label>
+        ))}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button className="nav-item" style={{ width: "auto", padding: "6px 14px" }} onClick={onCancel}>Cancel</button>
-          <button className="primary-btn" style={{ width: "auto", padding: "6px 16px", background: danger ? "#dc2626" : undefined }} disabled={!ok} onClick={() => onConfirm(note.trim())}>{confirmLabel}</button>
+          <button className="primary-btn" style={{ width: "auto", padding: "6px 16px", background: danger ? "#dc2626" : undefined }} disabled={!ok} onClick={() => onConfirm(note.trim(), picked)}>{confirmLabel}</button>
         </div>
       </div>
     </div>
