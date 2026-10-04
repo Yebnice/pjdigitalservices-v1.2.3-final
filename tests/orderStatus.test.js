@@ -33,10 +33,18 @@ describe("customer order status labels", () => {
     expect(getOrderStatusLabel({ status: "payment_failed", failReason: "amount_mismatch" })).toBe("Payment received — under review");
     expect(getOrderStatusLabel({ status: "payment_failed", failReason: "currency_mismatch" })).toBe("Payment received — under review");
     expect(getOrderStatusLabel({ status: "payment_failed", failReason: "declined" })).toBe("Payment failed");
-    expect(getOrderStatusLabel({ status: "payment_failed", failReason: "payment_abandoned" })).toBe("Payment cancelled");
+    expect(getOrderStatusLabel({ status: "payment_failed", failReason: "payment_abandoned" })).toBe("Payment abandoned");
   });
 
   it("labels an order an admin closed without delivery", () => {
     expect(getOrderStatusLabel({ status: "payment_verified", fulfillmentStatus: "resolved" })).toBe("Closed by support");
+  });
+});
+
+
+describe("terminal payment states do not look pending", () => {
+  it("labels abandoned and failed payments as terminal", () => {
+    expect(getOrderStatusLabel({ status: "payment_failed", failReason: "payment_abandoned", fulfillmentStatus: "not_applicable" })).toBe("Payment abandoned");
+    expect(getOrderStatusLabel({ status: "payment_failed", failReason: "failed", fulfillmentStatus: "not_applicable" })).toBe("Payment failed");
   });
 });
