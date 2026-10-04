@@ -422,7 +422,7 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
           padding: "16px 0", marginBottom: 20,
         }}
       >
-        <ReceiptRow label="Order number" value={order.reference} />
+        <ReceiptRow label="Order number" value={order.orderNo || order.reference} />
         <ReceiptRow label="Product" value={label} />
         {showRecipient && <ReceiptRow label="Recipient" value={order.phone} />}
         {order.result?.token && <ReceiptRow label="Electricity token" value={String(order.result.token)} />}
