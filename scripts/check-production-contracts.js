@@ -42,8 +42,11 @@ if (!pricing.includes("hasExplicitFixed") || !pricing.includes("hasExplicitFixed
 }
 
 const ui = read("components/ui.js");
-if (!ui.includes("order.orderNo || order.reference")) {
-  failures.push("components/ui.js: purchase receipt must display the customer-facing order number");
+if (!ui.includes("const customerOrderNumber = order.orderNo || null")) {
+  failures.push("components/ui.js: purchase receipt must use the customer-facing order number");
+}
+if (ui.includes("order.orderNo || order.reference")) {
+  failures.push("components/ui.js: purchase receipt must never fall back to the Paystack reference as the customer order number");
 }
 if (!ui.includes("Back to home")) {
   failures.push("components/ui.js: purchase receipt must provide a Back to home action");
