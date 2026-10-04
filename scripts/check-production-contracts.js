@@ -41,6 +41,14 @@ if (!pricing.includes("hasExplicitFixed") || !pricing.includes("hasExplicitFixed
   failures.push("lib/pricing.js: fixed-only markup must suppress the default percentage");
 }
 
+const ui = read("components/ui.js");
+if (!ui.includes("order.orderNo || order.reference")) {
+  failures.push("components/ui.js: purchase receipt must display the customer-facing order number");
+}
+if (!ui.includes("Back to home")) {
+  failures.push("components/ui.js: purchase receipt must provide a Back to home action");
+}
+
 const orderTrack = read("pages/api/orders/track.js");
 if (!orderTrack.includes('req.method !== "POST"') || orderTrack.includes("req.query.reference") || orderTrack.includes("req.query.email")) {
   failures.push("pages/api/orders/track.js: customer credentials must use POST body");
