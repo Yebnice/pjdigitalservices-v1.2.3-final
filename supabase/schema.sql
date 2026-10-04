@@ -1,10 +1,10 @@
 -- PjDigitalServices production database schema.
--- Version: v1.3.6
+-- Version: v1.4.5
 --
 -- SOURCE OF TRUTH:
 -- This file matches the current application code on the main branch.
--- It is intentionally idempotent: it creates missing tables/columns/indexes
--- and does not delete or overwrite existing business data.
+-- It is intentionally idempotent: it creates missing tables/columns/indexes,
+-- restores required security policies/triggers, and does not delete or overwrite existing business data.
 --
 -- Existing deployments:
 --   1) Paste/run this whole file in Supabase SQL Editor.
@@ -12,7 +12,8 @@
 --
 -- Security model:
 -- The application uses server-side Supabase access only. RLS is enabled and
--- no public table policies are created here.
+-- explicit restrictive deny policies protect server-only tables even if a
+-- future migration accidentally grants Data API privileges.
 
 create extension if not exists pgcrypto;
 
@@ -300,9 +301,6 @@ create index if not exists feedback_transaction_id_idx
 create index if not exists reviews_created_at_idx
   on reviews (created_at desc);
 
-create index if not exists reviews_order_reference_idx
-  on reviews (order_reference);
-
 -- One review per order, enforced by the database (see migration_v1_3_6.sql).
 create unique index if not exists reviews_order_reference_uq
   on reviews (order_reference);
@@ -322,12 +320,43 @@ create index if not exists app_settings_updated_at_idx
 -- ROW LEVEL SECURITY
 -- ============================================================
 
+alter table paystack_webhook_events enable row level security;
 alter table orders enable row level security;
 alter table customers enable row level security;
 alter table feedback enable row level security;
 alter table reviews enable row level security;
 alter table audit_log enable row level security;
 alter table app_settings enable row level security;
+
+do $
+declare
+  t text;
+  policy_name constant text := 'deny_client_access';
+begin
+  foreach t in array array[
+    'paystack_webhook_events',
+    'orders',
+    'customers',
+    'feedback',
+    'reviews',
+    'audit_log',
+    'app_settings'
+  ]
+  loop
+    if not exists (
+      select 1 from pg_policies
+      where schemaname = 'public'
+        and tablename = t
+        and policyname = policy_name
+    ) then
+      execute format(
+        'create policy %I on public.%I as restrictive for all to public using (false) with check (false)',
+        policy_name, t
+      );
+    end if;
+  end loop;
+end
+$;
 
 
 -- ============================================================
@@ -392,3 +421,28 @@ from information_schema.columns
 where table_schema = 'public'
   and table_name = 'orders'
 order by ordinal_position;
+
+
+-- Database-level delivery lock: even direct SQL writes cannot move an order
+-- into provider-processing states without recorded payment evidence.
+create or replace function public.orders_require_payment_before_delivery()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.fulfillment_status in ('processing', 'queued_with_provider')
+     and (tg_op = 'INSERT' or old.fulfillment_status is distinct from new.fulfillment_status) then
+    if new.status is distinct from 'payment_verified' or new.payment_verified_at is null then
+      raise exception 'Order % cannot be sent to the provider: no verified payment is recorded for it.', new.reference
+        using errcode = '23514';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists orders_require_payment_before_delivery on public.orders;
+create trigger orders_require_payment_before_delivery
+  before insert or update on public.orders
+  for each row execute function public.orders_require_payment_before_delivery();

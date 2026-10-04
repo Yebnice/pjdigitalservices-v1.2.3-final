@@ -10,8 +10,10 @@ from pg_class c join pg_namespace n on n.oid = c.relnamespace
 where n.nspname = 'public' and c.relkind = 'r'
 order by c.relname;
 
--- 2. Policies. EXPECTED: ZERO rows. (Any row here is a rule that lets a public
---    role through. Investigate every one.)
+-- 2. Policies. EXPECTED: exactly one restrictive deny_client_access policy
+--    on each server-only table. These policies do not grant access; they are
+--    defense-in-depth against accidental future Data API table grants.
+--    Investigate any policy with a permissive mode or a non-false condition.
 select schemaname, tablename, policyname, roles, cmd, qual, with_check
 from pg_policies where schemaname = 'public';
 
