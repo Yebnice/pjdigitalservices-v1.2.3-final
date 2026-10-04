@@ -369,6 +369,8 @@ $;
 update orders
 set fulfillment_status = case
   when fulfilled = true then 'fulfilled'
+  when status = 'payment_failed' and fail_reason = 'payment_abandoned' then 'not_applicable'
+  when status = 'payment_failed' then 'not_applicable'
   when fulfillment_status is null then 'pending'
   else fulfillment_status
 end
@@ -385,7 +387,7 @@ where fulfillment_attempts is null;
 update orders
 set
   status = 'payment_failed',
-  fulfillment_status = 'pending'
+  fulfillment_status = 'not_applicable'
 where fulfilled = false
   and status = 'failed'
   and fulfillment_status = 'failed'
