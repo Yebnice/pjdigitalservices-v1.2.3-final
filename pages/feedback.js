@@ -46,7 +46,7 @@ export default function FeedbackPage() {
       {isDataOrAirtime && <Field label="Recipient / beneficiary"><input className="input" value={beneficiary} onChange={e=>setBeneficiary(e.target.value)} placeholder="Recipient phone number" /></Field>}
       {!isDataOrAirtime && <Field label="Recipient / beneficiary (if applicable)"><input className="input" value={beneficiary} onChange={e=>setBeneficiary(e.target.value)} placeholder="Meter, smartcard, account, phone or beneficiary" /></Field>}
       <Field label="Transaction date & time"><input className="input" value={transactionAt} onChange={e=>setTransactionAt(e.target.value)} type="datetime-local" /></Field>
-      <Field label="Order reference (if available)"><input className="input" value={orderReference} onChange={e=>setOrderReference(e.target.value)} placeholder="TL..." /></Field>
+      <Field label="Order number (if available)"><input className="input" value={orderReference} onChange={e=>setOrderReference(e.target.value)} placeholder="PJ-XXXXXXXX" /></Field>
       <Field label="Complaint category"><select className="input" value={category} onChange={e=>setCategory(e.target.value)}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></Field>
       <Field label="Transaction details"><textarea className="input" value={transactionDetails} onChange={e=>setTransactionDetails(e.target.value)} placeholder="What happened? Include any relevant transaction detail." rows={3} /></Field>
       <Field label="Your complaint"><textarea className="input" value={message} onChange={e=>setMessage(e.target.value)} placeholder="Tell us what you expected and what happened." rows={4} style={{ resize: "vertical", fontFamily: "inherit" }} /></Field>

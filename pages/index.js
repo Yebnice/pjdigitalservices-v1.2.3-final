@@ -87,7 +87,7 @@ export default function Home() {
             Every order is confirmed against your actual payment before anything is sent — so delivery is
             fast without cutting corners on security. Already bought from us? Check your order any
             time from <Link href="/dashboard" style={{ color: "var(--price)" }}>My Orders</Link> using
-            your order reference and the email you checked out with.
+            your order number (it starts with PJ-) and the email you checked out with.
           </p>
         </div>
       </div>

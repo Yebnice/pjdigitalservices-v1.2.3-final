@@ -80,8 +80,8 @@ export default function ReviewsPage() {
           <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
             Reviews are tied to a real completed order, so only actual purchasers can leave one.
           </p>
-          <Field label="Order reference">
-            <input className="input" value={orderReference} onChange={(e) => setOrderReference(e.target.value)} placeholder="TL..." />
+          <Field label="Order number (or reference)">
+            <input className="input" value={orderReference} onChange={(e) => setOrderReference(e.target.value)} placeholder="PJ-XXXXXXXX" />
           </Field>
           <Field label="Email used at checkout">
             <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" type="email" />

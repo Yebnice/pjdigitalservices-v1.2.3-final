@@ -48,9 +48,9 @@ const FAQS = [
     items: [
       { q: "What payment methods can I use?", a: "Card, mobile money, or bank transfer — all through Paystack's secure checkout." },
       { q: "Can I get a refund for a wrong number?", a: "No — please double-check the number before paying. Wrong numbers, duplicate orders, and lines with an outstanding balance can't be refunded, in line with the networks' own rules." },
-      { q: "How do I check my order status?", a: "Use the My Orders or Track Order page with the order reference and the checkout email — no account is required." },
+      { q: "How do I check my order status?", a: "Use the My Orders or Track Order page with your order number (it starts with PJ-) and the checkout email — no account is required." },
       { q: "What should I check before buying data or airtime?", a: "Make sure you don't owe any amount on the line you're topping up — an outstanding balance means the bundle won't be delivered, and the order isn't refunded. Turbonet and Broadband SIMs aren't eligible for data bundles. Don't place duplicate orders — duplicates aren't refunded. And double-check the phone number before paying — a wrong number can't be refunded either." },
-      { q: "Something went wrong with my order — what do I do?", a: "Go to the Feedback page and include your order reference. We'll look into it." },
+      { q: "Something went wrong with my order — what do I do?", a: "Go to the Feedback page and include your order number. We'll look into it." },
       { q: "Someone contacted me asking for my password or a code — is that really you?", a: "No. We will never call, text, email, or WhatsApp you asking for your password, PIN, mobile money PIN, or a one-time code. If anyone claiming to be PjDigitalServices asks for these, it's a scam — don't share anything, and report it through the Feedback page." },
     ],
   },
