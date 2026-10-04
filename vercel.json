@@ -5,11 +5,5 @@
       "**": false,
       "main": true
     }
-  },
-  "crons": [
-    {
-      "path": "/api/jobs/fulfill",
-      "schedule": "17 6 * * *"
-    }
-  ]
+  }
 }
