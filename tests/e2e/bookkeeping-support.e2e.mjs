@@ -186,5 +186,48 @@ await tt("HEALTH: the dashboard learns how many refund/dispute notices arrived i
   const h = await call("pages/api/admin/health.js", "op", "operator"); assert.equal(h.code, 200); assert.equal(h.body.reversals.last30d, 1);
 });
 
+
+await tt("BOOKS: a successful Paystack charge with an amount mismatch is recorded as charged-but-rejected, not payment_failed", async () => {
+  withNo("TLCRJ001", "PJ-CRJ12345", { amount: 2, checkout_amount: 2.06, customer_product_amount: 2, business_markup_amount: 0 });
+  world.paystack.TLCRJ001 = { status: "success", amount: 205, currency: "GHS", fees: 4, domain: "live", id: 987654321, paid_at: minsAgo(2) };
+  const { verifyAndPrepareOrder } = await load("lib/orderProcessing.js");
+  const r = await verifyAndPrepareOrder("TLCRJ001");
+  assert.equal(r.kind, "failed");
+  assert.equal(get("TLCRJ001").status, "payment_rejected_after_charge");
+  assert.equal(get("TLCRJ001").failReason, "amount_mismatch");
+  assert.equal(get("TLCRJ001").paymentAmount, 205);
+  assert.equal(get("TLCRJ001").paystackTransactionId, "987654321");
+  assert.ok(get("TLCRJ001").paymentChargedAt);
+  assert.equal(get("TLCRJ001").fulfillmentStatus, "not_applicable");
+  assert.equal(get("TLCRJ001").paymentVerifiedAt, null);
+  assert.equal(world.techlinkCalls.length, 0);
+});
+
+await tt("BOOKS: a successful Paystack charge without a currency is rejected as charged money, never accepted as GHS", async () => {
+  withNo("TLCUR001", "PJ-CUR12345", { amount: 2, checkout_amount: 2.06 });
+  world.paystack.TLCUR001 = { status: "success", amount: 206, fees: 4, domain: "live", id: 987654322, paid_at: minsAgo(1) };
+  const { verifyAndPrepareOrder } = await load("lib/orderProcessing.js");
+  const r = await verifyAndPrepareOrder("TLCUR001");
+  assert.equal(r.status, "currency_mismatch");
+  assert.equal(get("TLCUR001").status, "payment_rejected_after_charge");
+  assert.equal(get("TLCUR001").paymentAmount, 206);
+  assert.equal(get("TLCUR001").paymentVerifiedAt, null);
+  assert.equal(get("TLCUR001").fulfillmentStatus, "not_applicable");
+  assert.equal(world.techlinkCalls.length, 0);
+});
+
+await tt("BOOKS: a non-genuine successful response does not record its amount as customer money", async () => {
+  withNo("TLNG001", "PJ-NG123456", { amount: 2, checkout_amount: 2.06 });
+  world.paystack.TLNG001 = { status: "success", amount: 206, currency: "GHS", domain: "live", id: 987654323, reference: "SOME-OTHER-REFERENCE" };
+  const { verifyAndPrepareOrder } = await load("lib/orderProcessing.js");
+  const r = await verifyAndPrepareOrder("TLNG001");
+  assert.equal(r.status, "reference_mismatch");
+  assert.equal(get("TLNG001").status, "payment_failed");
+  assert.equal(get("TLNG001").paymentAmount, null);
+  assert.equal(get("TLNG001").paymentVerifiedAt, null);
+  assert.equal(get("TLNG001").fulfillmentStatus, "not_applicable");
+  assert.equal(world.techlinkCalls.length, 0);
+});
+
 console.log(out.join("\n"));
 if (out.some((l) => l.startsWith("FAIL"))) process.exitCode = 1;
