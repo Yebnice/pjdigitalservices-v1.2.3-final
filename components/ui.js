@@ -445,7 +445,17 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
             ? "A confirmation email is on its way — we'll email you again once it's actually delivered. Keep the order number above for reference."
             : "If it hasn't arrived within a couple of hours, contact us via the Feedback page with the order number above — no need to pay again."}
       </p>
-      <PrimaryButton onClick={onNewOrder}>Make another purchase</PrimaryButton>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <PrimaryButton onClick={onNewOrder}>Make another purchase</PrimaryButton>
+        <button
+          type="button"
+          className="secondary-btn"
+          onClick={() => { window.location.href = "/"; }}
+          style={{ width: "100%" }}
+        >
+          Back to home
+        </button>
+      </div>
     </div>
   );
 }
