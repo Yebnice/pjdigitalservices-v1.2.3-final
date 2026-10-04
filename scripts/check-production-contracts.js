@@ -34,7 +34,7 @@ const pricing = read("lib/pricing.js");
 if (!pricing.includes('tierbulkairtime')) {
   failures.push("lib/pricing.js: bulk Airtime must use the normalized zero-margin order type");
 }
-if (!pricing.includes('envNumber("DEFAULT_BUSINESS_MARGIN_PERCENT", 1)')) {
+if (!pricing.includes('envNumber("DEFAULT_BUSINESS_MARGIN_PERCENT", 2)')) {
   failures.push("lib/pricing.js: default business margin must be 1%");
 }
 if (!pricing.includes("hasExplicitFixed") || !pricing.includes("hasExplicitFixed\n      ? 0")) {
