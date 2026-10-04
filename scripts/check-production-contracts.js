@@ -51,6 +51,9 @@ if (ui.includes("order.orderNo || order.reference")) {
 if (!ui.includes("Back to home")) {
   failures.push("components/ui.js: purchase receipt must provide a Back to home action");
 }
+if (!ui.includes('label="Order number"') || !ui.includes("customerOrderNumber || \"Unavailable — contact support\"")) {
+  failures.push("components/ui.js: receipt must render a safe customer order-number value");
+}
 
 const orderTrack = read("pages/api/orders/track.js");
 if (!orderTrack.includes('req.method !== "POST"') || orderTrack.includes("req.query.reference") || orderTrack.includes("req.query.email")) {
