@@ -62,6 +62,7 @@ function OrderRow({ order, open, onToggle }) {
           <Detail label="Techlink cost">{order.providerCost != null ? ghs(order.providerCost) : null}</Detail>
           <Detail label="Customer paid">{order.paymentAmountGhs != null ? ghs(order.paymentAmountGhs) : null}</Detail>
           <Detail label="Created">{when(order.createdAt)}</Detail>
+          <Detail label="Payment charged">{when(order.paymentChargedAt)}</Detail>
           <Detail label="Payment verified">{when(order.paymentVerifiedAt)}</Detail>
           <Detail label="Delivered">{when(order.fulfilledAt)}</Detail>
           <Detail label="Delivery attempts">{order.fulfillmentAttempts > 0 ? order.fulfillmentAttempts : null}</Detail>
