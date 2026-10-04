@@ -460,14 +460,34 @@ export default function TierShop({ networkKey }) {
   // note in lib/agentProducts.js — that reference list can drift out of
   // sync with the real, live catalogue).
   useEffect(() => {
-    if (isEvd) return;
-    let cancelled = false;
-    setLiveSizes(null);
-    fetch(`/api/techlink/tier-products?tierKey=${encodeURIComponent(activeTierKey)}`)
-      .then((r) => r.json())
-      .then((d) => { if (!cancelled) setLiveSizes(d.sizes || null); })
-      .catch(() => { if (!cancelled) setLiveSizes(null); });
-    return () => { cancelled = true; };
+    if (isEvd) {
+      setLiveSizes(null);
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/techlink/tier-products?tierKey=${encodeURIComponent(activeTierKey)}`,
+          { signal: controller.signal }
+        );
+        if (!response.ok) throw new Error(`Catalogue request failed: ${response.status}`);
+
+        const data = await response.json();
+        if (active) setLiveSizes(data.sizes || null);
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        if (active) setLiveSizes(null);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [activeTierKey, isEvd]);
 
   const tier = !isEvd ? TIERS[activeTierKey] : null;
