@@ -2,6 +2,11 @@ import crypto from "crypto";
 import { isAdminAuthed } from "../../../lib/adminAuth";
 import { runWorkerCycle } from "../../../lib/workerRun";
 
+// Keep the worker endpoint within the same 60-second execution contract
+// previously configured in vercel.json, without relying on a fragile
+// project-level function matcher.
+export const config = { maxDuration: 60 };
+
 // Constant-time comparison so the worker secret can't be guessed byte-by-byte
 // from response timing.
 function safeEqual(a, b) {
