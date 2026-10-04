@@ -2,7 +2,9 @@ import { verifyWebhookSignature } from "../../../lib/paystack";
 import { enqueuePaystackWebhook, settleWebhookInline } from "../../../lib/paystackWebhookQueue";
 import { isReversalEvent, recordReversalEvent } from "../../../lib/paymentReversals";
 
-export const config = { api: { bodyParser: false } };
+// Keep both the raw-body requirement and the previous 60-second execution
+// contract at route level; this avoids project-level function path matching.
+export const config = { api: { bodyParser: false }, maxDuration: 60 };
 
 // Paystack events are a few KB. Cap the body so an unauthenticated caller
 // can't make the server buffer an arbitrarily large payload before the
