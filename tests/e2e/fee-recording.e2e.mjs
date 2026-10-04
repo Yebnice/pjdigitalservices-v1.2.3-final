@@ -22,11 +22,11 @@ globalThis.fetch = async (url) => {
 };
 console.error = () => {}; console.warn = () => {};
 
-// A GHS 4.49 product: customer is charged 4.59, expected fee 0.10.
+// A GHS 4.44 product (1% margin on GHS 4.40): customer is charged 4.53, expected fee 0.09.
 const seed = (ref) => memdb.db.tables.orders.push({
   reference: ref, order_type: "tierData", network: "mtn", phone: "0241234567", email: "c@d.co",
-  amount: 4.4, provider_cost: 4.4, checkout_amount: 4.59, paystack_fee_amount: 0.1,
-  customer_product_amount: 4.49, business_markup_amount: 0.09,
+  amount: 4.4, provider_cost: 4.4, checkout_amount: 4.53, paystack_fee_amount: 0.09,
+  customer_product_amount: 4.44, business_markup_amount: 0.04,
   status: "pending", fulfilled: false, fulfillment_status: "pending", fulfillment_attempts: 0,
   created_at: new Date(Date.now() - 4 * 60000).toISOString(), // a fresh checkout: an order with NO creation time counts as too old and is held
 });
