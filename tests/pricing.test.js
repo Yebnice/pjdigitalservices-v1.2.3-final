@@ -12,8 +12,8 @@ describe("pricing policy", () => {
     expect(businessMarkup(100, { orderType: "tierBulkAirtime", network: "telecel" })).toBe(0);
   });
 
-  it("applies the default 2% business margin to other services", () => {
-    expect(businessMarkup(100, { orderType: "ecg", network: "ecg" })).toBe(2);
+  it("applies the default 1% business margin to other services", () => {
+    expect(businessMarkup(100, { orderType: "ecg", network: "ecg" })).toBe(1);
   });
 
   it("treats a fixed-only rule as an override, not fixed plus default percent", () => {
@@ -37,8 +37,8 @@ describe("pricing policy", () => {
       orderType: "ecg",
       network: "ecg",
     });
-    expect(pricing.customerProductAmount).toBe(102);
-    expect(pricing.checkoutAmount).toBeCloseTo(104.04, 2);
+    expect(pricing.customerProductAmount).toBe(101);
+    expect(pricing.checkoutAmount).toBeCloseTo(103.02, 2);
     expect(pricing.checkoutAmount).toBeGreaterThan(pricing.customerProductAmount);
   });
 
