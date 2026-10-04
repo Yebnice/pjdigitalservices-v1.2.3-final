@@ -494,4 +494,4 @@ The fulfillment worker automatically checks provider-queued orders on schedule a
 - Admin sessions are re-checked against `ADMIN_USERS_JSON` on every request, and state-changing admin requests from another website are refused.
 - **Two-factor sign-in** (authenticator app), named accounts, and per-account login limits. See DEPLOYMENT.md.
 - **Needs attention** is sorted into: customers charged but not delivered, paid orders needing a decision (with a one-click “Check Techlink” that shows whether Techlink already delivered it), and unpaid checkouts. Admins also get **Manual control** on every order.
-- A **system health** banner appears if the background worker stops, and **Run worker now** forces a pass.
+- A **system health** banner appears if the background worker stops, and **Check outstanding orders** asks Paystack about old unpaid checkouts and lists what needs a decision. It never sends anything to Techlink (0 deliveries); you approve each order on the Needs attention tab.

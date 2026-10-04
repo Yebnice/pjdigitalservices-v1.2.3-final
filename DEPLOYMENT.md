@@ -286,13 +286,25 @@ A release should not be treated as fully production-ready until the CI build and
 ## Making sure paid customers get delivered
 
 The scheduled worker (`.github/workflows/background-worker.yml`, every 5 minutes) is what turns a Paystack payment
-into a delivery when the customer's own browser did not finish the job. It now also re-checks every checkout still
-marked unpaid with Paystack, so a customer who paid and closed the tab is delivered automatically.
+into a delivery when the customer's own browser did not finish the job, **but only for fresh, live-verified payments**
+(see "Delivery safety" below). It also re-checks checkouts still marked unpaid with Paystack. Since v1.4.0 that
+re-check only RECORDS what it finds: a customer who paid and closed the tab shows up under **Needs attention → Paid —
+awaiting your approval**, and nothing reaches Techlink until an admin approves it.
+
+## Delivery safety (v1.4.0)
+
+An order is sent to Techlink on its own only when ALL of these are true: Paystack says the payment succeeded; the
+transaction is **live** (not test mode) and carries this order's reference; the amount and currency are right; the
+checkout is younger than `AUTO_DELIVERY_MAX_AGE_MINUTES` (default 45); and delivery mode is **automatic**.
+Anything else waits for an admin: **Needs attention → Approve & deliver** re-checks Paystack and Techlink, then sends.
+The scheduled worker repeats these checks immediately before spending wallet money, so a stray database edit
+cannot send an unpaid order. The dashboard has an **Automatic / Manual** switch (admin role) and shows a red
+banner if the site is running a Paystack TEST key.
 
 - The dashboard shows a red banner when the worker has not run for 20 minutes, and shows the webhook backlog.
 - **GitHub switches scheduled workflows off after 60 days with no activity in a public repository.** If the banner
   appears, open the repository's **Actions** tab, check the workflow is enabled and that the `CRON_SECRET` secret matches
-  Vercel. Meanwhile, **Run worker now** on the dashboard does the same work immediately.
+  Vercel. Meanwhile, **Check outstanding orders** on the dashboard asks Paystack about unpaid checkouts and records payments. It never delivers: orders it finds paid wait under **Needs attention → Paid — awaiting your approval** until an admin presses **Approve & deliver**.
 - Scheduled runs on GitHub can be delayed by many minutes. If you are on a Vercel plan that allows frequent cron jobs,
   adding a Vercel cron for `/api/jobs/fulfill` is more reliable (it needs the same `Authorization: Bearer $CRON_SECRET`).
 

@@ -110,6 +110,11 @@ alter table orders add column if not exists checkout_amount numeric;
 alter table orders add column if not exists paystack_fee_amount numeric;
 alter table orders add column if not exists paystack_fee_actual numeric;
 alter table orders add column if not exists paystack_net_settled numeric;
+
+-- v1.4.0: our own order number and Paystack's transaction id (see migration_v1_4_0.sql)
+alter table orders add column if not exists order_no text;
+alter table orders add column if not exists paystack_transaction_id text;
+create unique index if not exists orders_order_no_uq on orders (order_no) where order_no is not null;
 alter table orders add column if not exists customer_product_amount numeric;
 alter table orders add column if not exists business_markup_amount numeric;
 alter table orders add column if not exists idempotency_key text;

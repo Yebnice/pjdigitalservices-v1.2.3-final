@@ -7,7 +7,20 @@
     }
   },
   "functions": {
-    "pages/api/jobs/fulfill.js": { "maxDuration": 60 },
-    "pages/api/admin/run-worker.js": { "maxDuration": 60 }
-  }
+    "pages/api/jobs/fulfill.js": {
+      "maxDuration": 60
+    },
+    "pages/api/paystack/webhook.js": {
+      "maxDuration": 60
+    },
+    "pages/api/admin/run-worker.js": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/jobs/fulfill",
+      "schedule": "17 6 * * *"
+    }
+  ]
 }
