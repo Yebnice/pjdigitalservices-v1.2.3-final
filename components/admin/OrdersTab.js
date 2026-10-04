@@ -10,6 +10,7 @@ const FILTERS = [
   ["fulfilled", "Delivered"],
   ["failed_delivery", "Delivery failed"],
   ["payment_failed", "Payment failed"],
+  ["charged_rejected", "Payment review"],
   ["unpaid", "Awaiting payment"],
   ["abandoned", "Abandoned"],
 ];
