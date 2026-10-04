@@ -449,9 +449,17 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
         <PrimaryButton onClick={onNewOrder}>Make another purchase</PrimaryButton>
         <button
           type="button"
-          className="secondary-btn"
           onClick={() => { window.location.href = "/"; }}
-          style={{ width: "100%" }}
+          style={{
+            width: "100%",
+            minHeight: 44,
+            border: "1px solid var(--line)",
+            borderRadius: "var(--radius-sm)",
+            background: "transparent",
+            color: "var(--text)",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
         >
           Back to home
         </button>
