@@ -29,11 +29,13 @@ if (!fs.existsSync(workerWorkflow)) {
 if (fs.existsSync(legacyWorkerWorkflow)) {
   failures.push("GitHub Actions: legacy root workflows/background-worker.yml must not remain");
 }
-\nconst pricing = read("lib/pricing.js");
+
+const pricing = read("lib/pricing.js");
 if (!pricing.includes('tierbulkairtime')) {
   failures.push("lib/pricing.js: bulk Airtime must use the normalized zero-margin order type");
 }
-if (!pricing.includes("hasExplicitFixed") || !pricing.includes("hasExplicitFixed\n      ? 0")) {
+if (!pricing.includes("hasExplicitFixed") || !pricing.includes("hasExplicitFixed
+      ? 0")) {
   failures.push("lib/pricing.js: fixed-only markup must suppress the default percentage");
 }
 
