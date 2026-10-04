@@ -45,10 +45,11 @@ export default function OverviewTab({ overview, loading, error, range, onRangeCh
             <StatCard label="Delivery success" value={overview.rates.fulfillment == null ? "—" : `${overview.rates.fulfillment}%`} tone={overview.rates.fulfillment != null && overview.rates.fulfillment < 90 ? "red" : undefined} hint="Delivered vs paid" />
           </div>
 
-          {(overview.counts.deliveryFailed > 0 || overview.counts.paymentFailed > 0 || overview.counts.awaitingPayment > 0 || overview.counts.abandoned > 0) && (
+          {(overview.counts.deliveryFailed > 0 || overview.counts.paymentFailed > 0 || overview.counts.paymentRejectedAfterCharge > 0 || overview.counts.awaitingPayment > 0 || overview.counts.abandoned > 0) && (
             <div style={{ display: "flex", gap: 16, fontSize: 13, flexWrap: "wrap" }}>
               {overview.counts.deliveryFailed > 0 && <span style={{ color: TONE_COLORS.red, fontWeight: 600 }}>● {overview.counts.deliveryFailed} delivery failed</span>}
               {overview.counts.paymentFailed > 0 && <span style={{ color: TONE_COLORS.red, fontWeight: 600 }}>● {overview.counts.paymentFailed} payment failed</span>}
+              {overview.counts.paymentRejectedAfterCharge > 0 && <span style={{ color: TONE_COLORS.amber, fontWeight: 600 }}>● {overview.counts.paymentRejectedAfterCharge} payment review</span>}
               {overview.counts.awaitingPayment > 0 && <span style={{ color: TONE_COLORS.amber, fontWeight: 600 }}>● {overview.counts.awaitingPayment} awaiting payment</span>}
               {overview.counts.abandoned > 0 && <span style={{ color: TONE_COLORS.muted }}>● {overview.counts.abandoned} abandoned checkouts</span>}
             </div>
