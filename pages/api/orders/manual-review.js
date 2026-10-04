@@ -3,7 +3,7 @@ import { roleHas } from "../../../lib/adminPermissions";
 import { toAdminOrder, attentionCategory, attentionCounts } from "../../../lib/adminOrders";
 import { retryIsSafe } from "../../../lib/techlinkMatch";
 import { evidenceForOrder } from "../../../lib/adminEvidence";
-import { listManualReviewOrders, listChargedButRejectedOrders, manuallyResolveOrder, manualOverride, getOrder } from "../../../lib/store";
+import { listManualReviewOrders, listChargedButRejectedOrders, manuallyResolveOrder, manualOverride, getOrder, markPaymentVerified } from "../../../lib/store";
 import { notifyCustomerOrderFulfilled, notifyCustomerOrderSms } from "../../../lib/notifications";
 import { verifyAndPrepareOrder, approveAndDeliver, fulfillClaimedOrder, acceptChargedOrder, inspectChargedOrder } from "../../../lib/orderProcessing";
 import { readPaystackFees, readPaystackTransactionId } from "../../../lib/feeCheck";
@@ -175,11 +175,7 @@ export default async function handler(req, res) {
               ...(readPaystackFees(inspected.txn) || {}),
               transactionId,
             };
-            const verified = await (await import("../../../lib/store")).markPaymentVerified(
-              cleanReference,
-              Math.round(Number(inspected.txn.amount)),
-              info,
-            );
+            const verified = await markPaymentVerified(cleanReference, Math.round(Number(inspected.txn.amount)), info);
             if (!verified || verified.status !== "payment_verified") {
               return res.status(409).json({
                 error: "Payment verification could not be recorded. Nothing was marked delivered.",
