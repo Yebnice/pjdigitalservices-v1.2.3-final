@@ -2,6 +2,10 @@ import { requireAdminPermission } from "../../../lib/adminAuth";
 import { runOutstandingCheck } from "../../../lib/workerRun";
 import { recordAuditEvent } from "../../../lib/auditLog";
 
+// Keep the admin worker endpoint within the previous 60-second execution
+// contract without depending on project-level function path matching.
+export const config = { maxDuration: 60 };
+
 // "Check outstanding orders": asks Paystack about old unpaid checkouts, records
 // what it finds, and shows what NEEDS ATTENTION. It sends NOTHING to Techlink
 // (deliveries is always 0); every delivery from here on is an explicit decision
