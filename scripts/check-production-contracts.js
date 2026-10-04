@@ -49,6 +49,13 @@ if (!feedbackTrack.includes('req.method !== "POST"') || feedbackTrack.includes("
 }
 
 const store = read("lib/store.js");
+if (!store.includes('fulfillment_status: "not_applicable"')) {
+  failures.push("lib/store.js: terminal payment failures must not remain in fulfillment_status=pending");
+}
+if (!store.includes('[\"pending\", \"not_applicable\", \"failed\", \"ready\"]')) {
+  failures.push("lib/store.js: a genuinely paid late recovery must still accept terminal payment rows");
+}
+
 if (!store.includes('encryptAfaDetails(order.afaDetails)') || !store.includes('decryptAfaDetails(row.afa_details)')) {
   failures.push("lib/store.js: AFA data must be encrypted/decrypted centrally");
 }
