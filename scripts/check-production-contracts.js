@@ -34,6 +34,9 @@ const pricing = read("lib/pricing.js");
 if (!pricing.includes('tierbulkairtime')) {
   failures.push("lib/pricing.js: bulk Airtime must use the normalized zero-margin order type");
 }
+if (!pricing.includes('envNumber("DEFAULT_BUSINESS_MARGIN_PERCENT", 1)')) {
+  failures.push("lib/pricing.js: default business margin must be 1%");
+}
 if (!pricing.includes("hasExplicitFixed") || !pricing.includes("hasExplicitFixed\n      ? 0")) {
   failures.push("lib/pricing.js: fixed-only markup must suppress the default percentage");
 }
@@ -54,6 +57,16 @@ if (!store.includes('fulfillment_status: "not_applicable"')) {
 }
 if (!store.includes('[\"pending\", \"not_applicable\", \"failed\", \"ready\"]')) {
   failures.push("lib/store.js: a genuinely paid late recovery must still accept terminal payment rows");
+}
+if (!store.includes("payment_rejected_after_charge")) {
+  failures.push("lib/store.js: charged-but-rejected payments need a distinct terminal payment state");
+}
+const processing = read("lib/orderProcessing.js");
+if (!processing.includes('String(txn.currency || "").toUpperCase() !== "GHS"')) {
+  failures.push("lib/orderProcessing.js: payment currency must be explicitly GHS, including missing currency");
+}
+if (!processing.includes("markPaymentRejectedAfterCharge")) {
+  failures.push("lib/orderProcessing.js: successful charged mismatches must be recorded separately from failed payments");
 }
 
 if (!store.includes('encryptAfaDetails(order.afaDetails)') || !store.includes('decryptAfaDetails(row.afa_details)')) {
