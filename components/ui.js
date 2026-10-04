@@ -396,6 +396,7 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
     ? Number(order.paystackFeeAmount)
     : (order.checkoutAmount != null ? Math.round((totalPaid - productPrice) * 100) / 100 : null);
   const showFeeBreakdown = feePaid != null && feePaid > 0;
+  const customerOrderNumber = order.orderNo || null;
   const showRecipient = order.phone && order.phone !== "—" && order.phone !== "N/A" && !String(order.phone).includes("recipient");
   return (
     <div className="card" style={{ padding: "32px 28px", textAlign: "center", maxWidth: 420, margin: "0 auto" }}>
@@ -422,7 +423,7 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
           padding: "16px 0", marginBottom: 20,
         }}
       >
-        <ReceiptRow label="Order number" value={order.orderNo || order.reference} />
+        <ReceiptRow label="Order number" value={customerOrderNumber || "Unavailable — contact support"} />
         <ReceiptRow label="Product" value={label} />
         {showRecipient && <ReceiptRow label="Recipient" value={order.phone} />}
         {order.result?.token && <ReceiptRow label="Electricity token" value={String(order.result.token)} />}
