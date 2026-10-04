@@ -432,18 +432,28 @@ create or replace function public.orders_require_payment_before_delivery()
 returns trigger
 language plpgsql
 set search_path = ''
-as $$
+as $
 begin
-  if new.fulfillment_status in ('processing', 'queued_with_provider')
-     and (tg_op = 'INSERT' or old.fulfillment_status is distinct from new.fulfillment_status) then
+  -- Provider-processing states require a live payment verification.
+  if new.fulfillment_status in ('ready', 'processing', 'queued_with_provider') then
     if new.status is distinct from 'payment_verified' or new.payment_verified_at is null then
-      raise exception 'Order % cannot be sent to the provider: no verified payment is recorded for it.', new.reference
+      raise exception 'Order % cannot enter delivery state: no verified payment is recorded for it.', new.reference
         using errcode = '23514';
     end if;
   end if;
+
+  -- A completed delivery changes the order status to "success", so the final
+  -- state must be allowed when the same Paystack verification evidence remains.
+  if new.fulfillment_status = 'fulfilled' or new.fulfilled = true then
+    if new.status is distinct from 'success' or new.payment_verified_at is null then
+      raise exception 'Order % cannot enter delivery state: no verified payment is recorded for it.', new.reference
+        using errcode = '23514';
+    end if;
+  end if;
+
   return new;
 end;
-$$;
+$;
 
 drop trigger if exists orders_require_payment_before_delivery on public.orders;
 create trigger orders_require_payment_before_delivery

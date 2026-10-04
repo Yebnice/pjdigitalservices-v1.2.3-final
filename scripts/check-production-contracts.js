@@ -35,7 +35,7 @@ if (!pricing.includes('tierbulkairtime')) {
   failures.push("lib/pricing.js: bulk Airtime must use the normalized zero-margin order type");
 }
 if (!pricing.includes('envNumber("DEFAULT_BUSINESS_MARGIN_PERCENT", 2)')) {
-  failures.push("lib/pricing.js: default business margin must be 1%");
+  failures.push("lib/pricing.js: default business margin must be 2%");
 }
 if (!pricing.includes("hasExplicitFixed") || !pricing.includes("hasExplicitFixed\n      ? 0")) {
   failures.push("lib/pricing.js: fixed-only markup must suppress the default percentage");
@@ -61,6 +61,11 @@ if (!store.includes('[\"pending\", \"not_applicable\", \"failed\", \"ready\"]'))
 if (!store.includes("payment_rejected_after_charge")) {
   failures.push("lib/store.js: charged-but-rejected payments need a distinct terminal payment state");
 }
+const supabaseSchema = read("supabase/schema.sql");
+if (!supabaseSchema.includes("new.fulfillment_status = 'fulfilled'") || !supabaseSchema.includes("new.status is distinct from 'success'")) {
+  failures.push("supabase/schema.sql: completed orders must allow status=success when payment_verified_at is present");
+}
+
 const processing = read("lib/orderProcessing.js");
 if (!processing.includes('String(txn.currency || "").toUpperCase() !== "GHS"')) {
   failures.push("lib/orderProcessing.js: payment currency must be explicitly GHS, including missing currency");
