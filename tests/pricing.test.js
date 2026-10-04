@@ -45,7 +45,7 @@ describe("pricing policy", () => {
   // BUG FIX regression: AFA, ECG, Water, TV and the bulk-data Excel/CSV
   // fallback estimate used to preview the customer's total with
   // withPaystackFee(rawAmount) alone, which adds the Paystack fee but
-  // silently skips the 2% business markup — understating the price shown
+  // silently skips the 1% business markup — understating the price shown
   // before checkout for every non-zero-margin order type. previewCustomerTotal
   // must match what getOrderPricing() (the real server-side charge) produces.
   it("previewCustomerTotal matches getOrderPricing's real checkout total for a marked-up service", () => {
