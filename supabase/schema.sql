@@ -1,5 +1,5 @@
 -- PjDigitalServices production database schema.
--- Version: v1.4.5
+-- Version: v1.4.7
 --
 -- SOURCE OF TRUTH:
 -- This file matches the current application code on the main branch.
@@ -130,6 +130,7 @@ alter table orders add column if not exists fulfillment_attempts integer not nul
 alter table orders add column if not exists processing_started_at timestamptz;
 alter table orders add column if not exists last_fulfillment_error text;
 alter table orders add column if not exists payment_verified_at timestamptz;
+alter table orders add column if not exists payment_charged_at timestamptz;
 alter table orders add column if not exists payment_amount numeric;
 alter table orders add column if not exists result jsonb;
 alter table orders add column if not exists fail_reason text;
@@ -370,7 +371,7 @@ update orders
 set fulfillment_status = case
   when fulfilled = true then 'fulfilled'
   when status = 'payment_failed' and fail_reason = 'payment_abandoned' then 'not_applicable'
-  when status = 'payment_failed' then 'not_applicable'
+  when status in ('payment_failed', 'payment_rejected_after_charge') then 'not_applicable'
   when fulfillment_status is null then 'pending'
   else fulfillment_status
 end
