@@ -5,7 +5,7 @@ import { retryIsSafe } from "../../../lib/techlinkMatch";
 import { evidenceForOrder } from "../../../lib/adminEvidence";
 import { listManualReviewOrders, listChargedButRejectedOrders, manuallyResolveOrder, manualOverride, getOrder } from "../../../lib/store";
 import { notifyCustomerOrderFulfilled, notifyCustomerOrderSms } from "../../../lib/notifications";
-import { verifyAndFulfillOrder, fulfillClaimedOrder, acceptChargedOrder } from "../../../lib/orderProcessing";
+import { verifyAndPrepareOrder, approveAndDeliver, fulfillClaimedOrder, acceptChargedOrder } from "../../../lib/orderProcessing";
 import { recordAuditEvent } from "../../../lib/auditLog";
 
 // verifyAndFulfillOrder / fulfillClaimedOrder return an outcome that can carry
@@ -48,24 +48,54 @@ export default async function handler(req, res) {
       if (action === "confirm_fulfilled" && !adminHasRole(req, ["admin"])) {
         return res.status(403).json({ error: "Only an admin can mark an order as delivered manually" });
       }
+      // Spending Techlink wallet money on a held or stuck order (Approve & deliver,
+      // Send now, Authorise retry) needs the role set by WALLET_SPEND_ROLE: admin by
+      // default, so a day-to-day operator account can check and verify but cannot
+      // spend. The server enforces this; the dashboard merely hides the buttons.
+      if (["approve_delivery", "process_now", "retry"].includes(action) && !roleHas(actor.role, "orders.spend_wallet")) {
+        return res.status(403).json({ error: "Spending wallet money on an order needs the admin role (set WALLET_SPEND_ROLE=operator to allow operators)" });
+      }
       const current = await getOrder(cleanReference);
       if (!current) return res.status(404).json({ error: "Order not found" });
 
-      // A payment can be verified manually after a webhook/callback delay.
-      // This path is intentionally limited to orders that have not yet been
-      // verified and does not call Techlink unless Paystack reports success.
+      // "Verify with Paystack": asks Paystack and RECORDS the answer. It never
+      // sends anything to Techlink. A paid order is held in Needs attention, and
+      // sending it is a separate, deliberate step: "Approve & deliver".
       if (action === "verify_and_process") {
         if (current.fulfilled) return res.status(409).json({ error: "Order is already fulfilled" });
-        if (!["pending", "payment_pending"].includes(current.status)) {
+        if (!["pending", "payment_pending", "payment_failed"].includes(current.status)) {
           return res.status(409).json({ error: "This order no longer needs payment verification" });
         }
-        const result = await verifyAndFulfillOrder(cleanReference);
+        const result = await verifyAndPrepareOrder(cleanReference, { source: "review" });
         await recordAuditEvent({
           actor: actor.username,
-          action: "admin_verify_and_process",
+          action: "admin_verify_with_paystack",
           reference: cleanReference,
-          note: String(note).trim().slice(0, 2000),
+          note: `${String(note).trim().slice(0, 1800)} [result: ${result.kind}${result.status ? ` / ${result.status}` : ""}; nothing sent to Techlink]`,
         });
+        return res.status(200).json({ result: toAdminResult({ ...result, deliveries: 0 }) });
+      }
+
+      // The decision step. Re-checks Paystack itself (live, right reference,
+      // enough money), checks Techlink's history so it cannot deliver twice, then
+      // sends. The approving admin is recorded on the audit log.
+      if (action === "approve_delivery") {
+        if (current.fulfilled) return res.status(409).json({ error: "Order is already fulfilled" });
+        const evidence = await evidenceForOrder(current);
+        if (!retryIsSafe(evidence) && req.body?.force !== true) {
+          return res.status(409).json({ error: `Not sent. ${evidence.note} Sending again would deliver it twice. If it really did not arrive, confirm to force it.`, evidence, canForce: roleHas(actor.role, "orders.manual_control") });
+        }
+        if (!retryIsSafe(evidence) && !roleHas(actor.role, "orders.manual_control")) {
+          return res.status(403).json({ error: "Only an admin can force delivery against Techlink's evidence" });
+        }
+        const result = await approveAndDeliver(cleanReference, { approvedBy: actor.username });
+        await recordAuditEvent({
+          actor: actor.username,
+          action: result.kind === "rejected" ? "admin_approve_delivery_refused" : "admin_approve_delivery",
+          reference: cleanReference,
+          note: `${String(note).trim().slice(0, 1500)}${result.kind === "rejected" ? ` [refused: ${result.message}]` : ""}${req.body?.force === true ? " [forced despite Techlink evidence]" : ""}`,
+        });
+        if (result.kind === "rejected") return res.status(409).json({ error: result.message, result });
         return res.status(200).json({ result: toAdminResult(result) });
       }
 
@@ -77,7 +107,7 @@ export default async function handler(req, res) {
         if (current.status !== "payment_verified" || current.fulfillmentStatus !== "ready") {
           return res.status(409).json({ error: "Only a payment-verified order waiting for fulfillment can be processed now" });
         }
-        const result = await fulfillClaimedOrder(cleanReference);
+        const result = await fulfillClaimedOrder(cleanReference, { approvedBy: actor.username });
         await recordAuditEvent({
           actor: actor.username,
           action: "admin_process_now",
@@ -106,7 +136,7 @@ export default async function handler(req, res) {
           const paid = await manualOverride(cleanReference, "mark_paid", cleanNote);
           if (!paid) return res.status(404).json({ error: "Order not found or already delivered" });
           await recordAuditEvent({ actor: actor.username, action: "admin_mark_paid_send", reference: cleanReference, note: `${cleanNote}${req.body?.force === true ? " [forced despite Techlink evidence]" : ""}` });
-          const result = await fulfillClaimedOrder(cleanReference);
+          const result = await fulfillClaimedOrder(cleanReference, { approvedBy: actor.username });
           return res.status(200).json({ result: toAdminResult(result) });
         }
 
@@ -128,7 +158,7 @@ export default async function handler(req, res) {
       // Paystack itself rather than trusting what the browser saw.
       if (action === "accept_charged") {
         if (!roleHas(actor.role, "orders.accept_charged")) return res.status(403).json({ error: "Only an admin can accept a payment that was rejected" });
-        const result = await acceptChargedOrder(cleanReference);
+        const result = await acceptChargedOrder(cleanReference, { approvedBy: actor.username });
         await recordAuditEvent({ actor: actor.username, action: "admin_accept_charged", reference: cleanReference, note: String(note).trim().slice(0, 2000) });
         return res.status(200).json({ result: toAdminResult(result) });
       }
@@ -168,6 +198,14 @@ export default async function handler(req, res) {
       const order = await manuallyResolveOrder(cleanReference, resolveAction, resolveNote);
       if (!order) return res.status(404).json({ error: "Order not found in a resolvable state or already resolved" });
       await recordAuditEvent({ actor: actor.username, action: `manual_review_${action}`, reference: cleanReference, note: resolveNote });
+
+      // An authorised retry is the admin's own approval. Send it now, with that
+      // approval attached; leaving it for the background worker would re-hold an
+      // old order, because the worker never carries an approval.
+      if (resolveAction === "retry") {
+        const result = await fulfillClaimedOrder(cleanReference, { approvedBy: actor.username });
+        return res.status(200).json({ order: toAdminOrder(order), result: toAdminResult(result) });
+      }
 
       if (resolveAction === "confirm_fulfilled") {
         try {

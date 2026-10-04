@@ -46,18 +46,20 @@ const fresh = () => { memdb.reset(); world.paystack = {}; world.techlinkOrders =
 const out = []; const t = async (name, fn) => { fresh(); try { await fn(); out.push("PASS " + name); } catch (e) { out.push("FAIL " + name + " -> " + (e.stack || e.message).split("\n").slice(0, 3).join(" | ")); } };
 const quiet = console.error; console.error = () => {}; console.warn = () => {};
 
-await t("PAID-BUT-MISSED: a checkout stuck at 'pending' that Paystack says was paid is now delivered automatically", async () => {
+await t("PAID-BUT-MISSED: a checkout stuck at 'pending' that Paystack says was paid is RECORDED and HELD for approval; nothing is sent to Techlink", async () => {
   const o = seed({ reference: "PAID1" }); world.paystack.PAID1 = { status: "success", amount: 206, currency: "GHS" };
   const r = await runWorkerCycle({ batchSize: 3, sweepLimit: 8 });
-  assert.equal(r.sweep.checked, 1); assert.equal(r.sweep.ready, 1);
-  assert.equal(get("PAID1").fulfilled, true, "order must be fulfilled, status=" + get("PAID1").status + "/" + get("PAID1").fulfillment_status);
-  assert.equal(world.techlinkCalls.length, 1); assert.deepEqual(world.techlinkCalls[0].body, { network: "MTN", phone: "0241234567", amount: 2 });
+  assert.equal(r.sweep.checked, 1); assert.equal(r.sweep.paidHeld, 1); assert.equal(r.sweep.deliveries, 0);
+  const row = get("PAID1");
+  assert.equal(row.fulfilled, false, "an outstanding-orders check must never deliver"); assert.equal(row.status, "payment_verified"); assert.equal(row.fulfillment_status, "manual_review"); assert.equal(row.payment_amount, 206);
+  assert.equal(world.techlinkCalls.length, 0, "NOTHING may reach Techlink from the check");
+  assert.equal(audit("paid_order_held_for_approval").length, 1);
   assert.equal(r.failures.length, 0, JSON.stringify(r.failures));
 });
 await t("ABANDONED: a checkout Paystack says was never paid is closed, and nothing is sent to Techlink", async () => {
   seed({ reference: "GONE1" }); world.paystack.GONE1 = { status: "abandoned", amount: 206, currency: "GHS" };
   const r = await runWorkerCycle({}); assert.equal(r.sweep.closed, 1);
-  assert.equal(get("GONE1").status, "payment_failed"); assert.equal(get("GONE1").fail_reason, "abandoned"); assert.equal(world.techlinkCalls.length, 0);
+  assert.equal(get("GONE1").status, "payment_failed"); assert.equal(get("GONE1").fail_reason, "payment_abandoned", "the code customers' lists and the admin Abandoned filter recognise"); assert.equal(world.techlinkCalls.length, 0);
 });
 await t("a checkout younger than 10 minutes is left alone (customer may still be paying)", async () => {
   seed({ reference: "NEW1", created_at: minsAgo(2) }); world.paystack.NEW1 = { status: "success", amount: 206, currency: "GHS" };
@@ -66,7 +68,7 @@ await t("a checkout younger than 10 minutes is left alone (customer may still be
 await t("still-pending at Paystack (mobile money prompt open) stays pending and is retried next run", async () => {
   seed({ reference: "MOMO1" }); world.paystack.MOMO1 = { status: "ongoing", amount: 206, currency: "GHS" };
   const r = await runWorkerCycle({}); assert.equal(r.sweep.stillPending, 1); assert.equal(get("MOMO1").status, "payment_pending"); assert.equal(world.techlinkCalls.length, 0);
-  world.paystack.MOMO1.status = "success"; const r2 = await runWorkerCycle({}); assert.equal(get("MOMO1").fulfilled, true, "second run must deliver it");
+  world.paystack.MOMO1.status = "success"; const r2 = await runWorkerCycle({}); assert.equal(get("MOMO1").fulfilled, false, "the check must not deliver"); assert.equal(get("MOMO1").fulfillment_status, "manual_review", "once paid it waits for approval"); assert.equal(world.techlinkCalls.length, 0);
 });
 await t("LATE PAYMENT: an order marked abandoned that is later paid is recovered by the webhook path", async () => {
   seed({ reference: "LATE1", status: "payment_failed", fail_reason: "payment_abandoned" }); world.paystack.LATE1 = { status: "success", amount: 206, currency: "GHS" };
@@ -78,7 +80,7 @@ await t("PAYSTACK OUTAGE turns the worker red instead of silently doing nothing"
 });
 await t("one broken order does not stop the rest of the sweep", async () => {
   seed({ reference: "OK1" }); seed({ reference: "BAD1" }); world.paystack.OK1 = { status: "success", amount: 206, currency: "GHS" };
-  const r = await runWorkerCycle({}); assert.equal(get("OK1").fulfilled, true); assert.equal(r.sweep.checked, 2);
+  const r = await runWorkerCycle({}); assert.equal(get("OK1").fulfillment_status, "manual_review"); assert.equal(get("OK1").fulfilled, false); assert.equal(r.sweep.checked, 2); assert.equal(world.techlinkCalls.length, 0);
 });
 await t("HEARTBEAT is written every run and the health endpoint reports it", async () => {
   const before = await call("pages/api/admin/health.js", "op", "operator"); assert.equal(before.body.worker.lastRunAt, null);
@@ -120,23 +122,23 @@ await t("wrong CURRENCY is treated as charged-but-rejected too", async () => {
 const delivered = (over = {}) => ({ orderId: "ORD-TL1", productType: "Airtime", phoneNumber: "0241234567", amount: 2.04, costPrice: 2, status: "completed", createdAt: minsAgo(20), ...over });
 await t("EVIDENCE: 'retry' is BLOCKED when Techlink's history shows the order was already delivered", async () => {
   seed({ reference: "RET1", status: "payment_verified", fulfillment_status: "failed", payment_verified_at: minsAgo(25) }); world.techlinkOrders = [delivered()];
-  const r = await call("pages/api/orders/manual-review.js", "op", "operator", { method: "POST", body: { reference: "RET1", action: "retry", note: "customer says not received" } });
+  const r = await call("pages/api/orders/manual-review.js", "ad", "admin", { method: "POST", body: { reference: "RET1", action: "retry", note: "customer says not received" } });
   assert.equal(r.code, 409); assert.equal(r.body.evidence.verdict, "delivered"); assert.equal(get("RET1").fulfillment_status, "failed", "must not have been re-queued");
-  const forced = await call("pages/api/orders/manual-review.js", "op", "operator", { method: "POST", body: { reference: "RET1", action: "retry", note: "x1234", force: true } }); assert.equal(forced.code, 409, "operators cannot force");
+  const forced = await call("pages/api/orders/manual-review.js", "op", "operator", { method: "POST", body: { reference: "RET1", action: "retry", note: "x1234", force: true } }); assert.equal(forced.code, 403, "an operator cannot spend wallet money, let alone force a retry (the relaxed-policy case is tested in techlink-contract)");
 });
 await t("EVIDENCE: an admin can force a retry, and it is audited", async () => {
   seed({ reference: "RET2", status: "payment_verified", fulfillment_status: "failed", payment_verified_at: minsAgo(25) }); world.techlinkOrders = [delivered()];
   const r = await call("pages/api/orders/manual-review.js", "ad", "admin", { method: "POST", body: { reference: "RET2", action: "retry", note: "verified with Techlink support it did not arrive", force: true } });
-  assert.equal(r.code, 200, JSON.stringify(r.body)); assert.equal(get("RET2").fulfillment_status, "ready"); assert.equal(audit("admin_forced_retry").length, 1);
+  assert.equal(r.code, 200, JSON.stringify(r.body)); assert.equal(get("RET2").fulfilled, true, "the admin's forced retry IS the approval, so it is sent now"); assert.equal(world.techlinkCalls.length, 1); assert.equal(audit("admin_forced_retry").length, 1);
 });
 await t("EVIDENCE: retry is ALLOWED when Techlink has no record (payment never reached Techlink)", async () => {
   seed({ reference: "RET3", status: "payment_verified", fulfillment_status: "failed", payment_verified_at: minsAgo(25) }); world.techlinkOrders = [delivered({ phoneNumber: "0209999999" })];
   const chk = await call("pages/api/admin/techlink-check.js", "op", "operator", { query: { reference: "RET3" } }); assert.equal(chk.body.evidence.verdict, "not_found"); assert.equal(chk.body.retrySafe, true);
-  const r = await call("pages/api/orders/manual-review.js", "op", "operator", { method: "POST", body: { reference: "RET3", action: "retry", note: "never reached techlink" } }); assert.equal(r.code, 200); assert.equal(get("RET3").fulfillment_status, "ready");
+  const r = await call("pages/api/orders/manual-review.js", "ad", "admin", { method: "POST", body: { reference: "RET3", action: "retry", note: "never reached techlink" } }); assert.equal(r.code, 200); assert.equal(get("RET3").fulfilled, true, "authorised retry sends it now, with the admin's approval"); assert.equal(world.techlinkCalls.length, 1);
 });
 await t("EVIDENCE: a failed Techlink lookup never blocks an admin (verdict unknown)", async () => {
   seed({ reference: "RET4", status: "payment_verified", fulfillment_status: "failed" }); const real = globalThis.fetch; globalThis.fetch = async (u, o) => (String(u).includes("/orders?page=") ? { ok: false, status: 500, json: async () => ({}), text: async () => "", headers: new Map() } : real(u, o));
-  const r = await call("pages/api/orders/manual-review.js", "op", "operator", { method: "POST", body: { reference: "RET4", action: "retry", note: "techlink history is down" } }); globalThis.fetch = real; assert.equal(r.code, 200);
+  const r = await call("pages/api/orders/manual-review.js", "ad", "admin", { method: "POST", body: { reference: "RET4", action: "retry", note: "techlink history is down" } }); globalThis.fetch = real; assert.equal(r.code, 200);
 });
 await t("EVIDENCE: the same delivered Techlink row is NOT credited to two orders (already claimed by another)", async () => {
   seed({ reference: "OLD1", status: "success", fulfilled: true, fulfillment_status: "fulfilled", result: { orderId: "ORD-TL1" }, created_at: minsAgo(60) });
@@ -156,20 +158,20 @@ await t("mark-delivered WITHOUT proof is still admin-only", async () => {
   assert.equal((await call("pages/api/orders/manual-review.js", "op", "operator", { method: "POST", body: { reference: "MAN1", action: "confirm_fulfilled", note: "no proof at all" } })).code, 403);
   assert.equal((await call("pages/api/orders/manual-review.js", "ad", "admin", { method: "POST", body: { reference: "MAN1", action: "confirm_fulfilled", note: "no proof at all" } })).code, 200);
 });
-await t("run-worker endpoint: operator can run it, viewer cannot, and it delivers a paid-but-missed order", async () => {
+await t("run-worker endpoint (Check outstanding orders): operator can run it, viewer cannot, it holds a paid-but-missed order and DELIVERS NOTHING", async () => {
   seed({ reference: "RW1" }); world.paystack.RW1 = { status: "success", amount: 206, currency: "GHS" };
   assert.equal((await call("pages/api/admin/run-worker.js", "vw", "viewer", { method: "POST" })).code, 403);
-  const r = await call("pages/api/admin/run-worker.js", "op", "operator", { method: "POST" }); assert.equal(r.code, 200, JSON.stringify(r.body)); assert.equal(get("RW1").fulfilled, true); assert.equal(audit("admin_ran_worker").length, 1);
+  const r = await call("pages/api/admin/run-worker.js", "op", "operator", { method: "POST" }); assert.equal(r.code, 200, JSON.stringify(r.body)); assert.equal(get("RW1").fulfilled, false); assert.equal(get("RW1").fulfillment_status, "manual_review"); assert.equal(r.body.deliveries, 0); assert.equal(r.body.paidHeld, 1); assert.equal(r.body.needsAttentionTotal, 1); assert.equal(world.techlinkCalls.length, 0); assert.equal(audit("admin_checked_outstanding_orders").length, 1);
 });
-await t("the scheduled worker endpoint: wrong secret 401, right secret runs and returns 200", async () => {
+await t("the scheduled worker endpoint: wrong secret 401, right secret runs, returns 200 and does not deliver an old unpaid checkout", async () => {
   const h = (await load("pages/api/jobs/fulfill.js")).default;
   const bad = mkRes(); await h({ method: "POST", headers: { authorization: "Bearer nope" } }, bad); assert.equal(bad.code, 401);
   seed({ reference: "CR1" }); world.paystack.CR1 = { status: "success", amount: 206, currency: "GHS" };
-  const ok = mkRes(); await h({ method: "POST", headers: { authorization: "Bearer " + process.env.CRON_SECRET } }, ok); assert.equal(ok.code, 200, JSON.stringify(ok.body)); assert.equal(get("CR1").fulfilled, true);
+  const ok = mkRes(); await h({ method: "POST", headers: { authorization: "Bearer " + process.env.CRON_SECRET } }, ok); assert.equal(ok.code, 200, JSON.stringify(ok.body)); assert.equal(get("CR1").fulfilled, false); assert.equal(get("CR1").fulfillment_status, "manual_review"); assert.equal(world.techlinkCalls.length, 0);
 });
 await t("Needs Attention list: unpaid checkouts are categorised separately from paid orders", async () => {
   seed({ reference: "U1" }); seed({ reference: "P1", status: "payment_verified", fulfillment_status: "ready" }); seed({ reference: "Q1", status: "payment_verified", fulfillment_status: "queued_with_provider" });
-  const r = await call("pages/api/orders/manual-review.js", "op", "operator"); assert.deepEqual(r.body.counts, { charged_rejected: 0, ready: 1, queued: 1, retryable: 0, unpaid: 1, paidNeedingAction: 2 });
+  const r = await call("pages/api/orders/manual-review.js", "op", "operator"); assert.deepEqual(r.body.counts, { charged_rejected: 0, held: 0, ready: 1, queued: 1, retryable: 0, unpaid: 1, paidNeedingAction: 2 });
 });
 
 const { getOrderStatusLabel } = await load("lib/orderStatus.js"); const { fromRow } = store;
@@ -225,10 +227,13 @@ await t("MANUAL: cannot override an order that is already delivered, or one bein
   seed({ reference: "BUSY1", status: "payment_verified", fulfillment_status: "processing", processing_started_at: new Date().toISOString() }); const b = await manual("ad", "admin", { reference: "BUSY1", action: "mark_delivered", note: "worker is mid-flight" }); assert.equal(b.code, 400); assert.ok(/right now/.test(b.body.error)); assert.equal(get("BUSY1").fulfilled, false);
 });
 await t("MANUAL: mark_paid_send refuses an order that is not waiting on payment", async () => { seed({ reference: "MP3", status: "payment_verified", fulfillment_status: "ready" }); const r = await manual("ad", "admin", { reference: "MP3", action: "mark_paid_send", note: "already paid, wrong button" }); assert.equal(r.code, 400); assert.equal(world.techlinkCalls.length, 0); });
-await t("API CHECKS STILL WORK alongside manual control (verify_and_process, process_now)", async () => {
+await t("API CHECKS STILL WORK alongside manual control: Verify only records, Approve & deliver sends, process_now sends", async () => {
   seed({ reference: "API1", status: "pending" }); world.paystack.API1 = { status: "success", amount: 206, currency: "GHS" };
-  assert.equal((await manual("op", "operator", { reference: "API1", action: "verify_and_process", note: "checking paystack" })).code, 200); assert.equal(get("API1").fulfilled, true);
-  seed({ reference: "API2", status: "payment_verified", fulfillment_status: "ready" }); assert.equal((await manual("op", "operator", { reference: "API2", action: "process_now", note: "push it now" })).code, 200); assert.equal(get("API2").fulfilled, true);
+  assert.equal((await manual("op", "operator", { reference: "API1", action: "verify_and_process", note: "checking paystack" })).code, 200);
+  assert.equal(get("API1").fulfilled, false, "Verify with Paystack must not deliver"); assert.equal(get("API1").fulfillment_status, "manual_review"); assert.equal(world.techlinkCalls.length, 0);
+  const ap = await manual("ad", "admin", { reference: "API1", action: "approve_delivery", note: "checked in Paystack dashboard" }); assert.equal(ap.code, 200, JSON.stringify(ap.body));
+  assert.equal(get("API1").fulfilled, true); assert.equal(world.techlinkCalls.length, 1); assert.equal(audit("admin_approve_delivery").length, 1);
+  seed({ reference: "API2", status: "payment_verified", fulfillment_status: "ready" }); assert.equal((await manual("ad", "admin", { reference: "API2", action: "process_now", note: "push it now" })).code, 200); assert.equal(get("API2").fulfilled, true);
 });
 await t("AMOUNT UNITS: 'Customer paid' comes back in cedis, not pesewas (510 -> 5.10, 2237 -> 22.37)", async () => {
   seed({ reference: "UNIT1", status: "success", fulfilled: true, fulfillment_status: "fulfilled", payment_amount: 510, checkout_amount: 5.1 }); seed({ reference: "UNIT2", status: "payment_verified", fulfillment_status: "queued_with_provider", payment_amount: 2237, checkout_amount: 22.37 });

@@ -52,7 +52,12 @@ function builder(table) {
       if (single === "one") return data[0] ? { data: { ...data[0] }, error: null, ...extra } : { data: null, error: { message: "no rows" }, ...extra };
       return { data: data.map((r) => ({ ...r })), error: null, ...extra };
     };
+    // Test hooks: db.failTable makes every operation on a table error out (a
+    // Supabase outage); db.missingColumns simulates a migration not yet run.
+    if (db.failTable === table) return { data: null, error: { code: "XX000", message: "simulated database failure" } };
     if (op === "insert" || op === "upsert") {
+      const missingOnInsert = db.missingColumns && (Array.isArray(payload) ? payload : [payload]).flatMap((r) => Object.keys(r || {})).find((k) => db.missingColumns.has(k));
+      if (missingOnInsert) return { data: null, error: { code: "PGRST204", message: `Could not find the '${missingOnInsert}' column of '${table}' in the schema cache` } };
       const list = Array.isArray(payload) ? payload : [payload];
       const out = [];
       for (const raw of list) {

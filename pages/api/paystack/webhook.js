@@ -1,5 +1,6 @@
 import { verifyWebhookSignature } from "../../../lib/paystack";
-import { enqueuePaystackWebhook } from "../../../lib/paystackWebhookQueue";
+import { enqueuePaystackWebhook, settleWebhookInline } from "../../../lib/paystackWebhookQueue";
+import { isReversalEvent, recordReversalEvent } from "../../../lib/paymentReversals";
 
 export const config = { api: { bodyParser: false } };
 
@@ -47,12 +48,24 @@ export default async function handler(req, res) {
 
     const event = JSON.parse(rawBody);
 
-    // Do not verify Paystack or call Techlink inside the webhook request.
+    // Refunds and disputes change the books but never the order: record them (audit
+    // log, matched to the order) and acknowledge. A database failure throws, which
+    // answers 5xx below so Paystack retries instead of the notice being lost.
+    if (isReversalEvent(event?.event)) {
+      const outcome = await recordReversalEvent(event);
+      return res.status(200).json({ received: true, recorded: outcome.recorded });
+    }
+
     // Persist first so a successful 200 acknowledgement always corresponds
     // to durable work that the fulfillment worker can retry safely.
-    await enqueuePaystackWebhook({ event, rawBody });
+    const queued = await enqueuePaystackWebhook({ event, rawBody });
 
-    return res.status(200).json({ received: true, queued: true });
+    // The notification is now durable. Settle it straight away (same checks as always) so a
+    // paying customer is not waiting for the next background run. This never throws and never
+    // changes the answer: Paystack gets its 200 either way, and the worker is the safety net.
+    const settled = await settleWebhookInline(queued);
+
+    return res.status(200).json({ received: true, queued: true, settled: Boolean(settled?.settled) });
   } catch (err) {
     if (err?.code === "BODY_TOO_LARGE") return res.status(413).json({ error: "Payload too large" });
     console.error("Paystack webhook enqueue error", err);

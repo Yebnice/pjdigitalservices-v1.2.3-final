@@ -5,6 +5,10 @@ import OverviewTab from "../../components/admin/OverviewTab";
 import OrdersTab from "../../components/admin/OrdersTab";
 import AttentionTab from "../../components/admin/AttentionTab";
 import AuditTab from "../../components/admin/AuditTab";
+import ReconcileTab from "../../components/admin/ReconcileTab";
+import NotificationsTab from "../../components/admin/NotificationsTab";
+import FeedbackTab from "../../components/admin/FeedbackTab";
+import ReviewsTab from "../../components/admin/ReviewsTab";
 
 const REFRESH_MS = 60000;
 // Techlink wallet warning level (GHS). Keep in sync with the server-side
@@ -13,9 +17,10 @@ const LOW_WALLET_THRESHOLD = Number(process.env.NEXT_PUBLIC_TECHLINK_LOW_BALANCE
 
 const ACTION_COPY = {
   confirm_fulfilled: { title: "Mark this order as delivered", message: "Only do this after you have confirmed with Techlink that it was delivered. The customer will be emailed/texted that it arrived.", confirmLabel: "Mark delivered", danger: true },
-  retry: { title: "Authorise a retry", message: "Confirm that Techlink did NOT deliver this order. A retry sends it to Techlink again.", confirmLabel: "Authorise retry", danger: true },
+  retry: { title: "Authorise a retry and send", message: "Confirm that Techlink did NOT deliver this order. Your authorisation sends it to Techlink now.", confirmLabel: "Authorise & send", danger: true },
   process_now: { title: "Send to Techlink now", message: "This order is paid and verified but has not been sent to Techlink yet.", confirmLabel: "Send now" },
-  verify_and_process: { title: "Verify payment and process", message: "Paystack is re-checked first. Techlink is only called if Paystack confirms the exact amount.", confirmLabel: "Verify & process" },
+  verify_and_process: { title: "Verify with Paystack", message: "Asks Paystack about this checkout and records the answer. Nothing is sent to Techlink. If it was paid, it moves to “Paid — awaiting your approval”.", confirmLabel: "Verify (no delivery)" },
+  approve_delivery: { title: "Approve & deliver", message: "Paystack is re-checked right now (live payment, exact amount, this reference) and Techlink's history is checked so it is not delivered twice. If both are fine, this order is sent to Techlink and wallet money is spent. Your name is recorded.", warning: "This spends Techlink wallet balance. Only approve an order you have looked at.", confirmLabel: "Approve & deliver", danger: true },
   confirm_from_techlink: { title: "Close: Techlink shows this delivered", message: "The server re-checks Techlink's order history and only closes the order if it really shows it as delivered. The customer is told it arrived.", confirmLabel: "Confirm delivered" },
   accept_charged: { title: "Accept this payment and send the order", message: "The customer paid at least the order price but the amount did not match exactly. Paystack is re-checked; if it is fine, the order is sent to Techlink now.", confirmLabel: "Accept & send" },
   mark_delivered: { title: "Mark this order as delivered", message: "You are confirming the customer HAS received it (or that you delivered it yourself). The order is closed as delivered and counted in your sales.", warning: "If this order was never paid, marking it delivered also records it as paid. Only do that if you have confirmed the payment yourself (for example in the Paystack dashboard).", confirmLabel: "Mark delivered", danger: true, options: [{ key: "notifyCustomer", label: "Tell the customer it was delivered (email / SMS)", defaultChecked: true }] },
@@ -70,224 +75,6 @@ function PasswordGate({ onUnlock }) {
   );
 }
 
-function ReconciliationTab() {
-  const [csvText, setCsvText] = useState("");
-  const [fileName, setFileName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [result, setResult] = useState(null);
-  const [generateAiSummary, setGenerateAiSummary] = useState(false);
-
-  function handleFile(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => setCsvText(String(reader.result || ""));
-    reader.readAsText(file);
-  }
-
-  async function run() {
-    if (!csvText) return;
-    setBusy(true);
-    setError("");
-    setResult(null);
-    try {
-      const r = await fetch("/api/admin/reconcile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv: csvText, generateAiSummary }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Reconciliation failed");
-      setResult(d);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div className="card" style={{ padding: 20 }}>
-        <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
-          In Paystack: Dashboard → Transactions → Export CSV. Upload that file here — it's matched exactly
-          against your orders table (by reference, amount, and status). Exact reconciliation runs inside the app. No transaction-level results are sent to Gemini unless you explicitly enable the optional AI summary.
-        </p>
-        <input id="reconcile-csv" name="reconcileCsv" aria-label="Paystack transactions CSV" type="file" accept=".csv" onChange={handleFile} />
-        {fileName && <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: "8px 0 0" }}>Loaded: {fileName}</p>}
-        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13, color: "var(--muted)" }}>
-          <input type="checkbox" name="generateAiSummary" checked={generateAiSummary} onChange={(e) => setGenerateAiSummary(e.target.checked)} />
-          Generate optional AI summary (sends the computed reconciliation result to Gemini)
-        </label>
-        <div style={{ marginTop: 12 }}>
-          <button className="primary-btn" onClick={run} disabled={!csvText || busy} style={{ width: "auto", padding: "8px 20px" }}>
-            {busy ? "Reconciling…" : "Run reconciliation"}
-          </button>
-        </div>
-        {error && <p style={{ color: "var(--red)", fontSize: 13, marginTop: 12 }}>{error}</p>}
-      </div>
-
-      {result && (
-        <>
-          {result.summary && (
-            <div className="card" style={{ padding: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--muted)" }}>Summary</div>
-              <p style={{ fontSize: 14, lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>{result.summary}</p>
-            </div>
-          )}
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-            <div className="stat-card"><div style={{ fontSize: 12, color: "var(--muted)" }}>Matched</div><div style={{ fontSize: 20, fontWeight: 600, color: "var(--green)" }}>{result.counts.matched}</div></div>
-            <div className="stat-card"><div style={{ fontSize: 12, color: "var(--muted)" }}>Mismatched</div><div style={{ fontSize: 20, fontWeight: 600, color: "var(--red)" }}>{result.counts.mismatched}</div></div>
-            <div className="stat-card"><div style={{ fontSize: 12, color: "var(--muted)" }}>Paystack-only</div><div style={{ fontSize: 20, fontWeight: 600, color: "var(--red)" }}>{result.counts.paystackOnly}</div></div>
-            <div className="stat-card"><div style={{ fontSize: 12, color: "var(--muted)" }}>App-only</div><div style={{ fontSize: 20, fontWeight: 600, color: "var(--price)" }}>{result.counts.appOnly}</div></div>
-          </div>
-
-          {result.mismatched.length > 0 && (
-            <div className="card" style={{ padding: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Mismatched (amount or status disagree)</div>
-              {result.mismatched.map((m) => (
-                <div key={m.reference} style={{ fontSize: 12, padding: "6px 0", borderTop: "1px solid var(--border)" }}>
-                  {m.reference} — Paystack: GHS {m.paystackAmount} ({m.paystackStatus || "—"}) vs App: GHS {m.appAmount} ({m.appStatus})
-                </div>
-              ))}
-            </div>
-          )}
-
-          {result.paystackOnly.length > 0 && (
-            <div className="card" style={{ padding: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Paid on Paystack, no matching order</div>
-              {result.paystackOnly.map((p) => (
-                <div key={p.reference} style={{ fontSize: 12, padding: "6px 0", borderTop: "1px solid var(--border)" }}>
-                  {p.reference} — GHS {p.amount} ({p.status || "unknown status"})
-                </div>
-              ))}
-            </div>
-          )}
-
-          {result.appOnly.length > 0 && (
-            <div className="card" style={{ padding: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Marked paid in app, not found in this export</div>
-              {result.appOnly.map((a) => (
-                <div key={a.reference} style={{ fontSize: 12, padding: "6px 0", borderTop: "1px solid var(--border)" }}>
-                  {a.reference} — GHS {a.amount} ({a.orderType})
-                </div>
-              ))}
-              <p style={{ fontSize: 11, color: "var(--muted-dim)", marginTop: 8, marginBottom: 0 }}>{result.note}</p>
-            </div>
-          )}
-
-          {result.counts.mismatched === 0 && result.counts.paystackOnly === 0 && result.counts.appOnly === 0 && (
-            <div className="card" style={{ padding: 20, textAlign: "center", color: "var(--green)", fontSize: 14 }}>
-              Everything matches — no discrepancies found.
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function FeedbackTab({ feedback, can, onChanged, onUnauthorized }) {
-  const [q, setQ] = useState("");
-  const [error, setError] = useState("");
-  const needle = q.trim().toLowerCase();
-  const shown = needle
-    ? feedback.filter((f) => [f.caseReference, f.orderReference, f.name, f.email, f.phone].some((v) => String(v || "").toLowerCase().includes(needle)))
-    : feedback;
-
-  async function setStatus(f, status) {
-    setError("");
-    try {
-      await adminApi("/api/feedback/status", { method: "POST", body: { id: f.id, status }, onUnauthorized });
-      onChanged();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  return (
-    <div>
-      <SearchBox value={q} onChange={setQ} placeholder="Search by case, order ref, name, email, or phone…" style={{ marginBottom: 12 }} />
-      {error && <Banner tone="amber">{error}</Banner>}
-      <div className="card" style={{ overflow: "hidden" }}>
-        {shown.length === 0 && <EmptyState>No feedback yet.</EmptyState>}
-        {shown.map((f) => (
-          <div key={f.id} className="tx-row" style={{ alignItems: "flex-start", flexDirection: "column", gap: 4 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", width: "100%", gap: 12 }}>
-              <span style={{ fontSize: 14, fontWeight: 600 }}>{f.name} · <span style={{ color: "var(--muted)", fontWeight: 400 }}>{f.category}</span></span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {can("feedback.update") ? (
-                  <select name="status" aria-label="Case status" className="input" style={{ width: "auto", padding: "4px 8px", fontSize: 12 }} value={f.status || "open"} onChange={(e) => setStatus(f, e.target.value)}>
-                    <option value="open">Open</option>
-                    <option value="in_progress">In progress</option>
-                    <option value="resolved">Resolved</option>
-                  </select>
-                ) : (
-                  <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{f.status || "open"}</span>
-                )}
-                <span style={{ fontSize: 12, color: "var(--muted-dim)" }}>{ageText(f.createdAt)} ago</span>
-              </div>
-            </div>
-            <div style={{ fontSize: 13, color: "var(--muted)" }}>{f.message}</div>
-            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5, marginTop: 2 }}>
-              <div><strong>Case:</strong> {f.caseReference || "—"} {f.orderReference ? <>· <strong>Order:</strong> {f.orderReference}</> : null}</div>
-              <div><strong>Service:</strong> {f.serviceType || "—"} · <strong>Transaction ID:</strong> {f.transactionId || "—"} · <strong>Amount:</strong> {f.transactionAmount != null ? ghs(f.transactionAmount) : "—"}</div>
-              {f.requestedData ? <div><strong>Requested:</strong> {f.requestedData}</div> : null}
-              {f.beneficiary ? <div><strong>Beneficiary:</strong> {f.beneficiary}</div> : null}
-              {f.transactionAt ? <div><strong>Transaction time:</strong> {new Date(f.transactionAt).toLocaleString()}</div> : null}
-              <div><strong>Transaction details:</strong> {f.transactionDetails || "—"}</div>
-            </div>
-            {(f.email || f.phone) && <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>{[f.email, f.phone].filter(Boolean).join(" · ")}</div>}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ReviewsTab({ can, refreshTick, onUnauthorized }) {
-  const [reviews, setReviews] = useState(null);
-  const [error, setError] = useState("");
-  const load = useCallback(() => {
-    adminApi("/api/admin/reviews", { onUnauthorized }).then((d) => { setReviews(d.reviews || []); setError(""); }).catch((err) => setError(err.message));
-  }, [onUnauthorized]);
-  useEffect(() => { load(); }, [load, refreshTick]);
-
-  async function toggle(r) {
-    try {
-      await adminApi("/api/admin/reviews", { method: "POST", body: { id: r.id, isHidden: !r.isHidden }, onUnauthorized });
-      load();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  return (
-    <div>
-      {error && <Banner tone="amber">{error}</Banner>}
-      <div className="card" style={{ overflow: "hidden" }}>
-        {reviews && reviews.length === 0 && <EmptyState>No reviews yet.</EmptyState>}
-        {!reviews && !error && <EmptyState>Loading reviews…</EmptyState>}
-        {(reviews || []).map((r) => (
-          <div key={r.id} className="tx-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4, opacity: r.isHidden ? 0.5 : 1 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-              <strong style={{ fontSize: 14 }}>{r.customerName} — {"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</strong>
-              {can("reviews.moderate") && (
-                <button className="nav-item" style={{ width: "auto", padding: "4px 10px", fontSize: 12 }} onClick={() => toggle(r)}>{r.isHidden ? "Unhide" : "Hide"}</button>
-              )}
-            </div>
-            <div style={{ fontSize: 12, color: "var(--muted-dim)" }}>Order {r.orderReference} · {r.serviceType} · {new Date(r.createdAt).toLocaleString()}</div>
-            {r.comment && <div style={{ fontSize: 13, color: "var(--muted)" }}>{r.comment}</div>}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function AdminPage() {
   const [auth, setAuth] = useState(null);
   const [me, setMe] = useState(null);
@@ -301,6 +88,7 @@ export default function AdminPage() {
   const [attentionCounts, setAttentionCounts] = useState(null);
   const [attentionTruncated, setAttentionTruncated] = useState(false);
   const [health, setHealth] = useState(null);
+  const [modeBusy, setModeBusy] = useState(false);
   const [checks, setChecks] = useState({});
   const [payments, setPayments] = useState({});
   const [workerBusy, setWorkerBusy] = useState(false);
@@ -427,17 +215,43 @@ export default function AdminPage() {
     }
   }
 
+  // "Check outstanding orders": asks Paystack about old unpaid checkouts and
+  // reports what needs a decision. It can never deliver (the server enforces it).
   async function runWorker() {
     setWorkerBusy(true);
     setNotice("");
     try {
       const d = await adminApi("/api/admin/run-worker", { method: "POST", onUnauthorized });
-      setNotice(d.message || "Outstanding orders checked. No customer orders were processed.");
+      const parts = [`checked ${d.checked ?? 0} unpaid checkout(s)`];
+      if (d.webhooksRecorded) parts.push(`recorded ${d.webhooksRecorded} Paystack payment notification(s)`);
+      if (d.paidHeld) parts.push(`${d.paidHeld} paid and now waiting for your approval`);
+      if (d.closed) parts.push(`${d.closed} closed as abandoned`);
+      if (d.stillPending) parts.push(`${d.stillPending} still open at Paystack`);
+      if (d.rejected) parts.push(`${d.rejected} rejected (see Needs attention)`);
+      if (d.failures?.length) parts.push(`${d.failures.length} problem(s): ${d.failures.map((f) => f.error || f.step).join("; ")}`);
+      setNotice(`Check complete: ${parts.join("; ")}. Deliveries: 0. Needs attention now: ${d.needsAttentionTotal ?? 0}.`);
       await refreshAll();
     } catch (err) {
       if (err.status !== 401) window.alert(err.message);
     } finally {
       setWorkerBusy(false);
+    }
+  }
+
+  async function changeDeliveryMode(next) {
+    const text = next === "manual"
+      ? "Switch to MANUAL delivery?\n\nEvery paid order will wait in Needs attention until you approve it. Customers will see “Payment received — under review”."
+      : "Switch back to AUTOMATIC delivery?\n\nFresh, live-verified payments will be sent to Techlink straight away. Old, unverified or test payments are still held for your approval.";
+    if (!window.confirm(text)) return;
+    setModeBusy(true);
+    try {
+      await adminApi("/api/admin/delivery-mode", { method: "POST", body: { mode: next }, onUnauthorized });
+      setNotice(`Delivery mode is now ${next.toUpperCase()}.`);
+      await refreshAll();
+    } catch (err) {
+      if (err.status !== 401) window.alert(err.message);
+    } finally {
+      setModeBusy(false);
     }
   }
 
@@ -469,7 +283,7 @@ export default function AdminPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {can("worker.run") && <button className="nav-item" onClick={runWorker} style={{ width: "auto", padding: "6px 12px" }} disabled={workerBusy} title="Checks outstanding orders and refreshes Needs attention. It does not fulfill customer orders.">{workerBusy ? "Checking…" : "Check outstanding orders"}</button>}
+          {can("worker.run") && <button className="nav-item" onClick={runWorker} style={{ width: "auto", padding: "6px 12px" }} disabled={workerBusy} title="Asks Paystack about old unpaid checkouts and lists what needs a decision. Sends nothing to Techlink.">{workerBusy ? "Checking…" : "Check outstanding orders"}</button>}
           <button className="nav-item" onClick={refreshAll} style={{ width: "auto", padding: "6px 12px" }} disabled={loadingOverview}>{loadingOverview ? "Refreshing…" : "Refresh"}</button>
           <button className="nav-item" onClick={logout} style={{ width: "auto", padding: "6px 12px" }}>Sign out</button>
         </div>
@@ -482,15 +296,42 @@ export default function AdminPage() {
       {me && !me.twoFactor && me.role === "admin" && (
         <Banner tone="blue">Two-factor sign-in is <strong>off</strong> for this account. Anyone who learns the password can open this dashboard and move money. {me.mode === "shared" ? "Set ADMIN_TOTP_SECRET" : "Add a totpSecret to your account"} (generate one with <code>npm run admin:user</code>) and set <code>ADMIN_REQUIRE_2FA=true</code> to make it mandatory.</Banner>
       )}
+      {health?.paystack?.keyMode === "test" && health.paystack.strict && (
+        <Banner tone="red"><strong>This site is using a Paystack TEST key.</strong> Test payments move no money, so every order is being blocked from delivery. Set the LIVE secret key (sk_live_…) in your hosting environment variables, then redeploy.</Banner>
+      )}
+      {health?.reversals?.last30d > 0 && (
+        <Banner tone="amber"><strong>{health.reversals.last30d} Paystack refund/dispute notice(s) in the last 30 days.</strong> They change what your books should say, and a dispute may have a deadline. Open the Audit tab (look for “paystack_refund” and “paystack_dispute”) and check each in the Paystack dashboard.</Banner>
+      )}
+      {health?.rateLimit?.backend === "memory" && (
+        <Banner tone="amber"><strong>Login and API rate limits are per-server, not shared.</strong> No Redis is configured, so on Vercel each server instance counts separately and a determined attacker can slip past the login throttle. Add an Upstash Redis integration (KV_REST_API_URL and KV_REST_API_TOKEN) in Vercel to fix this.</Banner>
+      )}
+      {health?.techlink?.keyMode === "test" && health.techlink.strict && (
+        <Banner tone="red"><strong>This site is using a Techlink TEST key.</strong> Nothing is being sent to Techlink, and paid orders are waiting. Set TECHLINK_API_KEY to your live key (it starts tlg_live_) in your hosting environment variables and redeploy; the waiting orders then deliver on their own.</Banner>
+      )}
+      {(health?.techlink?.keyMode === "missing" || health?.techlink?.keyMode === "unknown") && (
+        <Banner tone="amber"><strong>The Techlink API key is {health.techlink.keyMode === "missing" ? "missing" : "not recognised"}</strong> (it should start tlg_live_). Check TECHLINK_API_KEY in your hosting environment variables.</Banner>
+      )}
+      {health?.paystack?.keyMode === "unknown" && (
+        <Banner tone="amber"><strong>The Paystack secret key is not recognised</strong> (it should start with sk_live_). Check PAYSTACK_SECRET_KEY in your hosting environment variables.</Banner>
+      )}
+      {health?.delivery && (
+        <Banner tone={health.delivery.mode === "manual" ? "amber" : "blue"} action={me?.role === "admin" ? <button className="nav-item" style={{ width: "auto", padding: "4px 10px" }} disabled={modeBusy} onClick={() => changeDeliveryMode(health.delivery.mode === "manual" ? "automatic" : "manual")}>{modeBusy ? "Saving…" : health.delivery.mode === "manual" ? "Switch to automatic" : "Switch to manual"}</button> : null}>
+          <strong>Delivery mode: {health.delivery.mode === "manual" ? "MANUAL" : "AUTOMATIC"}.</strong>{" "}
+          {health.delivery.mode === "manual"
+            ? "Every paid order waits in Needs attention for your approval."
+            : `Fresh, live-verified payments (under ${health.delivery.autoMaxAgeMinutes} min old) are delivered at once. Anything older, found by a check, or not live-verified waits for your approval.`}
+          {health.delivery.known === false ? " (Could not read the saved setting, so deliveries are held.)" : ""}
+        </Banner>
+      )}
       {walletLow && <Banner tone="red"><strong>Low Techlink wallet: {ghs(walletBalance)}.</strong> Customers can still pay through Paystack, but orders will start failing at delivery if it runs out. Top up now.</Banner>}
       {errors.wallet && <Banner tone="amber">Couldn't check the Techlink wallet ({errors.wallet}). Orders may be failing at delivery without warning — check Techlink directly.</Banner>}
       {workerStale && (
         <Banner tone="red" action={can("worker.run") ? <button className="nav-item" style={{ width: "auto", padding: "4px 10px" }} disabled={workerBusy} onClick={runWorker}>{workerBusy ? "Checking…" : "Check outstanding orders"}</button> : null}>
-          <strong>{health.worker.lastRunAt ? `The background worker last ran ${ageText(health.worker.lastRunAt)} ago.` : "The background worker has not reported in yet."}</strong> While it is not running, automatic delivery may be delayed. Check the GitHub Actions tab and the CRON_SECRET secret. Use <strong>Check outstanding orders</strong> to refresh the review queue; it does not fulfill orders.
+          <strong>{health.worker.lastRunAt ? `The background worker last ran ${ageText(health.worker.lastRunAt)} ago.` : "The background worker has not reported in yet."}</strong> While it is not running, customers who paid may not be getting their orders. Check the GitHub Actions tab (scheduled workflows are switched off after 60 days without repository activity) and the CRON_SECRET secret.
         </Banner>
       )}
       {health?.worker?.lastRunOk === false && !workerStale && <Banner tone="amber">The last worker run had problems in: {health.worker.failedSteps.join(", ") || "unknown steps"}. See Vercel logs.</Banner>}
-      {webhookStuck && <Banner tone="red">{health.webhooks.pending} Paystack payment notification(s) are waiting to be processed, the oldest for {ageText(health.webhooks.oldestPendingAt)}. Run the worker now.</Banner>}
+      {webhookStuck && <Banner tone="red" action={<button className="nav-item" style={{ width: "auto", padding: "4px 10px" }} onClick={() => setTab("notifications")}>Open table</button>}>{health.webhooks.pending} Paystack payment notification(s) are waiting, the oldest for {ageText(health.webhooks.oldestPendingAt)}. Nothing is sent to Techlink from here: open the table, then decide each one on the Needs attention tab.</Banner>}
       {health?.webhooks && !health.webhooks.error && health.webhooks.failed > 0 && <Banner tone="amber">{health.webhooks.failed} Paystack payment notification(s) failed permanently. Those customers may have paid without being delivered: check the Needs attention tab.</Banner>}
       {paidNeedingAction > 0 && can("orders.process") && (
         <Banner tone="red" action={<button className="nav-item" style={{ width: "auto", padding: "4px 10px" }} onClick={() => setTab("review")}>Open</button>}>
@@ -504,7 +345,7 @@ export default function AdminPage() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 20 }}>
         {can("wallet.view") && <StatCard label="Techlink wallet" value={walletBalance != null ? ghs(walletBalance) : errors.wallet ? "—" : "…"} tone={walletLow ? "red" : undefined} />}
-        {can("orders.process") && <StatCard label="Paid — need a decision" value={paidNeedingAction} tone={paidNeedingAction ? "red" : undefined} hint={unpaidCount ? `+ ${unpaidCount} unpaid checkouts` : "all clear"} />}
+        {can("orders.process") && <StatCard label="Paid — need a decision" value={paidNeedingAction} tone={paidNeedingAction ? "red" : undefined} hint={attentionCounts?.held ? `${attentionCounts.held} awaiting your approval` : unpaidCount ? `+ ${unpaidCount} unpaid checkouts` : "all clear"} />}
         {overview && <StatCard label="Paid, not delivered" value={overview.atRisk.count} tone={overview.atRisk.count ? "red" : undefined} hint={overview.atRisk.count ? ghs(overview.atRisk.value) : "none waiting"} />}
         <StatCard label="Open feedback" value={openFeedback} tone={openFeedback ? "amber" : undefined} />
       </div>
@@ -513,6 +354,7 @@ export default function AdminPage() {
         <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>Overview</TabButton>
         <TabButton active={tab === "orders"} onClick={() => setTab("orders")}>Orders</TabButton>
         {can("orders.process") && <TabButton active={tab === "review"} onClick={() => setTab("review")} badge={paidNeedingAction || null}>Needs attention</TabButton>}
+        {can("system.view") && <TabButton active={tab === "notifications"} onClick={() => setTab("notifications")} badge={(health?.webhooks && !health.webhooks.error ? health.webhooks.pending + health.webhooks.failed : 0) || null}>Paystack notifications</TabButton>}
         <TabButton active={tab === "feedback"} onClick={() => setTab("feedback")} badge={openFeedback || null}>Feedback</TabButton>
         {can("reconcile.run") && <TabButton active={tab === "reconcile"} onClick={() => setTab("reconcile")}>Reconciliation</TabButton>}
         <TabButton active={tab === "reviews"} onClick={() => setTab("reviews")}>Reviews</TabButton>
@@ -522,8 +364,9 @@ export default function AdminPage() {
       {tab === "overview" && <OverviewTab overview={overview} loading={loadingOverview} error={errors.overview} range={range} onRangeChange={setRange} />}
       {tab === "orders" && <OrdersTab can={can} refreshTick={refreshTick} onUnauthorized={onUnauthorized} />}
       {tab === "review" && can("orders.process") && <AttentionTab orders={manualReview} counts={attentionCounts} truncated={attentionTruncated} can={can} busy={actionBusy} checks={checks} payments={payments} onAction={requestAction} onCheck={checkTechlink} onInspect={inspectPayment} onRunWorker={runWorker} workerBusy={workerBusy} />}
+      {tab === "notifications" && can("system.view") && <NotificationsTab refreshTick={refreshTick} onUnauthorized={onUnauthorized} onOpenAttention={() => setTab("review")} />}
       {tab === "feedback" && <FeedbackTab feedback={feedback} can={can} onChanged={refreshAll} onUnauthorized={onUnauthorized} />}
-      {tab === "reconcile" && can("reconcile.run") && <ReconciliationTab />}
+      {tab === "reconcile" && can("reconcile.run") && <ReconcileTab />}
       {tab === "reviews" && <ReviewsTab can={can} refreshTick={refreshTick} onUnauthorized={onUnauthorized} />}
       {tab === "audit" && can("audit.view") && <AuditTab entries={auditLog} />}
 

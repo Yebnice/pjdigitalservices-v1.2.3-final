@@ -27,13 +27,17 @@ function csvField(value) {
 }
 
 const COLUMNS = [
-  ["reference", "Reference"],
+  ["orderNo", "Order No"],
+  ["reference", "Paystack Reference"],
+  ["paystackTransactionId", "Paystack Transaction ID"],
   ["orderType", "Order Type"],
   ["network", "Network"],
   ["phone", "Phone"],
   ["email", "Email"],
   ["amount", "Product Amount (GHS)"],
-  ["paystackFeeAmount", "Paystack Fee (GHS)"],
+  ["paystackFeeAmount", "Paystack Fee Charged To Customer (GHS)"],
+  ["paystackFeeActual", "Paystack Fee Actually Taken (GHS)"],
+  ["paystackNetSettled", "Net Settled By Paystack (GHS)"],
   ["checkoutAmount", "Total Charged (GHS)"],
   ["status", "Status"],
   ["fulfillmentStatus", "Fulfillment Status"],

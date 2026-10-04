@@ -95,7 +95,10 @@ async function askGemini(messages, order) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
-  const orderContext = order ? `\nVerified order context (safe customer-facing fields only): ${JSON.stringify(order)}` : "";
+  // The delivered result (electricity token, voucher serial/PIN) is a credential. The AI
+  // provider is a third party and never needs it, so it is stripped from the prompt.
+  const { result: _deliveredResult, ...promptSafeOrder } = order || {};
+  const orderContext = order ? `\nVerified order context (safe customer-facing fields only): ${JSON.stringify(promptSafeOrder)}` : "";
   const system = `You are Annette, the friendly customer-support assistant for PjDigitalServices, a Ghana-focused digital-services storefront.
 
 Your goal is to have a natural, useful conversation — not to sound like a menu, call-centre script, or FAQ bot.

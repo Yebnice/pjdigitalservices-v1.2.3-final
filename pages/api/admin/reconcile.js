@@ -45,10 +45,20 @@ function findColumn(headerRow, candidates) {
 }
 
 function parseAmount(raw) {
-  const cleaned = String(raw || "").replace(/[^0-9.]/g, "");
+  const text = String(raw || "");
+  const cleaned = text.replace(/[^0-9.]/g, "");
   const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  if (!cleaned || !Number.isFinite(n)) return null;
+  // Keep the sign. A refund or reversal row such as "-4.59" or "(4.59)" must not
+  // be read as a normal +4.59 payment and silently "match" the order.
+  const negative = /-\s*[0-9]/.test(text) || /^\s*\(.*[0-9].*\)\s*$/.test(text);
+  return negative ? -n : n;
 }
+
+// Money is compared in whole pesewas. Comparing floats with "< 0.01" is decided
+// by binary rounding noise (4.59 vs 4.58 passed, 102.00 vs 101.99 failed), so a
+// real one-pesewa fee/rounding drift was hidden for some amounts and not others.
+const toPesewas = (ghs) => Math.round(Number(ghs) * 100);
 
 function buildAiSummaryPayload(result) {
   return {
@@ -134,7 +144,7 @@ export default async function handler(req, res) {
       // the card/wallet. Fall back to `amount` for orders that predate the
       // checkoutAmount field.
       const expectedAmount = Number(order.checkoutAmount ?? order.amount);
-      const amountOk = p.amount == null || Math.abs(p.amount - expectedAmount) < 0.01;
+      const amountOk = p.amount == null || toPesewas(p.amount) === toPesewas(expectedAmount);
       // BUG FIX: `!p.status || p.status === "reversed"` used to share one
       // branch, so a CSV with NO recognizable Status column (p.status is
       // null for every row, e.g. a Paystack export that only lists
@@ -158,6 +168,7 @@ export default async function handler(req, res) {
           reference: p.reference,
           paystackAmount: p.amount,
           appAmount: expectedAmount,
+          differenceGhs: p.amount == null ? null : (toPesewas(p.amount) - toPesewas(expectedAmount)) / 100,
           paystackStatus: p.status,
           appStatus: order.status,
         });
