@@ -20,7 +20,7 @@ function walk(dir) {
 }
 walk(apiRoot);
 
-const pricing = read("lib/pricing.js");
+\nconst workerWorkflow = path.join(process.cwd(), ".github", "workflows", "background-worker.yml");\nconst legacyWorkerWorkflow = path.join(process.cwd(), "workflows", "background-worker.yml");\nif (!fs.existsSync(workerWorkflow)) {\n  failures.push("GitHub Actions: background-worker.yml must live in .github/workflows so GitHub can discover it");\n}\nif (fs.existsSync(legacyWorkerWorkflow)) {\n  failures.push("GitHub Actions: legacy root workflows/background-worker.yml must not remain");\n}\n\nconst pricing = read("lib/pricing.js");
 if (!pricing.includes('tierbulkairtime')) {
   failures.push("lib/pricing.js: bulk Airtime must use the normalized zero-margin order type");
 }
