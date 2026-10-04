@@ -34,8 +34,7 @@ const pricing = read("lib/pricing.js");
 if (!pricing.includes('tierbulkairtime')) {
   failures.push("lib/pricing.js: bulk Airtime must use the normalized zero-margin order type");
 }
-if (!pricing.includes("hasExplicitFixed") || !pricing.includes("hasExplicitFixed
-      ? 0")) {
+if (!pricing.includes("hasExplicitFixed") || !pricing.includes("hasExplicitFixed\n      ? 0")) {
   failures.push("lib/pricing.js: fixed-only markup must suppress the default percentage");
 }
 
