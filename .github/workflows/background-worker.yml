@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: "2-59/5 * * * *"
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/background-worker.yml"
 
 concurrency:
   group: pjdigitalservices-fulfillment-worker
@@ -20,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$CRON_SECRET"
-          curl --fail --silent --show-error --max-time 240 \
+          curl --fail-with-body --silent --show-error --location --max-time 240 \
             -H "Authorization: Bearer $CRON_SECRET" \
             -X POST \
-            "https://pjdigitalservices.online/api/jobs/fulfill"
+            "https://www.pjdigitalservices.online/api/jobs/fulfill"
