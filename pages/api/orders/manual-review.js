@@ -5,7 +5,8 @@ import { retryIsSafe } from "../../../lib/techlinkMatch";
 import { evidenceForOrder } from "../../../lib/adminEvidence";
 import { listManualReviewOrders, listChargedButRejectedOrders, manuallyResolveOrder, manualOverride, getOrder } from "../../../lib/store";
 import { notifyCustomerOrderFulfilled, notifyCustomerOrderSms } from "../../../lib/notifications";
-import { verifyAndPrepareOrder, approveAndDeliver, fulfillClaimedOrder, acceptChargedOrder } from "../../../lib/orderProcessing";
+import { verifyAndPrepareOrder, approveAndDeliver, fulfillClaimedOrder, acceptChargedOrder, inspectChargedOrder } from "../../../lib/orderProcessing";
+import { readPaystackFees, readPaystackTransactionId } from "../../../lib/feeCheck";
 import { recordAuditEvent } from "../../../lib/auditLog";
 
 // verifyAndFulfillOrder / fulfillClaimedOrder return an outcome that can carry
@@ -138,6 +139,54 @@ export default async function handler(req, res) {
           await recordAuditEvent({ actor: actor.username, action: "admin_mark_paid_send", reference: cleanReference, note: `${cleanNote}${req.body?.force === true ? " [forced despite Techlink evidence]" : ""}` });
           const result = await fulfillClaimedOrder(cleanReference, { approvedBy: actor.username });
           return res.status(200).json({ result: toAdminResult(result) });
+        }
+
+        if (action === "mark_delivered") {
+          // Never let a manual click manufacture payment evidence. If this order
+          // does not already contain a complete Paystack verification record,
+          // verify the live Paystack transaction first and persist the evidence.
+          const hasCompletePaymentEvidence =
+            current.paymentVerifiedAt &&
+            current.paymentAmount != null &&
+            current.paystackTransactionId;
+          if (!hasCompletePaymentEvidence) {
+            const inspected = await inspectChargedOrder(cleanReference);
+            if (inspected.verdict !== "acceptable") {
+              const reasons = {
+                not_paid: "Paystack does not show this order as successfully paid.",
+                wrong_currency: "Paystack did not verify a GHS payment for this order.",
+                not_real_payment: "Paystack does not show a genuine live payment for this reference.",
+                underpaid: `Paystack shows GHS ${inspected.paid.toFixed(2)} but this order requires GHS ${inspected.expected.toFixed(2)}.`,
+              };
+              return res.status(409).json({
+                error: reasons[inspected.verdict] || "Payment could not be verified. Nothing was marked delivered.",
+                paymentRequired: true,
+                verdict: inspected.verdict,
+              });
+            }
+            const transactionId = readPaystackTransactionId(inspected.txn);
+            if (!transactionId) {
+              return res.status(409).json({
+                error: "Paystack confirmed payment, but no transaction ID was returned. Nothing was marked delivered.",
+                paymentRequired: true,
+              });
+            }
+            const info = {
+              ...(readPaystackFees(inspected.txn) || {}),
+              transactionId,
+            };
+            const verified = await (await import("../../../lib/store")).markPaymentVerified(
+              cleanReference,
+              Math.round(Number(inspected.txn.amount)),
+              info,
+            );
+            if (!verified || verified.status !== "payment_verified") {
+              return res.status(409).json({
+                error: "Payment verification could not be recorded. Nothing was marked delivered.",
+                paymentRequired: true,
+              });
+            }
+          }
         }
 
         const done = await manualOverride(cleanReference, action, cleanNote);
