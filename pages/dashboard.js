@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import OrdersTable from "../components/OrdersTable";
+import { OrderList } from "../components/ui";
 import { isAbandonedOrder } from "../lib/orderStatus";
 
 function customerVisibleOrders(items) {
@@ -93,7 +93,7 @@ export default function DashboardPage() {
         {loading && <p style={{ color: "var(--muted)", fontSize: 14 }}>Loading…</p>}
         {error && <p style={{ color: "var(--red)", fontSize: 13 }}>{error}</p>}
         {processing.length > 0 && <div className="card" style={{ padding: 12, marginBottom: 16, fontSize: 13, borderColor: "var(--gold)" }}>One or more paid orders are still being processed. Refresh later to see the latest status.</div>}
-        {orders && <OrdersTable items={orders} />}
+        {orders && <OrderList items={orders} />}
       </div>
     );
   }

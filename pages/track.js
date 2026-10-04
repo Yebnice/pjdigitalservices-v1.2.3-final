@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Field, PrimaryButton } from "../components/ui";
-import OrdersTable from "../components/OrdersTable";
+import { Field, PrimaryButton, OrderList } from "../components/ui";
 
 export default function TrackPage() {
   const [reference, setReference] = useState("");
@@ -44,7 +43,7 @@ export default function TrackPage() {
         <PrimaryButton onClick={search} disabled={!reference.trim() || !email.includes("@")} loading={loading}>Check order</PrimaryButton>
         {error && <p style={{ color: "var(--red)", fontSize: 13 }}>{error}</p>}
         </div>
-        {results && <div style={{ marginTop: 8 }}><div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>Order status</div>{results.some((o) => ["ready", "processing", "manual_review", "failed"].includes(o.fulfillmentStatus)) && <div className="card" style={{ padding: 12, marginBottom: 12, fontSize: 13, borderColor: "var(--gold)" }}>Your order is still being processed. We are sorry for the delay. Please do not place a duplicate order while we complete the request.</div>}<OrdersTable items={results} /></div>}
+        {results && <div style={{ marginTop: 8 }}><div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>Order status</div>{results.some((o) => ["ready", "processing", "manual_review", "failed"].includes(o.fulfillmentStatus)) && <div className="card" style={{ padding: 12, marginBottom: 12, fontSize: 13, borderColor: "var(--gold)" }}>Your order is still being processed. We are sorry for the delay. Please do not place a duplicate order while we complete the request.</div>}<OrderList items={results} /></div>}
       </div>
     </div>
   );
