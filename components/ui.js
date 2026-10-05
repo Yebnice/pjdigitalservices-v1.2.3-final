@@ -391,9 +391,7 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
   // In pass-through mode, paymentAmount is the actual Paystack amount in
   // pesewas recorded after verification. Use Paystack's actual fee for the
   // receipt when available; never manufacture a fee from our service amount.
-  const totalPaid = order.paymentAmount != null
-    ? Number(order.paymentAmount) / 100
-    : Number(order.checkoutAmount ?? amount ?? order.customerProductAmount ?? order.amount ?? 0);
+  const totalPaid = order.paymentAmount != null ? Number(order.paymentAmount) / 100 : null;
   const productPrice = Number(order.customerProductAmount ?? order.amount ?? 0);
   const feePaid = order.paystackFeeActual != null
     ? Number(order.paystackFeeActual)
@@ -435,10 +433,12 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
           <>
             <ReceiptRow label="Product price" value={`GHS ${productPrice.toFixed(2)}`} />
             <ReceiptRow label="Payment processing fee" value={`GHS ${feePaid.toFixed(2)}`} />
-            <ReceiptRow label="Total paid" value={`GHS ${totalPaid.toFixed(2)}`} />
+            <ReceiptRow label="Total paid" value={totalPaid != null && Number.isFinite(totalPaid) ? `GHS ${totalPaid.toFixed(2)}` : "Unavailable — contact support"} />
           </>
+        ) : totalPaid != null && Number.isFinite(totalPaid) ? (
+          <ReceiptRow label="Amount paid" value={`GHS ${totalPaid.toFixed(2)}`} />
         ) : (
-          <ReceiptRow label="Amount" value={`GHS ${totalPaid.toFixed(2)}`} />
+          <ReceiptRow label="Amount paid" value="Unavailable — contact support" />
         )}
         <ReceiptRow label="Date & time" value={when.toLocaleString()} />
       </div>
