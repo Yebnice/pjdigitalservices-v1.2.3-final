@@ -161,9 +161,10 @@ export function NetworkMismatchNotice({ network, phone, acknowledged, onAcknowle
 // Shown near the phone/account field on every purchase page — Techlink's
 // documented rule is that a wrong number is not refunded, so this needs to
 // be visible before checkout, not buried in a terms page.
-// "Price + processing fee = total", shown before the customer taps Pay so the
-// number on the Pay button never comes as a surprise. Feed it from
-// previewBreakdown() (lib/pricing.js), which uses the same formula as the server.
+// Shows the PjDigitalServices service amount before Paystack checkout. When
+// Paystack customer-fee pass-through is enabled, Paystack—not this UI—calculates
+// and adds the processing fee at checkout, so the fee is intentionally not
+// hard-coded here.
 export function PriceBreakdown({ productAmount, feeAmount, total, productLabel = "Price" }) {
   const t = Number(total);
   if (!Number.isFinite(t) || t <= 0) return null;
