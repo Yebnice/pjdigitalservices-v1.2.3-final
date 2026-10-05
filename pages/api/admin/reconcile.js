@@ -185,9 +185,13 @@ export default async function handler(req, res) {
           reference: p.reference,
           amountCheck,
           paystackAmount: p.amount,
-          appAmount: expectedAmount,
-          amountCheck,
-          differenceGhs: p.amount == null ? null : (toPesewas(p.amount) - toPesewas(expectedAmount)) / 100,
+          appAmount: order.paymentAmount != null && Number.isFinite(Number(order.paymentAmount))
+            ? Number(order.paymentAmount) / 100
+            : expectedAmount,
+          differenceGhs: p.amount == null ? null
+            : (toPesewas(p.amount) - (order.paymentAmount != null && Number.isFinite(Number(order.paymentAmount))
+              ? Math.round(Number(order.paymentAmount))
+              : toPesewas(expectedAmount))) / 100,
           paystackStatus: p.status,
           appStatus: order.status,
         });
