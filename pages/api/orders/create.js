@@ -466,7 +466,11 @@ export default async function handler(req, res) {
       // to Paystack. When Paystack is configured to pass fees to customers,
       // sending checkoutAmount here would make the customer pay the fee twice.
       amount: order.checkoutAmount,
-      paymentAmount: pricing.paymentAmount,
+      paymentAmount: getPaystackPaymentAmount(
+        order.customerProductAmount,
+        order.checkoutAmount,
+        order.amount
+      ),
       productAmount: order.customerProductAmount ?? order.amount,
       feeAmount: order.paystackFeeAmount,
       reused: false,
