@@ -27,40 +27,27 @@ describe("pricing policy", () => {
     }
   });
 
-  it("passes the calculated service amount to Popup when Paystack adds fees", () => {
-    const old = process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS;
-    process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS = "true";
-    try {
-      const pricing = getOrderPricing({
-        providerCost: 1.02,
-        customerBaseAmount: 1,
-        orderType: "airtime",
-        network: "mtn",
-      });
-      expect(pricing.customerProductAmount).toBe(1);
-      expect(pricing.checkoutAmount).toBe(1.03);
-      expect(pricing.paymentAmount).toBe(1.03);
-      expect(withPaystackFee(pricing.paymentAmount)).toBeCloseTo(1.06, 2);
-    } finally {
-      if (old === undefined) delete process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS;
-      else process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS = old;
-    }
+  it("always sends the fee-inclusive checkout amount to Paystack in Ghana", () => {
+    const pricing = getOrderPricing({
+      providerCost: 1.02,
+      customerBaseAmount: 1,
+      orderType: "airtime",
+      network: "mtn",
+    });
+    expect(pricing.customerProductAmount).toBe(1);
+    expect(pricing.checkoutAmount).toBe(1.03);
+    expect(pricing.paymentAmount).toBe(pricing.checkoutAmount);
+    expect(pricing.paymentAmount).not.toBe(pricing.customerProductAmount);
   });
 
-  it("uses the fee-inclusive total as Popup amount when PjDigitalServices bears Paystack fees", () => {
-    const old = process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS;
-    process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS = "false";
+  it("keeps the business margin fixed at 2% even if a deployment supplies a different default", () => {
+    const old = process.env.DEFAULT_BUSINESS_MARGIN_PERCENT;
+    process.env.DEFAULT_BUSINESS_MARGIN_PERCENT = "1";
     try {
-      const pricing = getOrderPricing({
-        providerCost: 1,
-        customerBaseAmount: 1,
-        orderType: "airtime",
-        network: "mtn",
-      });
-      expect(pricing.paymentAmount).toBe(1.03);
+      expect(businessMarkup(100, { orderType: "ecg", network: "ecg" })).toBe(2);
     } finally {
-      if (old === undefined) delete process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS;
-      else process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS = old;
+      if (old === undefined) delete process.env.DEFAULT_BUSINESS_MARGIN_PERCENT;
+      else process.env.DEFAULT_BUSINESS_MARGIN_PERCENT = old;
     }
   });
 
