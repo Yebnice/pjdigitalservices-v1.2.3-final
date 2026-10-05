@@ -189,7 +189,7 @@ export default function ChatWidget() {
           {trackMode && (
             <div className="chat-tool-card">
               <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
-                For privacy, provide both details. They are used only for this lookup.
+                Enter your order number or Paystack reference and the checkout email used for the payment.
               </div>
               <input id="chat-order-reference" name="reference" aria-label="Order reference" className="input" value={orderReference} onChange={(e) => setOrderReference(e.target.value)} placeholder="Order reference" style={{ marginBottom: 8 }} />
               <input id="chat-order-email" name="email" aria-label="Checkout email" autoComplete="email" className="input" type="email" value={orderEmail} onChange={(e) => setOrderEmail(e.target.value)} placeholder="Checkout email" style={{ marginBottom: 8 }} />
@@ -205,7 +205,7 @@ export default function ChatWidget() {
                 <ShieldCheck size={14} />
                 <div>
                   <div className="chat-tool-title">Let's get this sorted</div>
-                  <div className="chat-tool-subtitle">I'll collect the details support needs — no passwords, PINs or one-time codes.</div>
+                  <div className="chat-tool-subtitle">I'll collect the transaction details support needs.</div>
                 </div>
               </div>
               <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>

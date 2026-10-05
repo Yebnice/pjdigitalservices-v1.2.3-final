@@ -72,7 +72,7 @@ export default function AirtimePage() {
         <EmailField email={email} setEmail={setEmail} />
         <PriceBreakdown {...breakdown} productLabel="Airtime" />
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
-          Pay GHS {breakdown.total.toFixed(2)} with Paystack
+          Continue to Paystack
         </PrimaryButton>
       </div>
       <Toast toast={toast} />
