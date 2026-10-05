@@ -1,6 +1,7 @@
 import { requireAdminRole } from "../../../lib/adminAuth";
 import { listOrders } from "../../../lib/store";
 import { recordAuditEvent } from "../../../lib/auditLog";
+import { PAYSTACK_PASS_FEES_TO_CUSTOMERS } from "../../../lib/pricing";
 
 // A small, deliberately simple CSV parser — handles quoted fields (with
 // embedded commas or escaped "" quotes), which is enough for a Paystack
@@ -138,13 +139,29 @@ export default async function handler(req, res) {
         if (!p.status || p.status === "success") paystackOnly.push(p);
         continue;
       }
-      // Compare against checkoutAmount (what Paystack actually charged,
-      // product price + fee markup), not the bare product `amount` — the
-      // Paystack export's "Amount" column is always the amount charged to
-      // the card/wallet. Fall back to `amount` for orders that predate the
-      // checkoutAmount field.
-      const expectedAmount = Number(order.checkoutAmount ?? order.amount);
-      const amountOk = p.amount == null || toPesewas(p.amount) === toPesewas(expectedAmount);
+      // Paystack's exported Amount is the amount actually charged. For a
+      // verified order, paymentAmount is the authoritative amount returned by
+      // Paystack verification. In customer-fee pass-through mode, checkoutAmount
+      // is only the service price, so it must NOT be treated as the charged total.
+      const expectedAmount = Number(order.customerProductAmount ?? order.checkoutAmount ?? order.amount);
+      let amountOk = true;
+      let amountCheck = "not_available";
+      if (p.amount != null) {
+        if (order.paymentAmount != null && Number.isFinite(Number(order.paymentAmount))) {
+          amountOk = toPesewas(p.amount) === Math.round(Number(order.paymentAmount));
+          amountCheck = "verified_payment_amount";
+        } else if (PAYSTACK_PASS_FEES_TO_CUSTOMERS) {
+          // Without the verified payment_amount we can only prove the CSV charge
+          // covered the service amount. We deliberately do not invent Paystack's
+          // exact fee/rounding from the 1.95% rate.
+          amountOk = toPesewas(p.amount) >= toPesewas(expectedAmount);
+          amountCheck = "pass_through_lower_bound";
+        } else {
+          const legacyExpected = Number(order.checkoutAmount ?? order.amount);
+          amountOk = toPesewas(p.amount) === toPesewas(legacyExpected);
+          amountCheck = "legacy_checkout_amount";
+        }
+      }
       // BUG FIX: `!p.status || p.status === "reversed"` used to share one
       // branch, so a CSV with NO recognizable Status column (p.status is
       // null for every row, e.g. a Paystack export that only lists
@@ -162,12 +179,14 @@ export default async function handler(req, res) {
           ? order.status !== "success"
           : (p.status === "success") === (order.status === "success");
       if (amountOk && statusOk) {
-        matched.push({ reference: p.reference });
+        matched.push({ reference: p.reference, amountCheck });
       } else {
         mismatched.push({
           reference: p.reference,
+          amountCheck,
           paystackAmount: p.amount,
           appAmount: expectedAmount,
+          amountCheck,
           differenceGhs: p.amount == null ? null : (toPesewas(p.amount) - toPesewas(expectedAmount)) / 100,
           paystackStatus: p.status,
           appStatus: order.status,
