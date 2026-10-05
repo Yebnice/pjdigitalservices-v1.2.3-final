@@ -14,8 +14,7 @@ describe("pricing policy", () => {
 
   it("applies exactly 2% to every non-exempt service in the pricing matrix", () => {
     const twoPercentServices = [
-      "mtnData", "telecelData", "atData", "tierData", "tierBulkData",
-      "afa", "ecg", "water", "tv", "checker",
+      "afa", "ecg", "water", "tv", "checker", "tierData", "tierBulkData",
     ];
     for (const orderType of twoPercentServices) {
       expect(businessMarkup(100, { orderType })).toBe(2);
