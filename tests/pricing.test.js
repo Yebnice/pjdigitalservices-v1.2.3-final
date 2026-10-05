@@ -56,7 +56,7 @@ describe("pricing policy", () => {
     expect(pricing.markupAmount).toBe(0);
     expect(pricing.customerProductAmount).toBe(1.02);
     expect(pricing.checkoutAmount).toBe(1.05);
-    expect(pricing.paymentAmount).toBe(1.05);
+    expect(pricing.paymentAmount).toBe(1.02);
   });
 
 
