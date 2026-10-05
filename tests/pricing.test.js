@@ -7,6 +7,7 @@ import {
   getPaystackPaymentAmount,
   previewCustomerTotal,
   withPaystackFee,
+  PAYSTACK_PASS_FEES_TO_CUSTOMERS,
 } from "../lib/pricing.js";
 
 const read = (file) => fs.readFileSync(path.join(process.cwd(), file), "utf8");
@@ -38,7 +39,7 @@ describe("pricing policy", () => {
     }
   });
 
-  it("applies Techlink 2% first, then Paystack's gross-up formula for Airtime", () => {
+  it("applies Techlink 2% and leaves Paystack's fee to Paystack", () => {
     const pricing = getOrderPricing({
       providerCost: 1.02,
       customerBaseAmount: 1,
@@ -47,12 +48,13 @@ describe("pricing policy", () => {
     });
     expect(pricing.markupAmount).toBe(0);
     expect(pricing.customerProductAmount).toBe(1.02);
-    expect(pricing.checkoutAmount).toBe(1.05);
-    expect(pricing.paystackFeeAmount).toBe(0.03);
-    expect(pricing.paymentAmount).toBe(1.05);
+    expect(PAYSTACK_PASS_FEES_TO_CUSTOMERS).toBe(true);
+    expect(pricing.checkoutAmount).toBe(1.02);
+    expect(pricing.paystackFeeAmount).toBeNull();
+    expect(pricing.paymentAmount).toBe(1.02);
   });
 
-  it("applies Techlink 2% first for Quick Data even though business margin is 0%", () => {
+  it("applies Techlink 2% first for Quick Data and leaves Paystack's fee to Paystack", () => {
     const pricing = getOrderPricing({
       providerCost: 1.02,
       customerBaseAmount: 1,
@@ -61,17 +63,18 @@ describe("pricing policy", () => {
     });
     expect(pricing.markupAmount).toBe(0);
     expect(pricing.customerProductAmount).toBe(1.02);
-    expect(pricing.checkoutAmount).toBe(1.05);
-    expect(pricing.paymentAmount).toBe(1.05);
+    expect(pricing.checkoutAmount).toBe(1.02);
+    expect(pricing.paystackFeeAmount).toBeNull();
+    expect(pricing.paymentAmount).toBe(1.02);
   });
 
 
-  it("keeps idempotent/retry payment amounts aligned with the first checkout", () => {
-    expect(getPaystackPaymentAmount(1.02, 1.05, 1)).toBe(1.05);
-    expect(getPaystackPaymentAmount(1.02, 1.05, 1)).not.toBe(1.02);
+  it("keeps idempotent/retry payment amounts aligned with the service amount", () => {
+    expect(getPaystackPaymentAmount(1.02, 1.02, 1)).toBe(1.02);
+    expect(getPaystackPaymentAmount(1.02, 1.05, 1)).toBe(1.02);
   });
 
-  it("always sends the fee-inclusive checkout amount to Paystack for Ghana", () => {
+  it("does not send the manually grossed-up amount to Paystack in pass-through mode", () => {
     const pricing = getOrderPricing({
       providerCost: 1.02,
       customerBaseAmount: 1,
@@ -79,18 +82,13 @@ describe("pricing policy", () => {
       network: "mtn",
     });
     expect(pricing.customerProductAmount).toBe(1.02);
-    expect(pricing.checkoutAmount).toBe(1.05);
-    expect(pricing.paymentAmount).toBe(1.05);
-    expect(pricing.paymentAmount).toBe(pricing.checkoutAmount);
-
-    // Regression for the observed duplicate-fee path: grossing up GHS 1.05
-    // again would produce GHS 1.08, so that second gross-up must never be used
-    // as the payment amount sent to Paystack.
-    expect(withPaystackFee(pricing.checkoutAmount)).toBe(1.08);
-    expect(pricing.paymentAmount).not.toBe(withPaystackFee(pricing.checkoutAmount));
+    expect(pricing.checkoutAmount).toBe(1.02);
+    expect(pricing.paymentAmount).toBe(1.02);
+    expect(withPaystackFee(pricing.customerProductAmount)).toBe(1.05);
+    expect(pricing.paymentAmount).not.toBe(withPaystackFee(pricing.customerProductAmount));
   });
 
-  it("computes the Paystack fee consistently from the gross checkout amount", () => {
+  it("keeps the manual Paystack gross-up helper available for legacy mode", () => {
     // Paystack's formula: Price / (1 - 0.0195) + 0.01
     const total = withPaystackFee(100);
     expect(total).toBeCloseTo(102.0, 2);
@@ -101,8 +99,8 @@ describe("pricing policy", () => {
       network: "ecg",
     });
     expect(pricing.customerProductAmount).toBe(102);
-    expect(pricing.checkoutAmount).toBeCloseTo(104.04, 2);
-    expect(pricing.checkoutAmount).toBeGreaterThan(pricing.customerProductAmount);
+    expect(pricing.checkoutAmount).toBe(102);
+    expect(pricing.paymentAmount).toBe(102);
   });
 
   // BUG FIX regression: AFA, ECG, Water, TV and the bulk-data Excel/CSV
@@ -114,14 +112,13 @@ describe("pricing policy", () => {
   it("previewCustomerTotal matches getOrderPricing's real checkout total for a marked-up service", () => {
     const preview = previewCustomerTotal(100, { orderType: "ecg" });
     const real = getOrderPricing({ providerCost: 100, customerBaseAmount: 100, orderType: "ecg" });
-    expect(preview).toBeCloseTo(real.checkoutAmount, 2);
-    // And it must be strictly more than the old, buggy calculation.
-    expect(preview).toBeGreaterThan(withPaystackFee(100));
+    expect(preview).toBeCloseTo(real.customerProductAmount, 2);
+    expect(preview).toBe(102);
   });
 
   it("previewCustomerTotal includes Techlink 2% before Paystack on zero-margin order types", () => {
     for (const orderType of ["airtime", "data", "tierbulkairtime"]) {
-      expect(previewCustomerTotal(100, { orderType })).toBe(104.04);
+      expect(previewCustomerTotal(100, { orderType })).toBe(102);
     }
   });
 
