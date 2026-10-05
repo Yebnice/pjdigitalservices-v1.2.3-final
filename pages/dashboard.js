@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ClipboardList, Clock3, CheckCircle2, ShoppingCart, Smartphone, Wifi, Bolt, Headset } from "lucide-react";
+import { useRouter } from "next/router";
 import { OrderList } from "../components/ui";
 import { isAbandonedOrder } from "../lib/orderStatus";
 
@@ -7,120 +9,139 @@ function customerVisibleOrders(items) {
   return (items || []).filter((o) => !isAbandonedOrder(o));
 }
 
+function StatCard({ icon: Icon, label, value, href }) {
+  const body = (
+    <div className="stat-card" style={{ display: "flex", alignItems: "center", gap: 12, height: "100%" }}>
+      <div className="service-icon"><Icon size={17} color="var(--blue-light)" /></div>
+      <div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{label}</div>
+        <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2 }}>{value}</div>
+      </div>
+    </div>
+  );
+  return href ? <Link href={href} style={{ textDecoration: "none", color: "inherit" }}>{body}</Link> : body;
+}
+
+const QUICK_ACTIONS = [
+  { href: "/airtime", label: "Buy Airtime", icon: Smartphone },
+  { href: "/data", label: "Buy Quick Data", icon: Wifi },
+  { href: "/bills", label: "Pay Bills", icon: Bolt },
+  { href: "/feedback", label: "Get Support", icon: Headset },
+];
+
 export default function DashboardPage() {
-  const [customer, setCustomer] = useState(undefined); // undefined = checking, null = guest
-  const [reference, setReference] = useState("");
-  const [email, setEmail] = useState("");
-  const [orders, setOrders] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const [customer, setCustomer] = useState(undefined);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Logged-in customers see every order tied to their account automatically
-  // — previously this page only supported looking up one order at a time
-  // by reference + email, even for someone with a real account.
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.customer) {
-          setCustomer(d.customer);
-          loadMine();
-        } else {
-          setCustomer(null);
-        }
-      })
-      .catch(() => setCustomer(null));
-  }, []);
-
-  useEffect(() => {
-    if (customer === null) {
+    let active = true;
+    async function load() {
       try {
-        setReference(window.localStorage.getItem("pj_last_reference") || "");
-        setEmail(window.sessionStorage.getItem("pj_email") || "");
-      } catch {}
-    }
-  }, [customer]);
-
-  useEffect(() => { if (customer === null && reference && email) loadOne(); }, [customer, reference, email]);
-
-  async function loadMine() {
-    setLoading(true); setError("");
-    try {
-      const r = await fetch("/api/orders/my");
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not load your orders");
-      setOrders(customerVisibleOrders(d.orders));
-    } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
-  }
-
-  async function loadOne() {
-    setLoading(true); setError("");
-    try {
-      const r = await fetch("/api/orders/track", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reference, email }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not load your order");
-      const visible = customerVisibleOrders(d.orders);
-      const abandoned = (d.orders || []).find((o) => isAbandonedOrder(o));
-      if (abandoned && visible.length === 0) {
-        try {
-          window.localStorage.removeItem("pj_last_reference");
-        } catch {}
-        setReference("");
-        setOrders(null);
-      } else {
-        setOrders(visible);
+        const me = await fetch("/api/auth/me").then((r) => r.json());
+        if (!active) return;
+        if (!me.customer) {
+          setCustomer(null);
+          router.replace("/login?next=/dashboard");
+          return;
+        }
+        setCustomer(me.customer);
+        const r = await fetch("/api/orders/my");
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Could not load your orders");
+        if (!active) return;
+        setOrders(customerVisibleOrders(d.orders));
+      } catch (err) {
+        if (!active) return;
+        setError(err.message || "Could not load your dashboard");
+      } finally {
+        if (active) setLoading(false);
       }
-    } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
-  }
+    }
+    load();
+    return () => { active = false; };
+  }, [router]);
 
-  const processing = (orders || []).filter((o) => ["payment_verified"].includes(o.status) || ["ready", "processing", "manual_review", "queued_with_provider"].includes(o.fulfillmentStatus));
+  const recentOrders = orders.slice(0, 5);
+  const processing = useMemo(
+    () => orders.filter((o) => o.status === "payment_verified" || ["ready", "processing", "manual_review", "queued_with_provider"].includes(o.fulfillmentStatus)),
+    [orders]
+  );
+  const completed = useMemo(() => orders.filter((o) => o.fulfilled || o.status === "success"), [orders]);
 
-  if (customer === undefined) return null;
-
-  if (customer) {
-    return (
-      <div className="page-wrap" style={{ maxWidth: 1000 }}>
-        <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>My orders</h1>
-          <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 4 }}>Signed in as <strong style={{ color: "var(--text)" }}>{customer.username || customer.name}</strong> · every order placed with {customer.email}{orders ? ` · ${orders.length} order${orders.length === 1 ? "" : "s"}` : ""}.</p>
-        </div>
-        {loading && <p style={{ color: "var(--muted)", fontSize: 14 }}>Loading…</p>}
-        {error && <p style={{ color: "var(--red)", fontSize: 13 }}>{error}</p>}
-        {processing.length > 0 && <div className="card" style={{ padding: 12, marginBottom: 16, fontSize: 13, borderColor: "var(--gold)" }}>One or more paid orders are still being processed. Refresh later to see the latest status.</div>}
-        {orders && <OrderList items={orders} />}
-      </div>
-    );
-  }
+  if (customer === undefined && loading) return null;
+  if (!customer) return null;
 
   return (
     <div className="page-wrap" style={{ maxWidth: 1000 }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>My order</h1>
-        <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 4 }}>Use your order number (or Paystack reference) and the checkout email to view one order securely.</p>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
-        <input id="order-reference" name="reference" aria-label="Order reference" className="input" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Order number or reference" />
-        <input id="order-email" name="email" aria-label="Checkout email" autoComplete="email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Checkout email" />
-      </div>
-      <button className="primary-btn" onClick={loadOne} disabled={!reference || !email.includes("@") || loading}>{loading ? "Checking…" : "Check order"}</button>
+      <section className="card" style={{ padding: 22, marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Customer dashboard</div>
+            <h1 style={{ fontSize: 28, fontWeight: 600, margin: "6px 0 4px" }}>Welcome, {customer.name || customer.username}</h1>
+            <p style={{ color: "var(--muted)", fontSize: 14, margin: 0 }}>
+              {customer.email} · Your purchases, order status and account shortcuts in one place.
+            </p>
+          </div>
+          <Link href="/dashboard/orders" className="primary-btn" style={{ width: "auto", padding: "10px 14px", textDecoration: "none" }}>
+            <ClipboardList size={16} />
+            View all orders
+          </Link>
+        </div>
+      </section>
+
       {error && <p style={{ color: "var(--red)", fontSize: 13 }}>{error}</p>}
-      {orders && <>
-        {processing.length > 0 && <div className="card" style={{ padding: 12, margin: "16px 0", fontSize: 13, borderColor: "var(--gold)" }}>Your paid order is still being processed. We are sorry for the delay. Please do not place a duplicate order; refresh this page later to see the latest status.</div>}
-        <OrderList items={orders} />
-      </>}
-      {!reference && (
-        <p style={{ fontSize: 13, color: "var(--muted-dim)", marginTop: 16 }}>
-          After a successful payment, your last order number is saved on this device. You can also find it on your receipt and in your confirmation email.{" "}
-          <Link href="/track" style={{ color: "var(--price)" }}>Track an order</Link>, or{" "}
-          <Link href="/login" style={{ color: "var(--price)" }}>log in</Link> to see all your orders at once.
-        </p>
-      )}
+
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 24 }}>
+        <StatCard icon={ClipboardList} label="Total orders" value={orders.length} href="/dashboard/orders" />
+        <StatCard icon={Clock3} label="Processing" value={processing.length} href="/dashboard/orders" />
+        <StatCard icon={CheckCircle2} label="Completed" value={completed.length} href="/dashboard/orders" />
+      </section>
+
+      <section style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
+          <div>
+            <h2 style={{ fontSize: 18, margin: 0 }}>Recent orders</h2>
+            <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>Your latest purchases and delivery status.</p>
+          </div>
+          {orders.length > 5 && <Link href="/dashboard/orders" style={{ color: "var(--price)", fontSize: 13 }}>See all</Link>}
+        </div>
+        {loading ? (
+          <div className="card" style={{ padding: 18, color: "var(--muted)", fontSize: 14 }}>Loading your orders…</div>
+        ) : recentOrders.length > 0 ? (
+          <OrderList items={recentOrders} />
+        ) : (
+          <div className="card" style={{ padding: 22, textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
+            You have not placed an order with this account yet.
+          </div>
+        )}
+      </section>
+
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 18, margin: "0 0 10px" }}>Quick actions</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+          {QUICK_ACTIONS.map(({ href, label, icon: Icon }) => (
+            <Link key={href} href={href} className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, textDecoration: "none", color: "inherit" }}>
+              <div className="service-icon"><Icon size={16} color="var(--blue-light)" /></div>
+              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{label}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="card" style={{ padding: 18 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <div className="service-icon"><ShoppingCart size={16} color="var(--blue-light)" /></div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>Bought without logging in?</div>
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--muted)", margin: "4px 0 0" }}>
+              Use the public <Link href="/track" style={{ color: "var(--price)" }}>Track an Order</Link> page with your order number and checkout email. Logged-in orders stay here in your account.
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
