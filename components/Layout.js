@@ -4,6 +4,7 @@ import {
   Home, Wifi, Smartphone, Bolt, UserPlus, Tv, GraduationCap,
   ClipboardList, HelpCircle, MessageSquare, Menu, ShoppingCart,
   Shield, FileText, RotateCcw, Zap, UserCircle, LogOut, Star, LogIn,
+  LayoutDashboard,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import ChatWidget from "./ChatWidget";
@@ -22,9 +23,15 @@ const MAIN_LINKS = [
   { href: "/reviews", label: "Reviews", icon: Star },
 ];
 
-const ACCOUNT_LINKS = [
+const AUTH_ACCOUNT_LINKS = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/orders", label: "My Orders", icon: ClipboardList },
+  { href: "/faq", label: "FAQ", icon: HelpCircle },
+  { href: "/feedback", label: "Support", icon: MessageSquare },
+];
+
+const GUEST_ACCOUNT_LINKS = [
   { href: "/register", label: "Create Account", icon: UserCircle },
-  { href: "/dashboard", label: "My Orders", icon: ClipboardList },
   { href: "/track", label: "Track an Order", icon: ShoppingCart },
   { href: "/faq", label: "FAQ", icon: HelpCircle },
   { href: "/feedback", label: "Support", icon: MessageSquare },
@@ -83,7 +90,7 @@ export default function Layout({ children }) {
   }, [router.pathname]);
 
   // A logged-in customer has no use for "Create Account".
-  const accountLinks = customer ? ACCOUNT_LINKS.filter((l) => l.href !== "/register") : ACCOUNT_LINKS;
+  const accountLinks = customer ? AUTH_ACCOUNT_LINKS : GUEST_ACCOUNT_LINKS;
 
   async function adminSignOut() {
     await fetch("/api/admin/logout", { method: "POST" });
@@ -170,7 +177,7 @@ export default function Layout({ children }) {
           </button>
         </div>
         {mobileOpen && (
-          <nav className="mobile-nav">
+          <nav className="mobile-nav" aria-label="Primary navigation">
             <NavList links={MAIN_LINKS} router={router} onNavigate={() => setMobileOpen(false)} />
             {/* The sidebar (which holds log in / log out) is hidden on phones, so the
                 mobile menu has to offer them itself. */}
