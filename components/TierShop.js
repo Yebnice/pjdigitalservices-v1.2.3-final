@@ -312,7 +312,7 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
         />
       </Field>
       <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
-        {rows.length} valid line{rows.length === 1 ? "" : "s"} detected. Estimated total: GHS {withPaystackFee(total).toFixed(2)} (includes the Paystack processing fee). The final total is confirmed exactly at payment.
+        {rows.length} valid line{rows.length === 1 ? "" : "s"} detected. Service total: GHS {total.toFixed(2)}. Paystack calculates and adds the processing fee at checkout. The service amount is confirmed exactly at payment.
       </p>
       {mismatches.length > 0 && (
         <div style={{ border: "1px solid var(--red)", borderRadius: 8, padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}>
