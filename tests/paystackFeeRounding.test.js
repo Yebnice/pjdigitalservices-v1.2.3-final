@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withPaystackFee, previewBreakdown, getOrderPricing, PAYSTACK_FEE_RATE } from "../lib/pricing.js";
+import { withPaystackFee, previewBreakdown, getOrderPricing, PAYSTACK_FEE_RATE, PAYSTACK_PASS_FEES_TO_CUSTOMERS } from "../lib/pricing.js";
 
 const round2 = (v) => Math.round(v * 100) / 100;
 
@@ -8,7 +8,7 @@ const round2 = (v) => Math.round(v * 100) / 100;
 const feeNearest = (total) => round2(total * PAYSTACK_FEE_RATE);
 const feeRoundedUp = (total) => Math.ceil(total * PAYSTACK_FEE_RATE * 100 - 1e-9) / 100;
 
-describe("Paystack fee gross-up", () => {
+describe("Paystack fee handling", () => {
   it("never settles below the product price, for every price from GHS 0.01 to 500.00", () => {
     const shortfalls = [];
     for (let pesewas = 1; pesewas <= 50000; pesewas += 1) {
@@ -33,12 +33,14 @@ describe("Paystack fee gross-up", () => {
     expect(previewBreakdown(0, { orderType: "airtime" }).total).toBe(0);
   });
 
-  it("previewBreakdown always satisfies price + fee = total and matches the server's amount", () => {
+  it("previewBreakdown uses the service amount and leaves the customer fee to Paystack", () => {
     for (const orderType of ["airtime", "data", "ecg", "tv", "water", "checker", "afa", "tierData", "tierBulkData"]) {
       for (const base of [1, 4.4, 9.99, 25, 100, 333.33]) {
         const b = previewBreakdown(base, { orderType, network: "mtn" });
         const server = getOrderPricing({ providerCost: base, customerBaseAmount: base, orderType, network: "mtn" });
-        expect(round2(b.productAmount + b.feeAmount)).toBe(b.total);
+        expect(PAYSTACK_PASS_FEES_TO_CUSTOMERS).toBe(true);
+        expect(b.feeAmount).toBeNull();
+        expect(b.total).toBe(server.customerProductAmount);
         expect(b.total).toBe(server.checkoutAmount);
       }
     }
