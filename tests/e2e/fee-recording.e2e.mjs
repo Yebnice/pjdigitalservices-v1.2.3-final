@@ -22,10 +22,10 @@ globalThis.fetch = async (url) => {
 };
 console.error = () => {}; console.warn = () => {};
 
-// A GHS 4.49 product: customer is charged 4.59, expected fee 0.10.
+// A GHS 4.49 product: Paystack customer-fee pass-through means the service amount sent is 4.49; Paystack adds its actual fee at checkout.
 const seed = (ref) => memdb.db.tables.orders.push({
   reference: ref, order_type: "tierData", network: "mtn", phone: "0241234567", email: "c@d.co",
-  amount: 4.4, provider_cost: 4.4, checkout_amount: 4.59, paystack_fee_amount: 0.1,
+  amount: 4.4, provider_cost: 4.4, checkout_amount: 4.49, paystack_fee_amount: null,
   customer_product_amount: 4.49, business_markup_amount: 0.09,
   status: "pending", fulfilled: false, fulfillment_status: "pending", fulfillment_attempts: 0,
   created_at: new Date(Date.now() - 4 * 60000).toISOString(), // a fresh checkout: an order with NO creation time counts as too old and is held
