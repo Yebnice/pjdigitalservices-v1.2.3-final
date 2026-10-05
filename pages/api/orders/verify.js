@@ -16,7 +16,12 @@ export default async function handler(req, res) {
 
     const result = await verifyAndFulfillOrder(String(reference).trim());
     if (result.kind === "not_found") return res.status(404).json({ error: "Unknown order" });
-    if (result.kind === "failed") return res.status(400).json({ status: result.status });
+    if (result.kind === "failed") {
+      return res.status(400).json({
+        status: result.status,
+        order: result.order ? toPublicOrderForViewer(result.order, email) : null,
+      });
+    }
     if (result.kind === "payment_pending" || result.kind === "processing" || result.kind === "retryable_failure" || result.kind === "manual_review" || result.kind === "held" || result.kind === "not_ready") {
       return res.status(202).json({ status: "processing", order: toPublicOrderForViewer(result.order, email) });
     }
