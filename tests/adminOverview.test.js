@@ -22,7 +22,7 @@ describe("estimatedNetProfit", () => {
   });
 
   it("falls back to actual fee minus charge when net settlement was not stored", () => {
-    const legacyEvidence = order({ paystackNetSettled: null, paystackFeeActual: 2.03, paymentAmount: 104.03 });
+    const legacyEvidence = order({ paystackNetSettled: null, paystackFeeActual: 2.03, paymentAmount: 10403 });
     expect(estimatedNetProfit(legacyEvidence, FEE)).toBe(2);
   });
 });
