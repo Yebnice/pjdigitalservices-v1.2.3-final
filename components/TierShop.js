@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import { Field, EmailField, PrimaryButton, Toast, NoRefundNotice, PriceBreakdown, NetworkBadge, OrderReceipt, NetworkMismatchNotice, getLikelyNetwork, phonePlaceholder, bulkPlaceholder, samplePhones, NETWORKS } from "./ui";
 import { payAndFulfil } from "../lib/payment";
-import { withPaystackFee, businessMarkup, previewBreakdown } from "../lib/pricing";
+import { businessMarkup, previewBreakdown } from "../lib/pricing";
 import { TIERS, NETWORK_PAGES } from "../lib/agentProducts";
 
 /* ---------- shared helpers ---------- */
@@ -281,7 +281,7 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
         rows: rows.map((r) => ({ phone: r.phone, size: r.value })),
         // Bulk data is summed from per-line catalogue prices that already include
         // rounded markup, so allow up to half a pesewa of rounding drift per line.
-        expectedAmount: total > 0 ? withPaystackFee(total) : undefined,
+        expectedAmount: total > 0 ? total : undefined,
         expectedTolerance: 0.01 + 0.005 * rows.length,
         onDone: (order, paidAmount) => onDone(order, paidAmount),
         onError,
@@ -407,7 +407,7 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
         <p style={{ fontSize: 12, color: "var(--muted-dim)", margin: 0 }}>
           {parsing
             ? "Reading file..."
-            : `${fileName}: ${rows.length} valid line${rows.length === 1 ? "" : "s"} detected. Estimated total: GHS ${withPaystackFee(total).toFixed(2)} (includes the Paystack processing fee). The final total is confirmed exactly at payment.`}
+            : `${fileName}: ${rows.length} valid line${rows.length === 1 ? "" : "s"} detected. Service total: GHS ${total.toFixed(2)}. Paystack calculates and adds the processing fee at checkout. The service amount is confirmed exactly at payment.`}
         </p>
       )}
       {mismatches.length > 0 && (
