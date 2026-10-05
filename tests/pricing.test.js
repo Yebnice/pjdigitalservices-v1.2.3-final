@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { businessMarkup, getOrderPricing, previewCustomerTotal, withPaystackFee } from "../lib/pricing.js";
+import {
+  businessMarkup,
+  getOrderPricing,
+  getPaystackPaymentAmount,
+  previewCustomerTotal,
+  withPaystackFee,
+} from "../lib/pricing.js";
 
 const read = (file) => fs.readFileSync(path.join(process.cwd(), file), "utf8");
 
@@ -60,6 +66,11 @@ describe("pricing policy", () => {
   });
 
 
+  it("keeps idempotent/retry payment amounts aligned with the first checkout", () => {
+    expect(getPaystackPaymentAmount(1.02, 1.05, 1)).toBe(1.02);
+    expect(getPaystackPaymentAmount(1.02, 1.05, 1)).not.toBe(1.05);
+  });
+
   it("does not send the grossed-up checkout amount when Paystack passes fees to the customer", () => {
     const pricing = getOrderPricing({
       providerCost: 1.02,
@@ -110,6 +121,12 @@ describe("pricing policy", () => {
     for (const orderType of ["airtime", "data", "tierbulkairtime"]) {
       expect(previewCustomerTotal(100, { orderType })).toBe(104.04);
     }
+  });
+
+  it("wires the idempotent order response through the shared Paystack amount resolver", () => {
+    expect(read("pages/api/orders/create.js")).toContain("getPaystackPaymentAmount(");
+    expect(read("pages/api/orders/create.js")).toContain("existing.customerProductAmount");
+    expect(read("pages/api/orders/create.js")).toContain("existing.checkoutAmount");
   });
 
   it("wires every customer-facing price preview through previewCustomerTotal, not withPaystackFee alone", () => {
