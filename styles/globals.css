@@ -973,3 +973,38 @@ summary:hover {
 }
 
 
+
+/* ---------- Small-screen layout safety ---------- */
+@media (max-width: 600px) {
+  .page-wrap {
+    padding: 28px 18px;
+  }
+
+  .hero {
+    padding: 24px 18px 8px;
+  }
+
+  .hero h1 {
+    font-size: 30px;
+    line-height: 1.2;
+  }
+
+  .hero p {
+    font-size: 14.5px;
+  }
+
+  .network-picker {
+    gap: 6px;
+  }
+
+  .network-btn {
+    padding: 10px 7px;
+    font-size: 13px;
+    gap: 5px;
+  }
+
+  .chat-panel {
+    min-height: 0;
+    height: min(74vh, calc(100vh - 96px));
+  }
+}
