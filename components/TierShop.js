@@ -292,7 +292,7 @@ function BulkForm({ kind, tierKey, tier, networkId, email, setEmail, loading, se
         network: networkId,
         email,
         rows: rows.map((r) => ({ phone: r.phone, amount: r.value })),
-        expectedAmount: total > 0 ? withPaystackFee(total) : undefined,
+        expectedAmount: total > 0 ? total : undefined,
         onDone: (order, paidAmount) => onDone(order, paidAmount),
         onError,
       });
@@ -374,7 +374,7 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
         rows: rows.map((r) => ({ phone: r.phone, size: r.value })),
         // Bulk data is summed from per-line catalogue prices that already include
         // rounded markup, so allow up to half a pesewa of rounding drift per line.
-        expectedAmount: total > 0 ? withPaystackFee(total) : undefined,
+        expectedAmount: total > 0 ? total : undefined,
         expectedTolerance: 0.01 + 0.005 * rows.length,
         onDone: (order, paidAmount) => onDone(order, paidAmount),
         onError,
@@ -385,7 +385,7 @@ function ExcelForm({ kind, tierKey, tier, networkId, email, setEmail, loading, s
         network: networkId,
         email,
         rows: rows.map((r) => ({ phone: r.phone, amount: r.value })),
-        expectedAmount: total > 0 ? withPaystackFee(total) : undefined,
+        expectedAmount: total > 0 ? total : undefined,
         onDone: (order, paidAmount) => onDone(order, paidAmount),
         onError,
       });
