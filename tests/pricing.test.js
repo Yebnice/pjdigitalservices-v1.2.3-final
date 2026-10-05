@@ -43,7 +43,7 @@ describe("pricing policy", () => {
     expect(pricing.customerProductAmount).toBe(1.02);
     expect(pricing.checkoutAmount).toBe(1.05);
     expect(pricing.paystackFeeAmount).toBe(0.03);
-    expect(pricing.paymentAmount).toBe(1.05);
+    expect(pricing.paymentAmount).toBe(1.02);
   });
 
   it("applies Techlink 2% first for Quick Data even though business margin is 0%", () => {
@@ -59,6 +59,23 @@ describe("pricing policy", () => {
     expect(pricing.paymentAmount).toBe(1.05);
   });
 
+
+  it("does not send the grossed-up checkout amount when Paystack passes fees to the customer", () => {
+    const pricing = getOrderPricing({
+      providerCost: 1.02,
+      customerBaseAmount: 1,
+      orderType: "airtime",
+      network: "mtn",
+    });
+    expect(pricing.customerProductAmount).toBe(1.02);
+    expect(pricing.checkoutAmount).toBe(1.05);
+    expect(pricing.paymentAmount).toBe(1.02);
+
+    // Regression for the observed duplicate-fee path: grossing up GHS 1.05
+    // again produces GHS 1.08.
+    expect(withPaystackFee(pricing.checkoutAmount)).toBe(1.08);
+    expect(pricing.paymentAmount).not.toBe(pricing.checkoutAmount);
+  });
 
   it("computes the Paystack fee consistently from the gross checkout amount", () => {
     // Paystack's formula: Price / (1 - 0.0195) + 0.01
