@@ -138,6 +138,14 @@ describe("pricing policy", () => {
     expect(source).toContain("Number(o.paymentAmount ?? o.checkoutAmount ?? o.amount).toFixed(2)");
   });
 
+  it("does not gross-up bulk order price guards when Paystack pass-through is enabled", () => {
+    const source = read("components/TierShop.js");
+    expect(source).toContain("expectedAmount: total > 0 ? total : undefined");
+    expect(source).not.toContain("expectedAmount: total > 0 ? withPaystackFee(total) : undefined");
+    expect(source).not.toContain("withPaystackFee");
+    expect(source).toContain("Paystack calculates and adds the processing fee at checkout");
+  });
+
   it("wires every customer-facing price preview through previewCustomerTotal, not withPaystackFee alone", () => {
     const checks = [
       { file: "pages/afa.js", mustContain: "previewCustomerTotal(fee, { orderType: \"afa\", network })" },
