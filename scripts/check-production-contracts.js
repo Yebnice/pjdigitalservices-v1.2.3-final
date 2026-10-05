@@ -31,14 +31,30 @@ if (fs.existsSync(legacyWorkerWorkflow)) {
 }
 
 const pricing = read("lib/pricing.js");
-if (!pricing.includes('tierbulkairtime')) {
-  failures.push("lib/pricing.js: bulk Airtime must use the normalized zero-margin order type");
+
+// The business-margin matrix is intentionally hard-coded. Deployment environment
+// variables must not be able to change the owner's pricing policy.
+if (!pricing.includes("export const DEFAULT_BUSINESS_MARGIN_PERCENT = 2;")) {
+  failures.push("lib/pricing.js: business margin constant must be exactly 2%");
 }
-if (!pricing.includes('envNumber("DEFAULT_BUSINESS_MARGIN_PERCENT", 2)')) {
-  failures.push("lib/pricing.js: default business margin must be 2%");
+if (!pricing.includes('const NO_MARGIN_ORDER_TYPES = new Set(["airtime", "data", "tierbulkairtime"]);')) {
+  failures.push("lib/pricing.js: zero-margin order-type matrix is missing or changed");
 }
-if (!pricing.includes("hasExplicitFixed") || !pricing.includes("hasExplicitFixed\n      ? 0")) {
-  failures.push("lib/pricing.js: fixed-only markup must suppress the default percentage");
+if (!pricing.includes("return hasNoBusinessMargin(orderType) ? 0 : roundMoney(base * 0.02);")) {
+  failures.push("lib/pricing.js: businessMarkup must enforce 0% or exactly 2% according to the locked matrix");
+}
+if (
+  pricing.includes('envNumber("DEFAULT_BUSINESS_MARGIN_PERCENT"') ||
+  pricing.includes("SERVICE_MARKUP_RULES_JSON") ||
+  pricing.includes("hasExplicitFixed")
+) {
+  failures.push("lib/pricing.js: configurable business-margin overrides must not remain");
+}
+if (!pricing.includes('envNumber("PAYSTACK_FEE_RATE", 0.0195)')) {
+  failures.push("lib/pricing.js: Paystack Ghana fee default must remain 1.95%");
+}
+if (!pricing.includes("const paymentAmount = checkoutAmount;")) {
+  failures.push("lib/pricing.js: Ghana payment amount must equal the calculated fee-inclusive checkout amount");
 }
 
 const ui = read("components/ui.js");
