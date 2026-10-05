@@ -27,19 +27,20 @@ describe("pricing policy", () => {
     }
   });
 
-  it("uses the product price as Popup amount when Paystack passes fees to customers", () => {
+  it("passes the calculated service amount to Popup when Paystack adds fees", () => {
     const old = process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS;
     process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS = "true";
     try {
       const pricing = getOrderPricing({
-        providerCost: 1,
+        providerCost: 1.02,
         customerBaseAmount: 1,
         orderType: "airtime",
         network: "mtn",
       });
       expect(pricing.customerProductAmount).toBe(1);
       expect(pricing.checkoutAmount).toBe(1.03);
-      expect(pricing.paymentAmount).toBe(1);
+      expect(pricing.paymentAmount).toBe(1.03);
+      expect(withPaystackFee(pricing.paymentAmount)).toBeCloseTo(1.06, 2);
     } finally {
       if (old === undefined) delete process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS;
       else process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS = old;
