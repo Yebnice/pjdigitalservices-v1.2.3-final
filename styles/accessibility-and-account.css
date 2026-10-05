@@ -1,0 +1,136 @@
+/* UI accessibility + customer-account enhancement.
+   Loaded after styles/globals.css. */
+
+:root {
+  --accent: #b4573b;
+  --accent-dark: #a94832;
+  --accent-light: #d7a08b;
+  --muted: #6e6656;
+  --muted-dim: #6b6251;
+  --blue-light: #1d4ed8;
+  --price: #1d4ed8;
+  --line: #968d7d;
+  --line-soft: rgba(41, 37, 29, 0.14);
+  --green: #216b49;
+  --red: #9f2f40;
+  --pending: #8a641a;
+  --pending-bg: #8a641a;
+  --border: var(--line);
+  --accent-link: #a94832;
+  --focus-ring: #a94832;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101114;
+    --bg-sidebar: #171922;
+    --surface: #191b21;
+    --surface-raised: #20232b;
+    --surface-hover: rgba(255, 255, 255, 0.06);
+    --line: #767c88;
+    --line-soft: rgba(255, 255, 255, 0.16);
+    --text: #f4f0e8;
+    --muted: #c7bfaf;
+    --muted-dim: #aaa18f;
+    --accent: #a94832;
+    --accent-dark: #963c2c;
+    --accent-light: #d7a08b;
+    --blue-light: #8fb1ff;
+    --price: #8fb1ff;
+    --green: #62b48a;
+    --red: #ef8394;
+    --pending: #e5b764;
+    --pending-bg: #8f691d;
+    --gold: #d6a33d;
+    --blue: #5f8fff;
+    --accent-link: #f0a487;
+    --focus-ring: #f0a487;
+  }
+
+  html,
+  body {
+    color-scheme: dark;
+  }
+
+  .mobile-topbar {
+    background: rgba(16, 17, 20, 0.92) !important;
+  }
+}
+
+.chat-header {
+  background: linear-gradient(135deg, #a94832 0%, #b4573b 100%) !important;
+}
+
+.card > div[style*="background: var(--gold)"] {
+  background: var(--pending-bg) !important;
+}
+
+.tx-row div[style*="color: var(--gold)"] {
+  color: var(--pending) !important;
+}
+
+.card[style*="border-color: var(--gold)"] {
+  border-color: var(--pending) !important;
+}
+
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline-color: var(--focus-ring) !important;
+}
+
+.input,
+.network-btn,
+.bundle-card,
+.card,
+.stat-card,
+.hero-eyebrow,
+.network-chip,
+.chat-panel,
+.chat-msg.bot,
+.chat-quick button {
+  border-color: var(--line);
+}
+
+.sidebar-footer .nav-item,
+.brand-tagline {
+  color: var(--muted-dim);
+}
+
+a {
+  color: var(--accent-link) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  summary:hover {
+    color: var(--accent-link) !important;
+  }
+
+  .brand-mark {
+    background: #08090c;
+  }
+
+  .chat-msg.user,
+  .chat-mini-avatar.user-avatar,
+  .chat-quick .chat-human-chip {
+    background: #f4f0e8 !important;
+    color: #101114 !important;
+    border-color: #f4f0e8 !important;
+  }
+
+  .primary-btn,
+  .sidebar-cta,
+  .chat-input-wrap > button {
+    background: var(--accent) !important;
+  }
+
+  .primary-btn:hover:not(:disabled),
+  .sidebar-cta:hover,
+  .chat-input-wrap > button:hover:not(:disabled) {
+    background: var(--accent-dark) !important;
+  }
+}
