@@ -14,7 +14,12 @@ import {
 } from "../../../lib/techlink";
 import { TIERS } from "../../../lib/agentProducts";
 import { rateLimit } from "../../../lib/rateLimit";
-import { getOrderPricing, DEFAULT_AIRTIME_PROVIDER_FEE_RATE, resolveAirtimeFeeRate } from "../../../lib/pricing";
+import {
+  getOrderPricing,
+  getPaystackPaymentAmount,
+  DEFAULT_AIRTIME_PROVIDER_FEE_RATE,
+  resolveAirtimeFeeRate,
+} from "../../../lib/pricing";
 import { isValidGhanaNumber, toLocalGhanaNumber } from "../../../lib/networkValidation";
 
 // Smallest airtime / bill top-up accepted. Anything lower is rejected by the
@@ -54,7 +59,11 @@ export default async function handler(req, res) {
         return res.status(200).json({
           reference: existing.reference,
           amount: existing.checkoutAmount,
-          paymentAmount: existing.checkoutAmount ?? existing.customerProductAmount ?? existing.amount,
+          paymentAmount: getPaystackPaymentAmount(
+            existing.customerProductAmount,
+            existing.checkoutAmount,
+            existing.amount
+          ),
           productAmount: existing.customerProductAmount ?? existing.amount,
           feeAmount: existing.paystackFeeAmount ?? 0,
           reused: true,
