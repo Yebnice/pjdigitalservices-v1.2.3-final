@@ -178,6 +178,9 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "That bundle is no longer available — refresh and pick again" });
       }
       amount = Number(bundle.price ?? bundle.amount);
+      // Quick Data has 0% PjDigitalServices business margin, but Techlink's
+      // 2% customer/platform fee is part of the customer price before Paystack.
+      providerCost = Math.round(amount * 1.02 * 100) / 100;
 
     } else if (orderType === "afa") {
       if (!network) return res.status(400).json({ error: "Network is required" });
