@@ -65,7 +65,7 @@ export default async function handler(req, res) {
             existing.amount
           ),
           productAmount: existing.customerProductAmount ?? existing.amount,
-          feeAmount: existing.paystackFeeAmount ?? 0,
+          feeAmount: existing.paystackFeeAmount ?? null,
           reused: true,
         });
       }
