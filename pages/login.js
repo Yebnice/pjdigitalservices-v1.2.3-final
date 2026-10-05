@@ -24,7 +24,16 @@ export default function LoginPage() {
         if (!ok) {
           setError(d.error);
         } else {
-          router.push("/dashboard");
+          let next = "/dashboard";
+          if (typeof router.query.next === "string" && router.query.next.startsWith("/") && !router.query.next.startsWith("//")) {
+            try {
+              const candidate = new URL(router.query.next, window.location.origin);
+              if (candidate.origin === window.location.origin) {
+                next = candidate.pathname + candidate.search + candidate.hash;
+              }
+            } catch {}
+          }
+          router.push(next);
         }
       })
       .catch(() => setError("Could not reach the server — try again."))
