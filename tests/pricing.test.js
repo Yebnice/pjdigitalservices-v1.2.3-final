@@ -49,7 +49,7 @@ describe("pricing policy", () => {
     expect(pricing.customerProductAmount).toBe(1.02);
     expect(pricing.checkoutAmount).toBe(1.05);
     expect(pricing.paystackFeeAmount).toBe(0.03);
-    expect(pricing.paymentAmount).toBe(1.02);
+    expect(pricing.paymentAmount).toBe(1.05);
   });
 
   it("applies Techlink 2% first for Quick Data even though business margin is 0%", () => {
@@ -62,16 +62,16 @@ describe("pricing policy", () => {
     expect(pricing.markupAmount).toBe(0);
     expect(pricing.customerProductAmount).toBe(1.02);
     expect(pricing.checkoutAmount).toBe(1.05);
-    expect(pricing.paymentAmount).toBe(1.02);
+    expect(pricing.paymentAmount).toBe(1.05);
   });
 
 
   it("keeps idempotent/retry payment amounts aligned with the first checkout", () => {
-    expect(getPaystackPaymentAmount(1.02, 1.05, 1)).toBe(1.02);
-    expect(getPaystackPaymentAmount(1.02, 1.05, 1)).not.toBe(1.05);
+    expect(getPaystackPaymentAmount(1.02, 1.05, 1)).toBe(1.05);
+    expect(getPaystackPaymentAmount(1.02, 1.05, 1)).not.toBe(1.02);
   });
 
-  it("does not send the grossed-up checkout amount when Paystack passes fees to the customer", () => {
+  it("always sends the fee-inclusive checkout amount to Paystack for Ghana", () => {
     const pricing = getOrderPricing({
       providerCost: 1.02,
       customerBaseAmount: 1,
@@ -80,12 +80,14 @@ describe("pricing policy", () => {
     });
     expect(pricing.customerProductAmount).toBe(1.02);
     expect(pricing.checkoutAmount).toBe(1.05);
-    expect(pricing.paymentAmount).toBe(1.02);
+    expect(pricing.paymentAmount).toBe(1.05);
+    expect(pricing.paymentAmount).toBe(pricing.checkoutAmount);
 
     // Regression for the observed duplicate-fee path: grossing up GHS 1.05
-    // again produces GHS 1.08.
+    // again would produce GHS 1.08, so that second gross-up must never be used
+    // as the payment amount sent to Paystack.
     expect(withPaystackFee(pricing.checkoutAmount)).toBe(1.08);
-    expect(pricing.paymentAmount).not.toBe(pricing.checkoutAmount);
+    expect(pricing.paymentAmount).not.toBe(withPaystackFee(pricing.checkoutAmount));
   });
 
   it("computes the Paystack fee consistently from the gross checkout amount", () => {
