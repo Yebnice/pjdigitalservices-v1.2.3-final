@@ -54,7 +54,7 @@ export default async function handler(req, res) {
         return res.status(200).json({
           reference: existing.reference,
           amount: existing.checkoutAmount,
-          paymentAmount: existing.customerProductAmount ?? existing.amount,
+          paymentAmount: existing.checkoutAmount ?? existing.customerProductAmount ?? existing.amount,
           productAmount: existing.customerProductAmount ?? existing.amount,
           feeAmount: existing.paystackFeeAmount ?? 0,
           reused: true,
