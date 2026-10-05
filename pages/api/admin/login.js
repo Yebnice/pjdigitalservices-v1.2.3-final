@@ -63,7 +63,13 @@ export default async function handler(req, res) {
     mfa = true;
   }
 
-  createAdminSession(res, identity, { mfa });
+  try {
+    createAdminSession(res, identity, { mfa });
+  } catch (err) {
+    // Do not expose secret/configuration details to the browser.
+    console.error("Could not create the admin session", err);
+    return res.status(503).json({ error: "Sign-in is temporarily unavailable. Try again shortly." });
+  }
   await recordAuditEvent({ actor: identity.username, action: "admin_login", note: `Signed in as ${identity.role}${mfa ? " with two-factor" : ""} from IP ${key}` });
   return res.status(200).json({ ok: true, role: identity.role, username: identity.username, twoFactor: mfa });
 }
