@@ -59,8 +59,13 @@ if (!pricing.includes("export function getPaystackPaymentAmount(")) {
 if (!pricing.includes("const paymentAmount = getPaystackPaymentAmount(")) {
   failures.push("lib/pricing.js: checkout must use the shared Paystack payment-amount resolver");
 }
-if (!pricing.includes("return checkout || product || fallback;")) {
-  failures.push("lib/pricing.js: Ghana checkout must send the single fee-inclusive amount to Paystack");
+if (!pricing.includes("return PAYSTACK_PASS_FEES_TO_CUSTOMERS ? (product || fallback) : (checkout || product || fallback);")) {
+  failures.push("lib/pricing.js: Paystack payment amount must use the product/service amount when customer-fee pass-through is enabled");
+}
+if (!pricing.includes("const checkoutAmount = PAYSTACK_PASS_FEES_TO_CUSTOMERS")
+    || !pricing.includes("? customerProductAmount")
+    || !pricing.includes(": withPaystackFee(customerProductAmount);")) {
+  failures.push("lib/pricing.js: customer-fee pass-through must not manually gross up the Paystack amount");
 }
 
 const ui = read("components/ui.js");
