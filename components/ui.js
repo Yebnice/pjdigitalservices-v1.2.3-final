@@ -161,9 +161,10 @@ export function NetworkMismatchNotice({ network, phone, acknowledged, onAcknowle
 // Shown near the phone/account field on every purchase page — Techlink's
 // documented rule is that a wrong number is not refunded, so this needs to
 // be visible before checkout, not buried in a terms page.
-// "Price + processing fee = total", shown before the customer taps Pay so the
-// number on the Pay button never comes as a surprise. Feed it from
-// previewBreakdown() (lib/pricing.js), which uses the same formula as the server.
+// Shows the PjDigitalServices service amount before Paystack checkout. When
+// Paystack customer-fee pass-through is enabled, Paystack—not this UI—calculates
+// and adds the processing fee at checkout, so the fee is intentionally not
+// hard-coded here.
 export function PriceBreakdown({ productAmount, feeAmount, total, productLabel = "Price" }) {
   const t = Number(total);
   if (!Number.isFinite(t) || t <= 0) return null;
@@ -175,9 +176,12 @@ export function PriceBreakdown({ productAmount, feeAmount, total, productLabel =
       style={{ border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: 13, lineHeight: 1.6, background: "var(--surface-raised)", color: "var(--muted)" }}
     >
       <div style={row}><span>{productLabel}</span><span>{money(productAmount)}</span></div>
-      <div style={row}><span>Payment processing fee</span><span>{money(feeAmount)}</span></div>
+      <div style={row}>
+        <span>Paystack processing fee</span>
+        <span>{feeAmount == null ? "Calculated by Paystack at checkout" : money(feeAmount)}</span>
+      </div>
       <div style={{ ...row, borderTop: "1px solid var(--line-soft)", marginTop: 4, paddingTop: 4, color: "var(--text)", fontWeight: 600 }}>
-        <span>Total to pay</span><span>{money(t)}</span>
+        <span>{feeAmount == null ? "Service amount" : "Total to pay"}</span><span>{money(t)}</span>
       </div>
     </div>
   );
@@ -384,17 +388,16 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
   // everything from "will auto-retry in a minute" to "needs an admin to
   // top up the Techlink wallet first."
   const isFulfilled = order.fulfillmentStatus === "fulfilled";
-  // What the customer actually paid is checkoutAmount (product price + the
-  // Paystack processing fee) — prefer that over the bare product `amount`,
-  // falling back to the `amount` prop (from the checkout call) for orders
-  // that predate the checkoutAmount field.
-  const totalPaid = Number(order.checkoutAmount ?? amount ?? order.customerProductAmount ?? order.amount ?? 0);
-  // customerProductAmount is the actual customer-facing product price after
-  // the PjDigitalServices business margin and before the Paystack fee.
+  // In pass-through mode, paymentAmount is the actual Paystack amount in
+  // pesewas recorded after verification. Use Paystack's actual fee for the
+  // receipt when available; never manufacture a fee from our service amount.
+  const totalPaid = order.paymentAmount != null
+    ? Number(order.paymentAmount) / 100
+    : Number(order.checkoutAmount ?? amount ?? order.customerProductAmount ?? order.amount ?? 0);
   const productPrice = Number(order.customerProductAmount ?? order.amount ?? 0);
-  const feePaid = order.paystackFeeAmount != null
-    ? Number(order.paystackFeeAmount)
-    : (order.checkoutAmount != null ? Math.round((totalPaid - productPrice) * 100) / 100 : null);
+  const feePaid = order.paystackFeeActual != null
+    ? Number(order.paystackFeeActual)
+    : null;
   const showFeeBreakdown = feePaid != null && feePaid > 0;
   const customerOrderNumber = order.orderNo || null;
   const showRecipient = order.phone && order.phone !== "—" && order.phone !== "N/A" && !String(order.phone).includes("recipient");
@@ -493,11 +496,16 @@ export function OrderList({ items }) {
               </div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>GHS {Number(o.checkoutAmount ?? o.amount).toFixed(2)}</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>
+                GHS {Number(o.paymentAmount ?? o.checkoutAmount ?? o.amount).toFixed(2)}
+              </div>
               {o.customerProductAmount != null && (
                 <div style={{ fontSize: 11, color: "var(--muted-dim)", marginTop: 2 }}>
                   Product GHS {Number(o.customerProductAmount).toFixed(2)}
-                  {" · "}Fee GHS {Number(o.paystackFeeAmount ?? 0).toFixed(2)}
+                  {" · "}
+                  {o.paystackFeeActual != null
+                    ? `Paystack fee GHS ${Number(o.paystackFeeActual).toFixed(2)}`
+                    : "Paystack fee calculated at checkout"}
                 </div>
               )}
               {o.result?.token && (

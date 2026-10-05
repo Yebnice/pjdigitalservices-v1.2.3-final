@@ -22,10 +22,10 @@ globalThis.fetch = async (url) => {
 };
 console.error = () => {}; console.warn = () => {};
 
-// A GHS 4.49 product: customer is charged 4.59, expected fee 0.10.
+// A GHS 4.49 product: Paystack customer-fee pass-through means the service amount sent is 4.49; Paystack adds its actual fee at checkout.
 const seed = (ref) => memdb.db.tables.orders.push({
   reference: ref, order_type: "tierData", network: "mtn", phone: "0241234567", email: "c@d.co",
-  amount: 4.4, provider_cost: 4.4, checkout_amount: 4.59, paystack_fee_amount: 0.1,
+  amount: 4.4, provider_cost: 4.4, checkout_amount: 4.49, paystack_fee_amount: null,
   customer_product_amount: 4.49, business_markup_amount: 0.09,
   status: "pending", fulfilled: false, fulfillment_status: "pending", fulfillment_attempts: 0,
   created_at: new Date(Date.now() - 4 * 60000).toISOString(), // a fresh checkout: an order with NO creation time counts as too old and is held
@@ -36,15 +36,15 @@ const out = [];
 const t = async (name, fn) => { memdb.reset(); world.paystack = {}; memdb.db.missingColumns = null; try { await fn(); out.push("PASS " + name); } catch (e) { out.push("FAIL " + name + " -> " + (e.stack || e.message).split("\n").slice(0, 3).join(" | ")); } };
 
 await t("the real Paystack fee and net settlement are stored on the order", async () => {
-  seed("F1"); world.paystack.F1 = { status: "success", amount: 459, currency: "GHS", fees: 9, domain: "live" };
+  seed("F1"); world.paystack.F1 = { status: "success", amount: 458, currency: "GHS", fees: 9, domain: "live" };
   const r = await verifyAndPrepareOrder("F1");
   assert.equal(r.kind, "ready");
-  assert.equal(get("F1").paystack_fee_actual, 0.09); assert.equal(get("F1").paystack_net_settled, 4.5);
+  assert.equal(get("F1").paystack_fee_actual, 0.09); assert.equal(get("F1").paystack_net_settled, 4.49);
   assert.equal(audit("paystack_net_below_price").length + audit("paystack_fee_differs").length, 0);
 });
 
 await t("an order that settles BELOW the product price is flagged, but is still delivered normally", async () => {
-  seed("F2"); world.paystack.F2 = { status: "success", amount: 459, currency: "GHS", fees: 14, domain: "live" };
+  seed("F2"); world.paystack.F2 = { status: "success", amount: 458, currency: "GHS", fees: 14, domain: "live" };
   const r = await verifyAndPrepareOrder("F2");
   assert.equal(r.kind, "ready", "bookkeeping must never block fulfilment");
   assert.equal(audit("paystack_net_below_price").length, 1);
@@ -52,20 +52,20 @@ await t("an order that settles BELOW the product price is flagged, but is still 
 });
 
 await t("verifying the same order twice does not raise the alert twice", async () => {
-  seed("F3"); world.paystack.F3 = { status: "success", amount: 459, currency: "GHS", fees: 14, domain: "live" };
+  seed("F3"); world.paystack.F3 = { status: "success", amount: 458, currency: "GHS", fees: 14, domain: "live" };
   await verifyAndPrepareOrder("F3"); await verifyAndPrepareOrder("F3");
   assert.equal(audit("paystack_net_below_price").length, 1);
 });
 
 await t("a response with no fee figure still verifies and records nothing", async () => {
-  seed("F4"); world.paystack.F4 = { status: "success", amount: 459, currency: "GHS", domain: "live" };
+  seed("F4"); world.paystack.F4 = { status: "success", amount: 458, currency: "GHS", domain: "live" };
   const r = await verifyAndPrepareOrder("F4");
   assert.equal(r.kind, "ready"); assert.equal(get("F4").paystack_fee_actual, undefined);
 });
 
 await t("if migration_v1_3_7.sql has not been run, a paid order is still verified", async () => {
   memdb.db.missingColumns = new Set(["paystack_fee_actual", "paystack_net_settled"]);
-  seed("F5"); world.paystack.F5 = { status: "success", amount: 459, currency: "GHS", fees: 9, domain: "live" };
+  seed("F5"); world.paystack.F5 = { status: "success", amount: 458, currency: "GHS", fees: 9, domain: "live" };
   const r = await verifyAndPrepareOrder("F5");
   assert.equal(r.kind, "ready"); assert.equal(get("F5").status, "payment_verified");
 });
