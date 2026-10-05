@@ -27,6 +27,42 @@ describe("pricing policy", () => {
     }
   });
 
+  it("uses the product price as Popup amount when Paystack passes fees to customers", () => {
+    const old = process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS;
+    process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS = "true";
+    try {
+      const pricing = getOrderPricing({
+        providerCost: 1,
+        customerBaseAmount: 1,
+        orderType: "airtime",
+        network: "mtn",
+      });
+      expect(pricing.customerProductAmount).toBe(1);
+      expect(pricing.checkoutAmount).toBe(1.03);
+      expect(pricing.paymentAmount).toBe(1);
+    } finally {
+      if (old === undefined) delete process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS;
+      else process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS = old;
+    }
+  });
+
+  it("uses the fee-inclusive total as Popup amount when PjDigitalServices bears Paystack fees", () => {
+    const old = process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS;
+    process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS = "false";
+    try {
+      const pricing = getOrderPricing({
+        providerCost: 1,
+        customerBaseAmount: 1,
+        orderType: "airtime",
+        network: "mtn",
+      });
+      expect(pricing.paymentAmount).toBe(1.03);
+    } finally {
+      if (old === undefined) delete process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS;
+      else process.env.PAYSTACK_PASS_FEES_TO_CUSTOMERS = old;
+    }
+  });
+
   it("computes the Paystack fee consistently from the gross checkout amount", () => {
     // Paystack's formula: Price / (1 - 0.0195) + 0.01
     const total = withPaystackFee(100);
