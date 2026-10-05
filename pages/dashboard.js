@@ -112,7 +112,7 @@ export default function DashboardPage() {
       {error && <p style={{ color: "var(--red)", fontSize: 13 }}>{error}</p>}
       {orders && <>
         {processing.length > 0 && <div className="card" style={{ padding: 12, margin: "16px 0", fontSize: 13, borderColor: "var(--gold)" }}>Your paid order is still being processed. We are sorry for the delay. Please do not place a duplicate order; refresh this page later to see the latest status.</div>}
-        <OrdersTable items={orders} />
+        <OrderList items={orders} />
       </>}
       {!reference && (
         <p style={{ fontSize: 13, color: "var(--muted-dim)", marginTop: 16 }}>
