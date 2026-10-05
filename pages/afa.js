@@ -71,7 +71,7 @@ export default function AfaPage() {
         <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>AFA registration</h1>
         <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 4 }}>
           Register a farmer under the AFA programme.{" "}
-          {fee != null ? `Registration fee: GHS ${previewCustomerTotal(fee, { orderType: "afa", network }).toFixed(2)} (includes payment processing fee).` : "Fee is confirmed at checkout."}
+          {fee != null ? `Service amount: GHS ${previewCustomerTotal(fee, { orderType: "afa", network }).toFixed(2)}. Paystack adds its processing fee at checkout.` : "Fee is confirmed at checkout."}
         </p>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -106,7 +106,7 @@ export default function AfaPage() {
         <EmailField email={email} setEmail={setEmail} />
         {breakdown && <PriceBreakdown {...breakdown} productLabel="Registration fee" />}
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
-          {fee != null ? `Pay GHS ${previewCustomerTotal(fee, { orderType: "afa", network }).toFixed(2)} & submit registration` : "Submit registration"}
+          {fee != null ? `Pay GHS ${previewCustomerTotal(fee, { orderType: "afa", network }).toFixed(2)} with Paystack (fee added at checkout) & submit registration` : "Submit registration"}
         </PrimaryButton>
       </div>
       <Toast toast={toast} />

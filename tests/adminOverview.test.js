@@ -9,20 +9,21 @@ function order(over = {}) {
     reference: "R" + Math.random().toString(36).slice(2, 8),
     orderType: "ecg", network: "ecg", status: "success", fulfilled: true, fulfillmentStatus: "fulfilled",
     amount: 100, providerCost: 100, customerProductAmount: 102, businessMarkupAmount: 2,
-    checkoutAmount: 104.03, paystackFeeAmount: 2.03, failReason: null,
+    checkoutAmount: 102, paymentAmount: 10403, paystackFeeActual: 2.03, paystackNetSettled: 102, paystackFeeAmount: null, failReason: null,
     createdAt: "2026-09-30T08:00:00.000Z", ...over,
   };
 }
 
 describe("estimatedNetProfit", () => {
-  it("is what is left after Paystack's cut of the total and Techlink's cost", () => {
-    // 104.03 charged, Paystack keeps 1.95% = 2.03, Techlink cost 100 -> ~2.00
-    expect(estimatedNetProfit(order(), FEE)).toBeCloseTo(2.0, 1);
+  it("uses the actual Paystack net settlement in customer-fee pass-through mode", () => {
+    // Customer pays 104.03 including Paystack's fee; Paystack settles exactly
+    // the 102.00 service amount to us; Techlink cost is 100.00.
+    expect(estimatedNetProfit(order(), FEE)).toBe(2);
   });
 
-  it("shows a loss for zero-margin airtime once Techlink's 2% wallet fee is counted", () => {
-    const airtime = order({ orderType: "airtime", providerCost: 102, customerProductAmount: 100, businessMarkupAmount: 0, checkoutAmount: 102.0, paystackFeeAmount: 1.99 });
-    expect(estimatedNetProfit(airtime, FEE) < 0).toBe(true);
+  it("falls back to actual fee minus charge when net settlement was not stored", () => {
+    const legacyEvidence = order({ paystackNetSettled: null, paystackFeeActual: 2.03, paymentAmount: 10403 });
+    expect(estimatedNetProfit(legacyEvidence, FEE)).toBe(2);
   });
 });
 

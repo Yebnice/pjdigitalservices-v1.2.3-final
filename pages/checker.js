@@ -126,7 +126,7 @@ export default function CheckerPage() {
                   that server-side calculation, applied to the full quantity*price like
                   the server does. */}
               {voucherPrice != null
-                ? `GHS ${previewCustomerTotal(voucherPrice * quantity, { orderType: "checker" }).toFixed(2)} for ${quantity} voucher${quantity === 1 ? "" : "s"} (incl. fees)`
+                ? `Service amount GHS ${previewCustomerTotal(voucherPrice * quantity, { orderType: "checker" }).toFixed(2)} for ${quantity} voucher${quantity === 1 ? "" : "s"}. Paystack adds its processing fee at checkout.`
                 : "Price shown at checkout"}
             </div>
             <Field label="How many?">
@@ -151,7 +151,7 @@ export default function CheckerPage() {
           <>
             <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
               Not instant — we look this up and email the result once it's ready.
-              {lookupPrice != null ? ` GHS ${previewCustomerTotal(lookupPrice, { orderType: "checker" }).toFixed(2)} (incl. fees).` : ""}
+              {lookupPrice != null ? ` Service amount GHS ${previewCustomerTotal(lookupPrice, { orderType: "checker" }).toFixed(2)}. Paystack adds its processing fee at checkout.` : ""}
             </p>
             <Field label="Index number">
               <input className="input" value={indexNumber} onChange={(e) => setIndexNumber(e.target.value)} placeholder="e.g. 0123456789" />
@@ -170,10 +170,10 @@ export default function CheckerPage() {
         <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
           {mode === "voucher"
             ? voucherPrice != null
-              ? `Pay GHS ${previewCustomerTotal(voucherPrice * quantity, { orderType: "checker" }).toFixed(2)} & get voucher`
+              ? `Pay GHS ${previewCustomerTotal(voucherPrice * quantity, { orderType: "checker" }).toFixed(2)} with Paystack (fee added at checkout) & get voucher`
               : "Pay & get voucher"
             : lookupPrice != null
-              ? `Pay GHS ${previewCustomerTotal(lookupPrice, { orderType: "checker" }).toFixed(2)} & request check`
+              ? `Pay GHS ${previewCustomerTotal(lookupPrice, { orderType: "checker" }).toFixed(2)} with Paystack (fee added at checkout) & request check`
               : "Pay & request check"}
         </PrimaryButton>
       </div>
