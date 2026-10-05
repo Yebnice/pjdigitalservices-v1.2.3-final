@@ -12,18 +12,24 @@ describe("pricing policy", () => {
     expect(businessMarkup(100, { orderType: "tierBulkAirtime", network: "telecel" })).toBe(0);
   });
 
-  it("applies the default 2% business margin to other services", () => {
-    expect(businessMarkup(100, { orderType: "ecg", network: "ecg" })).toBe(2);
+  it("applies exactly 2% to every non-exempt service in the pricing matrix", () => {
+    const twoPercentServices = [
+      "mtnData", "telecelData", "atData", "tierData", "tierBulkData",
+      "afa", "ecg", "water", "tv", "checker",
+    ];
+    for (const orderType of twoPercentServices) {
+      expect(businessMarkup(100, { orderType })).toBe(2);
+    }
   });
 
-  it("treats a fixed-only rule as an override, not fixed plus default percent", () => {
-    const old = process.env.SERVICE_MARKUP_RULES_JSON;
-    process.env.SERVICE_MARKUP_RULES_JSON = JSON.stringify({ water: { fixed: 1 } });
+  it("cannot be changed by a deployment margin override", () => {
+    const old = process.env.DEFAULT_BUSINESS_MARGIN_PERCENT;
+    process.env.DEFAULT_BUSINESS_MARGIN_PERCENT = "1";
     try {
-      expect(businessMarkup(100, { orderType: "water", network: "water" })).toBe(1);
+      expect(businessMarkup(100, { orderType: "ecg" })).toBe(2);
     } finally {
-      if (old === undefined) delete process.env.SERVICE_MARKUP_RULES_JSON;
-      else process.env.SERVICE_MARKUP_RULES_JSON = old;
+      if (old === undefined) delete process.env.DEFAULT_BUSINESS_MARGIN_PERCENT;
+      else process.env.DEFAULT_BUSINESS_MARGIN_PERCENT = old;
     }
   });
 
@@ -40,16 +46,6 @@ describe("pricing policy", () => {
     expect(pricing.paymentAmount).not.toBe(pricing.customerProductAmount);
   });
 
-  it("keeps the business margin fixed at 2% even if a deployment supplies a different default", () => {
-    const old = process.env.DEFAULT_BUSINESS_MARGIN_PERCENT;
-    process.env.DEFAULT_BUSINESS_MARGIN_PERCENT = "1";
-    try {
-      expect(businessMarkup(100, { orderType: "ecg", network: "ecg" })).toBe(2);
-    } finally {
-      if (old === undefined) delete process.env.DEFAULT_BUSINESS_MARGIN_PERCENT;
-      else process.env.DEFAULT_BUSINESS_MARGIN_PERCENT = old;
-    }
-  });
 
   it("computes the Paystack fee consistently from the gross checkout amount", () => {
     // Paystack's formula: Price / (1 - 0.0195) + 0.01
