@@ -34,7 +34,7 @@ const pay = (extra = {}) => new Promise((resolve) => {
 
 await t("same price: no question asked, popup opens at the server's amount", async () => {
   const r = await pay({ expectedAmount: 4.49 });
-  assert.equal(confirmCalls.length, 0); assert.equal(popups.length, 1); assert.equal(popups[0].amount, 459); assert.ok(r.pending);
+  assert.equal(confirmCalls.length, 0); assert.equal(popups.length, 1); assert.equal(popups[0].amount, 449); assert.ok(r.pending);
 });
 await t("price differs and customer DECLINES: no popup, order abandoned, clear message", async () => {
   confirmAnswer = false;
@@ -44,7 +44,7 @@ await t("price differs and customer DECLINES: no popup, order abandoned, clear m
 });
 await t("price differs and customer ACCEPTS: popup opens at the new server amount", async () => {
   const r = await pay({ expectedAmount: 4.58 });
-  assert.equal(confirmCalls.length, 1); assert.equal(popups.length, 1); assert.equal(popups[0].amount, 459); assert.equal(abandoned.length, 0);
+  assert.equal(confirmCalls.length, 1); assert.equal(popups.length, 1); assert.equal(popups[0].amount, 449); assert.equal(abandoned.length, 0);
 });
 await t("no expectedAmount (old callers): behaves exactly as before", async () => {
   await pay({}); assert.equal(confirmCalls.length, 0); assert.equal(popups.length, 1);
