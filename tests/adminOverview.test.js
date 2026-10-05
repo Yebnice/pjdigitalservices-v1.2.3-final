@@ -9,7 +9,7 @@ function order(over = {}) {
     reference: "R" + Math.random().toString(36).slice(2, 8),
     orderType: "ecg", network: "ecg", status: "success", fulfilled: true, fulfillmentStatus: "fulfilled",
     amount: 100, providerCost: 100, customerProductAmount: 102, businessMarkupAmount: 2,
-    checkoutAmount: 102, paymentAmount: 104.03, paystackFeeActual: 2.03, paystackNetSettled: 102, paystackFeeAmount: null, failReason: null,
+    checkoutAmount: 102, paymentAmount: 10403, paystackFeeActual: 2.03, paystackNetSettled: 102, paystackFeeAmount: null, failReason: null,
     createdAt: "2026-09-30T08:00:00.000Z", ...over,
   };
 }
