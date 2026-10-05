@@ -17,7 +17,7 @@ export default function FeedbackPage() {
   useEffect(() => { try {
   setEmail(window.sessionStorage.getItem("pj_email") || "");
   setPhone(window.sessionStorage.getItem("pj_phone") || "");
-  setOrderReference(window.localStorage.getItem("pj_last_reference") || "");
+  setOrderReference(window.localStorage.getItem("pj_last_order_no") || "");
 } catch {} }, []);
 
   const valid = Boolean(name.trim() && (email.trim() || phone.trim()) && serviceType && message.trim().length >= 5 && transactionId.trim() && transactionAmount !== "" && transactionAt && transactionDetails.trim() && (!isDataOrAirtime || (requestedData.trim() && beneficiary.trim())));
