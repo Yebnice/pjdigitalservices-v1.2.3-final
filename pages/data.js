@@ -172,7 +172,7 @@ export default function DataPage() {
         <div style={{ maxWidth: 300, display: "flex", flexDirection: "column", gap: 12 }}>
           {breakdown && <PriceBreakdown {...breakdown} productLabel="Data bundle" />}
           <PrimaryButton disabled={!valid} loading={loading} onClick={submit}>
-            {breakdown ? `Pay GHS ${breakdown.total.toFixed(2)} with Paystack` : "Select a bundle"}
+            {breakdown ? "Continue to Paystack" : "Select a bundle"}
           </PrimaryButton>
         </div>
       </div>
