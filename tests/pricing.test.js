@@ -127,6 +127,8 @@ describe("pricing policy", () => {
     expect(read("pages/api/orders/create.js")).toContain("getPaystackPaymentAmount(");
     expect(read("pages/api/orders/create.js")).toContain("existing.customerProductAmount");
     expect(read("pages/api/orders/create.js")).toContain("existing.checkoutAmount");
+    expect(read("pages/api/orders/create.js")).toContain("order.customerProductAmount");
+    expect(read("pages/api/orders/create.js")).toContain("order.checkoutAmount");
   });
 
   it("wires every customer-facing price preview through previewCustomerTotal, not withPaystackFee alone", () => {
