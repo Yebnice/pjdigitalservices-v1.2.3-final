@@ -32,17 +32,31 @@ describe("pricing policy", () => {
     }
   });
 
-  it("always sends the fee-inclusive checkout amount to Paystack in Ghana", () => {
+  it("applies Techlink 2% first, then Paystack's gross-up formula for Airtime", () => {
     const pricing = getOrderPricing({
       providerCost: 1.02,
       customerBaseAmount: 1,
       orderType: "airtime",
       network: "mtn",
     });
-    expect(pricing.customerProductAmount).toBe(1);
-    expect(pricing.checkoutAmount).toBe(1.03);
-    expect(pricing.paymentAmount).toBe(pricing.checkoutAmount);
-    expect(pricing.paymentAmount).not.toBe(pricing.customerProductAmount);
+    expect(pricing.markupAmount).toBe(0);
+    expect(pricing.customerProductAmount).toBe(1.02);
+    expect(pricing.checkoutAmount).toBe(1.05);
+    expect(pricing.paystackFeeAmount).toBe(0.03);
+    expect(pricing.paymentAmount).toBe(1.05);
+  });
+
+  it("applies Techlink 2% first for Quick Data even though business margin is 0%", () => {
+    const pricing = getOrderPricing({
+      providerCost: 1.02,
+      customerBaseAmount: 1,
+      orderType: "data",
+      network: "mtn",
+    });
+    expect(pricing.markupAmount).toBe(0);
+    expect(pricing.customerProductAmount).toBe(1.02);
+    expect(pricing.checkoutAmount).toBe(1.05);
+    expect(pricing.paymentAmount).toBe(1.05);
   });
 
 
@@ -75,9 +89,9 @@ describe("pricing policy", () => {
     expect(preview).toBeGreaterThan(withPaystackFee(100));
   });
 
-  it("previewCustomerTotal equals withPaystackFee for genuinely zero-margin order types", () => {
+  it("previewCustomerTotal includes Techlink 2% before Paystack on zero-margin order types", () => {
     for (const orderType of ["airtime", "data", "tierbulkairtime"]) {
-      expect(previewCustomerTotal(100, { orderType })).toBeCloseTo(withPaystackFee(100), 2);
+      expect(previewCustomerTotal(100, { orderType })).toBe(104.04);
     }
   });
 
@@ -113,8 +127,9 @@ describe("Techlink airtime fee resolution", () => {
     for (const bad of [{}, null, undefined, { percent: "abc" }, { rate: 5 }, { percent: -1 }]) expect(resolveAirtimeFeeRate(bad)).toBeNull();
   });
 
-  it("falls back to the documented 2% rather than 0%", async () => {
-    const { DEFAULT_AIRTIME_PROVIDER_FEE_RATE } = await import("../lib/pricing.js");
+  it("keeps the Techlink customer fee at exactly 2%", async () => {
+    const { DEFAULT_TECHLINK_FEE_RATE, DEFAULT_AIRTIME_PROVIDER_FEE_RATE } = await import("../lib/pricing.js");
+    expect(DEFAULT_TECHLINK_FEE_RATE).toBe(0.02);
     expect(DEFAULT_AIRTIME_PROVIDER_FEE_RATE).toBe(0.02);
   });
 });
