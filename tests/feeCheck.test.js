@@ -37,8 +37,13 @@ describe("Paystack fee check", () => {
     expect(assessPaystackFee(order, { amount: 459 }).status).toBe("unavailable");
   });
 
-  it("catches the airtime case where a doubled rate would cost money", () => {
-    const airtime = { customerProductAmount: 100, amount: 100, paystackFeeAmount: 2.0 };
-    expect(assessPaystackFee(airtime, { amount: 10200, fees: 400 }).status).toBe("net_below_price");
+  it("flags an apparent customer overcharge without claiming it proves a double fee", () => {
+    const result = assessPaystackFee(
+      { customerProductAmount: 100, amount: 100, paystackFeeAmount: null },
+      { amount: 10404, fees: 204 }
+    );
+    expect(result.status).toBe("customer_overcharged_suspected");
+    expect(result.excessGhs).toBe(2);
+    expect(describeFeeProblem(result)).toContain("apparent excess");
   });
 });
