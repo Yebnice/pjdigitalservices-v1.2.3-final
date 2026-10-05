@@ -176,9 +176,12 @@ export function PriceBreakdown({ productAmount, feeAmount, total, productLabel =
       style={{ border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: 13, lineHeight: 1.6, background: "var(--surface-raised)", color: "var(--muted)" }}
     >
       <div style={row}><span>{productLabel}</span><span>{money(productAmount)}</span></div>
-      <div style={row}><span>Payment processing fee</span><span>{money(feeAmount)}</span></div>
+      <div style={row}>
+        <span>Paystack processing fee</span>
+        <span>{feeAmount == null ? "Calculated by Paystack at checkout" : money(feeAmount)}</span>
+      </div>
       <div style={{ ...row, borderTop: "1px solid var(--line-soft)", marginTop: 4, paddingTop: 4, color: "var(--text)", fontWeight: 600 }}>
-        <span>Total to pay</span><span>{money(t)}</span>
+        <span>{feeAmount == null ? "Service amount" : "Total to pay"}</span><span>{money(t)}</span>
       </div>
     </div>
   );
