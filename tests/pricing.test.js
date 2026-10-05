@@ -144,6 +144,10 @@ describe("pricing policy", () => {
     expect(source).not.toContain("expectedAmount: total > 0 ? withPaystackFee(total) : undefined");
     expect(source).not.toContain("withPaystackFee");
     expect(source).toContain("Paystack calculates and adds the processing fee at checkout");
+    expect(read("pages/afa.js")).not.toContain("(includes payment processing fee)");
+    expect(read("pages/checker.js")).not.toContain("(incl. fees)");
+    expect(read("pages/afa.js")).toContain("fee added at checkout");
+    expect(read("pages/checker.js")).toContain("fee added at checkout");
   });
 
   it("wires every customer-facing price preview through previewCustomerTotal, not withPaystackFee alone", () => {
