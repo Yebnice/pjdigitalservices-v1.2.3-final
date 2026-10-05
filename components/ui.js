@@ -183,6 +183,11 @@ export function PriceBreakdown({ productAmount, feeAmount, total, productLabel =
       <div style={{ ...row, borderTop: "1px solid var(--line-soft)", marginTop: 4, paddingTop: 4, color: "var(--text)", fontWeight: 600 }}>
         <span>{feeAmount == null ? "Service amount" : "Total to pay"}</span><span>{money(t)}</span>
       </div>
+      {feeAmount == null && (
+        <div style={{ marginTop: 6, fontSize: 11, color: "var(--muted-dim)", lineHeight: 1.45 }}>
+          Paystack will calculate and show the final processing fee before you confirm payment.
+        </div>
+      )}
     </div>
   );
 }
