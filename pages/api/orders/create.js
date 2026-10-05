@@ -54,6 +54,7 @@ export default async function handler(req, res) {
         return res.status(200).json({
           reference: existing.reference,
           amount: existing.checkoutAmount,
+          paymentAmount: existing.customerProductAmount ?? existing.amount,
           productAmount: existing.customerProductAmount ?? existing.amount,
           feeAmount: existing.paystackFeeAmount ?? 0,
           reused: true,
@@ -448,7 +449,12 @@ export default async function handler(req, res) {
     // the checkout UI can show a transparent breakdown before payment.
     res.status(200).json({
       reference: order.reference,
+      // amount is the customer-facing total shown in the UI and used for
+      // server-side expected-price checks. paymentAmount is what Popup sends
+      // to Paystack. When Paystack is configured to pass fees to customers,
+      // sending checkoutAmount here would make the customer pay the fee twice.
       amount: order.checkoutAmount,
+      paymentAmount: pricing.paymentAmount,
       productAmount: order.customerProductAmount ?? order.amount,
       feeAmount: order.paystackFeeAmount,
       reused: false,
