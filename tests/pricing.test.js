@@ -130,6 +130,14 @@ describe("pricing policy", () => {
     expect(read("pages/api/orders/create.js")).toContain("order.checkoutAmount");
   });
 
+  it("does not display a zero Paystack fee when the real fee is unavailable in pass-through mode", () => {
+    const source = read("components/ui.js");
+    expect(source).toContain("o.paystackFeeActual");
+    expect(source).toContain("Paystack fee calculated at checkout");
+    expect(source).not.toContain("Number(o.paystackFeeAmount ?? 0).toFixed(2)");
+    expect(source).toContain("Number(o.paymentAmount ?? o.checkoutAmount ?? o.amount).toFixed(2)");
+  });
+
   it("wires every customer-facing price preview through previewCustomerTotal, not withPaystackFee alone", () => {
     const checks = [
       { file: "pages/afa.js", mustContain: "previewCustomerTotal(fee, { orderType: \"afa\", network })" },
