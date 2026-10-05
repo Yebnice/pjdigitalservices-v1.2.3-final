@@ -458,6 +458,8 @@ export default async function handler(req, res) {
     // amount Popup sends to Paystack. With customer-fee pass-through enabled,
     // both are the product/service amount; Paystack adds its processing fee
     // at checkout.
+    return res.status(200).json({
+      reference: order.reference,
       amount: order.checkoutAmount,
       paymentAmount: getPaystackPaymentAmount(
         order.customerProductAmount,
@@ -465,7 +467,7 @@ export default async function handler(req, res) {
         order.amount
       ),
       productAmount: order.customerProductAmount ?? order.amount,
-      feeAmount: order.paystackFeeAmount,
+      feeAmount: order.paystackFeeAmount ?? null,
       reused: false,
     });
   } catch (err) {
