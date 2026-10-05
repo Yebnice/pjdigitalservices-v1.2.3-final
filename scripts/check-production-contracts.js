@@ -53,17 +53,14 @@ if (
 if (!pricing.includes('envNumber("PAYSTACK_FEE_RATE", 0.0195)')) {
   failures.push("lib/pricing.js: Paystack Ghana fee default must remain 1.95%");
 }
-if (!pricing.includes("export const PAYSTACK_PASSES_FEES_TO_CUSTOMER =")) {
-  failures.push("lib/pricing.js: Paystack customer-fee pass-through switch is missing");
-}
 if (!pricing.includes("export function getPaystackPaymentAmount(")) {
   failures.push("lib/pricing.js: shared Paystack payment-amount resolver is missing");
 }
 if (!pricing.includes("const paymentAmount = getPaystackPaymentAmount(")) {
   failures.push("lib/pricing.js: checkout must use the shared Paystack payment-amount resolver");
 }
-if (!pricing.includes("return product || fallback;")) {
-  failures.push("lib/pricing.js: customer-fee pass-through must send the pre-fee product amount to Paystack");
+if (!pricing.includes("return checkout || product || fallback;")) {
+  failures.push("lib/pricing.js: Ghana checkout must send the single fee-inclusive amount to Paystack");
 }
 
 const ui = read("components/ui.js");
