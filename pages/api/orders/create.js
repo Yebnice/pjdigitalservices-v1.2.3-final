@@ -419,12 +419,11 @@ export default async function handler(req, res) {
     // `amount` is the customer-facing service/base amount used by the
     // fulfillment call. `providerCost` is the estimated wallet cost after
     // documented provider-side charges (notably Techlink airtime fees).
-    // Customer-facing pricing applies the product-specific business margin
-    // and the Paystack processing fee. For plain Airtime and Quick Data, the
-    // business margin is 0% and Techlink's wallet-side Airtime fee is kept as
-    // a provider cost rather than passed through to the customer.
-    // Fulfillment itself uses `amount` for the provider request, never
-    // checkoutAmount — see lib/techlink.js.
+    // Customer-facing pricing applies the product-specific business margin.
+    // When Paystack customer-fee pass-through is enabled, checkoutAmount/paymentAmount
+    // are the service amount supplied to Paystack; Paystack adds its own processing
+    // fee at checkout. Fulfillment itself uses `amount` for the provider request,
+    // never checkoutAmount — see lib/techlink.js.
     const pricing = getOrderPricing({
       providerCost,
       customerBaseAmount: amount,
@@ -455,16 +454,10 @@ export default async function handler(req, res) {
       status: "pending",
     });
 
-    // `amount` in this response is what the customer is actually charged
-    // at checkout (fee-inclusive) — the client uses it directly as the
-    // Paystack popup amount. productAmount/feeAmount are included too so
-    // the checkout UI can show a transparent breakdown before payment.
-    res.status(200).json({
-      reference: order.reference,
-      // amount is the customer-facing total shown in the UI and used for
-      // server-side expected-price checks. paymentAmount is what Popup sends
-      // to Paystack. When Paystack is configured to pass fees to customers,
-      // sending checkoutAmount here would make the customer pay the fee twice.
+    // amount is the service amount shown before checkout. paymentAmount is the
+    // amount Popup sends to Paystack. With customer-fee pass-through enabled,
+    // both are the product/service amount; Paystack adds its processing fee
+    // at checkout.
       amount: order.checkoutAmount,
       paymentAmount: getPaystackPaymentAmount(
         order.customerProductAmount,
