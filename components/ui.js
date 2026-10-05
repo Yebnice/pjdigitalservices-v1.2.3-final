@@ -388,17 +388,16 @@ export function OrderReceipt({ order, amount, onNewOrder }) {
   // everything from "will auto-retry in a minute" to "needs an admin to
   // top up the Techlink wallet first."
   const isFulfilled = order.fulfillmentStatus === "fulfilled";
-  // What the customer actually paid is checkoutAmount (product price + the
-  // Paystack processing fee) — prefer that over the bare product `amount`,
-  // falling back to the `amount` prop (from the checkout call) for orders
-  // that predate the checkoutAmount field.
-  const totalPaid = Number(order.checkoutAmount ?? amount ?? order.customerProductAmount ?? order.amount ?? 0);
-  // customerProductAmount is the actual customer-facing product price after
-  // the PjDigitalServices business margin and before the Paystack fee.
+  // In pass-through mode, paymentAmount is the actual Paystack amount in
+  // pesewas recorded after verification. Use Paystack's actual fee for the
+  // receipt when available; never manufacture a fee from our service amount.
+  const totalPaid = order.paymentAmount != null
+    ? Number(order.paymentAmount) / 100
+    : Number(order.checkoutAmount ?? amount ?? order.customerProductAmount ?? order.amount ?? 0);
   const productPrice = Number(order.customerProductAmount ?? order.amount ?? 0);
-  const feePaid = order.paystackFeeAmount != null
-    ? Number(order.paystackFeeAmount)
-    : (order.checkoutAmount != null ? Math.round((totalPaid - productPrice) * 100) / 100 : null);
+  const feePaid = order.paystackFeeActual != null
+    ? Number(order.paystackFeeActual)
+    : null;
   const showFeeBreakdown = feePaid != null && feePaid > 0;
   const customerOrderNumber = order.orderNo || null;
   const showRecipient = order.phone && order.phone !== "—" && order.phone !== "N/A" && !String(order.phone).includes("recipient");
