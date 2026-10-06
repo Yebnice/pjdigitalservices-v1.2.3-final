@@ -21,6 +21,7 @@ import {
   resolveAirtimeFeeRate,
 } from "../../../lib/pricing";
 import { isValidGhanaNumber, toLocalGhanaNumber } from "../../../lib/networkValidation";
+import { initializeTransaction } from "../../../lib/paystack";
 
 // Smallest airtime / bill top-up accepted. Anything lower is rejected by the
 // provider *after* the customer has already paid, which means a manual refund.
@@ -432,6 +433,22 @@ export default async function handler(req, res) {
     });
     const checkoutAmount = pricing.checkoutAmount;
 
+    // Initialize the Paystack transaction on the server before opening Popup V2.
+    // Paystack recommends backend initialization so the transaction details are
+    // authoritative and Popup resumes that exact transaction with access_code.
+    const paystackPaymentAmount = getPaystackPaymentAmount(
+      pricing.customerProductAmount,
+      checkoutAmount,
+      amount
+    );
+    const paystackTransaction = await initializeTransaction({
+      amount: paystackPaymentAmount,
+      email: normalizedEmail,
+      reference,
+      metadata: { orderType, network: resolvedNetwork || orderType, phone },
+      currency: "GHS",
+    });
+
     const order = await createOrder({
       reference,
       orderType,
@@ -468,6 +485,7 @@ export default async function handler(req, res) {
       ),
       productAmount: order.customerProductAmount ?? order.amount,
       feeAmount: order.paystackFeeAmount ?? null,
+      accessCode: paystackTransaction.access_code,
       reused: false,
     });
   } catch (err) {
