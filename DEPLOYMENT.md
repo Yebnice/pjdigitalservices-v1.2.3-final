@@ -53,13 +53,13 @@ where the order matters.
 
 **2.2 Environment variables**
 Set these in Project Settings → Environment Variables (Production, and
-Preview if you want staging to work too):
+Preview if you want staging to work too). For payment pricing, `PAYSTACK_PASS_FEES_TO_CUSTOMERS=true` is required; the app sends the service amount and Paystack adds its 1.95% processing fee at checkout:
 
 | Variable | Required | Notes |
 |---|---|---|
 | `SUPABASE_URL` | Yes | From step 1.1 |
 | `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`) | Yes | From step 1.1 — server only |
-| `PAYSTACK_SECRET_KEY` | Yes | Paystack dashboard → API Keys. Use `sk_test_...` until you're ready to go live |
+| `PAYSTACK_SECRET_KEY` | Yes | Paystack dashboard → API Keys. Use the live secret key in production |
 | `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | Yes | Same page, `pk_test_...`/`pk_live_...` |
 | `TECHLINK_API_KEY` | Yes | `tlg_test_...` while testing, `tlg_live_...` for real orders |
 | `ADMIN_PASSWORD` | Yes | Pick something strong — this gates `/admin` |
@@ -234,7 +234,7 @@ so a failure on one never blocks the other.
 
 ## v1.2.6 required deployment settings
 
-Set `CRON_SECRET` to a random 32+ character secret so the fulfillment cron can authenticate. Configure `PAYSTACK_FEE_RATE` to the merchant rate actually applicable to your Paystack account; do not assume a hard-coded fee is current without checking your merchant pricing. The default PjDigitalServices business margin is 2%. Keep `DEFAULT_BUSINESS_MARGIN_PERCENT=2` (or leave it unset) unless you intentionally want a different global margin, or use `SERVICE_MARKUP_RULES_JSON` for service/network-specific overrides. The repository does not depend on Vercel Cron. Background processing is configured through the GitHub Actions workflow above; no Cloudflare configuration is required.
+Set `CRON_SECRET` to a random 32+ character secret so the fulfillment cron can authenticate. Configure `PAYSTACK_FEE_RATE` to the merchant rate actually applicable to your Paystack account; do not assume a hard-coded fee is current without checking your merchant pricing. The current PjDigitalServices business-margin policy is fixed: 2% for all non-exempt services, and 0% for Airtime, Quick Data Top-up, and Bulk Airtime. Do not configure `DEFAULT_BUSINESS_MARGIN_PERCENT` or `SERVICE_MARKUP_RULES_JSON`; those are not production pricing controls. The repository does not depend on Vercel Cron. Background processing is configured through the GitHub Actions workflow above; no Cloudflare configuration is required.
 
 
 ### Admin hardening
