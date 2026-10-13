@@ -158,10 +158,11 @@ await t("mark-delivered WITHOUT proof is still admin-only", async () => {
   assert.equal((await call("pages/api/orders/manual-review.js", "op", "operator", { method: "POST", body: { reference: "MAN1", action: "confirm_fulfilled", note: "no proof at all" } })).code, 403);
   assert.equal((await call("pages/api/orders/manual-review.js", "ad", "admin", { method: "POST", body: { reference: "MAN1", action: "confirm_fulfilled", note: "no proof at all" } })).code, 200);
 });
-await t("run-worker endpoint (Check outstanding orders): operator can run it, viewer cannot, and valid paid orders are fulfilled", async () => {
+await t("outstanding-order check records paid orders as ready without sending to Techlink; scheduled worker then fulfills them", async () => {
   seed({ reference: "RW1" }); world.paystack.RW1 = { status: "success", amount: 206, currency: "GHS" };
   assert.equal((await call("pages/api/admin/run-worker.js", "vw", "viewer", { method: "POST" })).code, 403);
-  const r = await call("pages/api/admin/run-worker.js", "op", "operator", { method: "POST" }); assert.equal(r.code, 200, JSON.stringify(r.body)); assert.equal(get("RW1").fulfilled, true); assert.equal(get("RW1").fulfillment_status, "fulfilled"); assert.equal(r.body.deliveries, 1); assert.equal(r.body.paidReady, 1); assert.equal(world.techlinkCalls.length, 1); assert.equal(audit("admin_checked_outstanding_orders").length, 1);
+  const r = await call("pages/api/admin/run-worker.js", "op", "operator", { method: "POST" }); assert.equal(r.code, 200, JSON.stringify(r.body)); assert.equal(get("RW1").fulfilled, false); assert.equal(get("RW1").fulfillment_status, "ready"); assert.equal(r.body.deliveries, 0); assert.equal(r.body.paidReady, 1); assert.equal(world.techlinkCalls.length, 0); assert.equal(audit("admin_checked_outstanding_orders").length, 1);
+  await runWorkerCycle({}); assert.equal(get("RW1").fulfilled, true); assert.equal(get("RW1").fulfillment_status, "fulfilled"); assert.equal(world.techlinkCalls.length, 1);
 });
 await t("the scheduled worker endpoint: wrong secret 401; correct secret runs and fulfills valid paid orders", async () => {
   const h = (await load("pages/api/jobs/fulfill.js")).default;
