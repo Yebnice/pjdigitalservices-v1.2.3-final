@@ -29,6 +29,9 @@ jobs:
       - name: Run automated regression tests
         run: npm test
 
+      - name: Run mocked end-to-end payment recovery and delivery-safety drills
+        run: npm run test:e2e
+
       - name: Check distributed rate-limit usage
         run: npm run check:rate-limit
 
