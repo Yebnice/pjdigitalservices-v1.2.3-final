@@ -40,10 +40,25 @@ describe("delivery policy: who may spend wallet money", () => {
   it("a recorded payment below the order total is not enough", () => {
     expect(evaluateDelivery({ order: paid({ paymentAmount: 100 }), now: NOW }).code).toBe("amount_short");
   });
-  it("an explicit admin approval is the only way past mode, age and a stale verification", () => {
+  it("an explicit admin approval may override MANUAL mode only after payment evidence and amount checks", () => {
     const r = evaluateDelivery({ order: paid({ createdAt: minsAgo(900), paymentVerifiedAt: minsAgo(800) }), mode: "manual", approvedBy: "jonathan", now: NOW });
     expect(r.allowed).toBe(true);
     expect(r.code).toBe("approved");
+  });
+  it("admin approval cannot bypass a missing Paystack payment record", () => {
+    const r = evaluateDelivery({ order: paid({ paymentVerifiedAt: null }), mode: "manual", approvedBy: "jonathan" });
+    expect(r.allowed).toBe(false);
+    expect(r.code).toBe("no_payment_record");
+  });
+  it("admin approval cannot bypass an underpayment", () => {
+    const r = evaluateDelivery({ order: paid({ paymentAmount: 100 }), mode: "manual", approvedBy: "jonathan" });
+    expect(r.allowed).toBe(false);
+    expect(r.code).toBe("amount_short");
+  });
+  it("automatic delivery remains blocked in MANUAL mode without explicit approval", () => {
+    const r = evaluateDelivery({ order: paid(), mode: "manual" });
+    expect(r.allowed).toBe(false);
+    expect(r.code).toBe("manual_mode");
   });
   it("an unknown order is never allowed", () => {
     expect(evaluateDelivery({ order: null }).allowed).toBe(false);
