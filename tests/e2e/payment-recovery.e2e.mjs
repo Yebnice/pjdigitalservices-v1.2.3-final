@@ -78,9 +78,9 @@ await t("PAYSTACK OUTAGE turns the worker red instead of silently doing nothing"
   seed({ reference: "OUT1" }); world.paystackDown = true; const r = await runWorkerCycle({});
   assert.equal(r.sweep.errors, 1); assert.ok(r.failures.some((f) => f.step === "stale-pending-sweep")); assert.equal(get("OUT1").status, "pending");
 });
-await t("one broken order does not stop the rest of the sweep", async () => {
+await t("one broken order does not stop the rest of the sweep, and a paid order still fulfills", async () => {
   seed({ reference: "OK1" }); seed({ reference: "BAD1" }); world.paystack.OK1 = { status: "success", amount: 206, currency: "GHS" };
-  const r = await runWorkerCycle({}); assert.equal(get("OK1").fulfillment_status, "manual_review"); assert.equal(get("OK1").fulfilled, false); assert.equal(r.sweep.checked, 2); assert.equal(world.techlinkCalls.length, 0);
+  const r = await runWorkerCycle({}); assert.equal(get("OK1").fulfillment_status, "fulfilled"); assert.equal(get("OK1").fulfilled, true); assert.equal(r.sweep.checked, 2); assert.equal(world.techlinkCalls.length, 1);
 });
 await t("HEARTBEAT is written every run and the health endpoint reports it", async () => {
   const before = await call("pages/api/admin/health.js", "op", "operator"); assert.equal(before.body.worker.lastRunAt, null);
@@ -230,7 +230,7 @@ await t("MANUAL: mark_paid_send refuses an order that is not waiting on payment"
 await t("API CHECKS STILL WORK alongside manual control: Verify only records, Approve & deliver sends, process_now sends", async () => {
   seed({ reference: "API1", status: "pending" }); world.paystack.API1 = { status: "success", amount: 206, currency: "GHS" };
   assert.equal((await manual("op", "operator", { reference: "API1", action: "verify_and_process", note: "checking paystack" })).code, 200);
-  assert.equal(get("API1").fulfilled, false, "Verify with Paystack must not deliver"); assert.equal(get("API1").fulfillment_status, "manual_review"); assert.equal(world.techlinkCalls.length, 0);
+  assert.equal(get("API1").fulfilled, false, "Verify with Paystack records the payment but does not send from the admin check itself"); assert.equal(get("API1").fulfillment_status, "ready"); assert.equal(world.techlinkCalls.length, 0);
   const ap = await manual("ad", "admin", { reference: "API1", action: "approve_delivery", note: "checked in Paystack dashboard" }); assert.equal(ap.code, 200, JSON.stringify(ap.body));
   assert.equal(get("API1").fulfilled, true); assert.equal(world.techlinkCalls.length, 1); assert.equal(audit("admin_approve_delivery").length, 1);
   seed({ reference: "API2", status: "payment_verified", fulfillment_status: "ready" }); assert.equal((await manual("ad", "admin", { reference: "API2", action: "process_now", note: "push it now" })).code, 200); assert.equal(get("API2").fulfilled, true);
