@@ -15,23 +15,23 @@ describe("delivery policy: who may spend wallet money", () => {
     expect(r.allowed).toBe(false);
     expect(r.code).toBe("manual_mode");
   });
-  it("a payment DISCOVERED late (old checkout) is held at intake, even though Paystack says it was paid", () => {
+  it("a valid payment discovered late is still accepted for automatic fulfillment", () => {
     const r = evaluateIntake({ order: paid({ createdAt: minsAgo(300) }), now: NOW });
-    expect(r.allowed).toBe(false);
-    expect(r.code).toBe("too_old");
+    expect(r.allowed).toBe(true);
+    expect(r.code).toBe("automatic");
   });
   it("but a paid order is NOT stranded at delivery time because the scheduler ran an hour late", () => {
     expect(evaluateDelivery({ order: paid({ createdAt: minsAgo(70), paymentVerifiedAt: minsAgo(67) }), now: NOW }).allowed).toBe(true);
   });
-  it("an order verified many hours ago and still undelivered is held for a person", () => {
+  it("a valid payment verified many hours ago is not stranded by a retry-age cutoff", () => {
     const r = evaluateDelivery({ order: paid({ createdAt: minsAgo(900), paymentVerifiedAt: minsAgo(800) }), now: NOW });
-    expect(r.allowed).toBe(false);
-    expect(r.code).toBe("verified_too_long_ago");
+    expect(r.allowed).toBe(true);
+    expect(r.code).toBe("automatic");
   });
-  it("the intake age limit is configurable and defaults to 45 minutes", () => {
-    expect(autoDeliveryMaxAgeMinutes({})).toBe(45);
+  it("legacy age-limit settings do not block valid paid orders", () => {
+    expect(autoDeliveryMaxAgeMinutes({})).toBe(45); // retained for configuration compatibility
     expect(autoDeliveryMaxAgeMinutes({ AUTO_DELIVERY_MAX_AGE_MINUTES: "10" })).toBe(10);
-    expect(evaluateIntake({ order: paid({ createdAt: minsAgo(20) }), now: NOW, env: { AUTO_DELIVERY_MAX_AGE_MINUTES: "10" } }).allowed).toBe(false);
+    expect(evaluateIntake({ order: paid({ createdAt: minsAgo(300) }), now: NOW, env: { AUTO_DELIVERY_MAX_AGE_MINUTES: "10" } }).allowed).toBe(true);
   });
   it("no recorded payment = no delivery (an unpaid order can never be sent)", () => {
     expect(evaluateDelivery({ order: paid({ paymentVerifiedAt: null }), now: NOW }).code).toBe("no_payment_record");
@@ -48,9 +48,10 @@ describe("delivery policy: who may spend wallet money", () => {
   it("an unknown order is never allowed", () => {
     expect(evaluateDelivery({ order: null }).allowed).toBe(false);
   });
-  it("the stale-verification limit defaults to 6 hours", () => {
-    expect(retryMaxVerifiedHours({})).toBe(6);
+  it("legacy retry-age settings do not block valid paid orders", () => {
+    expect(retryMaxVerifiedHours({})).toBe(6); // retained for configuration compatibility
     expect(retryMaxVerifiedHours({ AUTO_RETRY_MAX_VERIFIED_HOURS: "2" })).toBe(2);
+    expect(evaluateDelivery({ order: paid({ paymentVerifiedAt: minsAgo(800) }), now: NOW, env: { AUTO_RETRY_MAX_VERIFIED_HOURS: "2" } }).allowed).toBe(true);
   });
   it("only automatic and manual are valid modes", () => {
     expect(normaliseDeliveryMode("Manual")).toBe("manual");
