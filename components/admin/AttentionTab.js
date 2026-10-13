@@ -3,9 +3,10 @@ import { ageText, ghs, orderStatusBadge } from "../../lib/adminClient";
 import { EmptyState, StatusPill } from "./AdminUi";
 
 const SECTION_HELP = {
-  charged_rejected: "Paystack took the customer's money but the payment did not match the order, so nothing was sent. Inspect what Paystack took, then either accept it and send the order, or refund the customer and close it.",
-  paid: "The customer's payment is confirmed. Before you retry or mark anything, press “Check Techlink”: it looks in Techlink's own order history so you don't have to guess whether it was already delivered. The Manual control row lets an admin settle any order by hand when the checks cannot.",
-  unpaid: "No payment was ever confirmed for these. Most are people who closed the payment window. “Run worker now” asks Paystack about every one: paid ones are delivered, abandoned ones are closed.",
+  charged_rejected: "Paystack took the customer's money but the payment did not match the order. Inspect the actual Paystack transaction before deciding whether to accept the payment and send the order or resolve/refund it.",
+  held: "Paystack confirms this order was paid, but the outstanding-orders check deliberately held it and did not send it to Techlink. Check Paystack and Techlink, then use Approve & deliver only when the payment is valid and Techlink has no existing delivery.",
+  paid: "The customer's payment is confirmed. Before retrying, press “Check Techlink” to avoid duplicate delivery.",
+  unpaid: "No payment has been confirmed yet. Check Paystack; this action does not send an order to Techlink.",
 };
 
 const VERDICT = {
@@ -68,7 +69,8 @@ function OrderCard({ o, can, busy, checks, payments, onAction, onCheck, onInspec
   const verdict = ev?.verdict;
   const evidenceSaysDelivered = verdict === "delivered";
   const retryBlocked = verdict === "delivered" || verdict === "in_progress";
-  const paidCategory = ["ready", "queued", "retryable"].includes(cat);
+  const paidCategory = ["held", "ready", "queued", "retryable"].includes(cat);
+  const canSpend = can("orders.spend_wallet");
 
   return (
     <div className="tx-row" style={{ alignItems: "flex-start", flexDirection: "column", gap: 5 }}>
@@ -102,7 +104,13 @@ function OrderCard({ o, can, busy, checks, payments, onAction, onCheck, onInspec
           <Btn busy={isBusy("verify_and_process")} busyText="Verifying…" onClick={() => onAction(o, "verify_and_process")}>Verify with Paystack</Btn>
         )}
 
+        {paidCategory && <Btn busy={payments[o.reference]?.loading} busyText="Asking Paystack…" onClick={() => onInspect(o)}>Check Paystack</Btn>}
         {paidCategory && <Btn busy={checks[o.reference]?.loading} busyText="Checking…" onClick={() => onCheck(o)}>Check Techlink</Btn>}
+        {cat === "held" && (
+          canSpend
+            ? <Btn busy={isBusy("approve_delivery")} busyText="Re-checking & sending…" onClick={() => onAction(o, "approve_delivery")}>Approve &amp; deliver</Btn>
+            : <Btn disabled title="Approving spends Techlink wallet balance and requires an admin role.">Approve &amp; deliver (admin only)</Btn>
+        )}
 
         {cat === "ready" && <Btn busy={isBusy("process_now")} busyText="Sending to Techlink…" onClick={() => onAction(o, "process_now")}>Send to Techlink now</Btn>}
 
@@ -161,6 +169,7 @@ function Section({ title, count, help, tone, children, collapsible, defaultOpen 
 export default function AttentionTab({ orders, counts, truncated, can, busy, checks, payments, onAction, onCheck, onInspect, onRunWorker, workerBusy }) {
   const byAge = (list) => [...list].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   const charged = byAge(orders.filter((o) => o.category === "charged_rejected"));
+  const held = byAge(orders.filter((o) => o.category === "held"));
   const paid = byAge(orders.filter((o) => ["ready", "queued", "retryable"].includes(o.category)));
   const unpaid = byAge(orders.filter((o) => o.category === "unpaid"));
   const card = (o) => <OrderCard key={o.reference} o={o} can={can} busy={busy} checks={checks} payments={payments} onAction={onAction} onCheck={onCheck} onInspect={onInspect} />;
@@ -170,6 +179,7 @@ export default function AttentionTab({ orders, counts, truncated, can, busy, che
       {truncated && <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", color: "#92400e", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13 }}>Showing the oldest 50 only. There are more waiting: resolve these and refresh, or use “Run worker now” to clear the unpaid ones in bulk.</div>}
       {orders.length === 0 && <div className="card"><EmptyState>Nothing needs attention right now. 🎉</EmptyState></div>}
       <Section tone="red" title="Customer charged, nothing delivered" count={charged.length} help={SECTION_HELP.charged_rejected}>{charged.map(card)}</Section>
+      <Section tone="amber" title="Paid — awaiting your approval" count={held.length} help={SECTION_HELP.held}>{held.map(card)}</Section>
       <Section title="Paid — needs a decision" count={paid.length} help={SECTION_HELP.paid}>{paid.map(card)}</Section>
       <Section collapsible defaultOpen={paid.length === 0 && charged.length === 0} title="Unpaid checkouts" count={unpaid.length} help={SECTION_HELP.unpaid}>
         {can("worker.run") && (

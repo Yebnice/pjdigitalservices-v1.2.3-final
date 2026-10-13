@@ -46,14 +46,37 @@ const fresh = () => { memdb.reset(); world.paystack = {}; world.techlinkOrders =
 const out = []; const t = async (name, fn) => { fresh(); try { await fn(); out.push("PASS " + name); } catch (e) { out.push("FAIL " + name + " -> " + (e.stack || e.message).split("\n").slice(0, 3).join(" | ")); } };
 const quiet = console.error; console.error = () => {}; console.warn = () => {};
 
-await t("PAID-BUT-MISSED: a checkout stuck at 'pending' that Paystack says was paid is RECORDED and HELD for approval; nothing is sent to Techlink", async () => {
+await t("PAID-BUT-MISSED: reconciliation records a genuine payment and the regular worker fulfills it automatically", async () => {
   const o = seed({ reference: "PAID1" }); world.paystack.PAID1 = { status: "success", amount: 206, currency: "GHS" };
   const r = await runWorkerCycle({ batchSize: 3, sweepLimit: 8 });
-  assert.equal(r.sweep.checked, 1); assert.equal(r.sweep.paidHeld, 1); assert.equal(r.sweep.deliveries, 0);
+  assert.equal(r.sweep.checked, 1); assert.equal(r.sweep.paidReady, 1);
   const row = get("PAID1");
-  assert.equal(row.fulfilled, false, "an outstanding-orders check must never deliver"); assert.equal(row.status, "payment_verified"); assert.equal(row.fulfillment_status, "manual_review"); assert.equal(row.payment_amount, 206);
-  assert.equal(world.techlinkCalls.length, 0, "NOTHING may reach Techlink from the check");
-  assert.equal(audit("paid_order_held_for_approval").length, 1);
+  assert.equal(row.fulfilled, true); assert.equal(row.status, "success"); assert.equal(row.fulfillment_status, "fulfilled"); assert.equal(row.payment_amount, 206);
+  assert.equal(world.techlinkCalls.length, 1, "delivery occurs through the regular worker, not inside the reconciliation check");
+  assert.equal(audit("paid_order_held_for_approval").length, 0);
+  assert.equal(r.failures.length, 0, JSON.stringify(r.failures));
+});
+await t("LEGACY HELD PAYMENT: re-verifies Paystack and automatically releases a zero-attempt held order to the normal worker", async () => {
+  seed({
+    reference: "HELDREC1",
+    status: "payment_verified",
+    fulfillment_status: "manual_review",
+    fail_reason: "held_for_approval",
+    fulfillment_attempts: 0,
+    payment_verified_at: minsAgo(20),
+    payment_amount: 489,
+    checkout_amount: 4.79,
+    customer_product_amount: 4.79,
+    created_at: minsAgo(30),
+  });
+  world.paystack.HELDREC1 = { status: "success", id: 1234567, amount: 489, currency: "GHS", domain: "test" };
+  const r = await runWorkerCycle({ batchSize: 3, sweepLimit: 8 });
+  const row = get("HELDREC1");
+  assert.equal(world.paystackCalls.includes("HELDREC1"), true, "Paystack must be re-verified before recovery");
+  assert.equal(row.fulfilled, true, "eligible legacy paid orders should reach the normal worker automatically");
+  assert.equal(row.fulfillment_status, "fulfilled");
+  assert.equal(row.fail_reason, null);
+  assert.equal(world.techlinkCalls.length, 1, "the claim-protected worker sends exactly once");
   assert.equal(r.failures.length, 0, JSON.stringify(r.failures));
 });
 await t("ABANDONED: a checkout Paystack says was never paid is closed, and nothing is sent to Techlink", async () => {
@@ -68,7 +91,7 @@ await t("a checkout younger than 10 minutes is left alone (customer may still be
 await t("still-pending at Paystack (mobile money prompt open) stays pending and is retried next run", async () => {
   seed({ reference: "MOMO1" }); world.paystack.MOMO1 = { status: "ongoing", amount: 206, currency: "GHS" };
   const r = await runWorkerCycle({}); assert.equal(r.sweep.stillPending, 1); assert.equal(get("MOMO1").status, "payment_pending"); assert.equal(world.techlinkCalls.length, 0);
-  world.paystack.MOMO1.status = "success"; const r2 = await runWorkerCycle({}); assert.equal(get("MOMO1").fulfilled, false, "the check must not deliver"); assert.equal(get("MOMO1").fulfillment_status, "manual_review", "once paid it waits for approval"); assert.equal(world.techlinkCalls.length, 0);
+  world.paystack.MOMO1.status = "success"; const r2 = await runWorkerCycle({}); assert.equal(get("MOMO1").fulfilled, true, "once Paystack confirms payment, the normal worker fulfills it"); assert.equal(get("MOMO1").fulfillment_status, "fulfilled"); assert.equal(world.techlinkCalls.length, 1);
 });
 await t("LATE PAYMENT: an order marked abandoned that is later paid is recovered by the webhook path", async () => {
   seed({ reference: "LATE1", status: "payment_failed", fail_reason: "payment_abandoned" }); world.paystack.LATE1 = { status: "success", amount: 206, currency: "GHS" };
@@ -78,9 +101,9 @@ await t("PAYSTACK OUTAGE turns the worker red instead of silently doing nothing"
   seed({ reference: "OUT1" }); world.paystackDown = true; const r = await runWorkerCycle({});
   assert.equal(r.sweep.errors, 1); assert.ok(r.failures.some((f) => f.step === "stale-pending-sweep")); assert.equal(get("OUT1").status, "pending");
 });
-await t("one broken order does not stop the rest of the sweep", async () => {
+await t("one broken order does not stop the rest of the sweep, and a paid order still fulfills", async () => {
   seed({ reference: "OK1" }); seed({ reference: "BAD1" }); world.paystack.OK1 = { status: "success", amount: 206, currency: "GHS" };
-  const r = await runWorkerCycle({}); assert.equal(get("OK1").fulfillment_status, "manual_review"); assert.equal(get("OK1").fulfilled, false); assert.equal(r.sweep.checked, 2); assert.equal(world.techlinkCalls.length, 0);
+  const r = await runWorkerCycle({}); assert.equal(get("OK1").fulfillment_status, "fulfilled"); assert.equal(get("OK1").fulfilled, true); assert.equal(r.sweep.checked, 2); assert.equal(world.techlinkCalls.length, 1);
 });
 await t("HEARTBEAT is written every run and the health endpoint reports it", async () => {
   const before = await call("pages/api/admin/health.js", "op", "operator"); assert.equal(before.body.worker.lastRunAt, null);
@@ -158,16 +181,17 @@ await t("mark-delivered WITHOUT proof is still admin-only", async () => {
   assert.equal((await call("pages/api/orders/manual-review.js", "op", "operator", { method: "POST", body: { reference: "MAN1", action: "confirm_fulfilled", note: "no proof at all" } })).code, 403);
   assert.equal((await call("pages/api/orders/manual-review.js", "ad", "admin", { method: "POST", body: { reference: "MAN1", action: "confirm_fulfilled", note: "no proof at all" } })).code, 200);
 });
-await t("run-worker endpoint (Check outstanding orders): operator can run it, viewer cannot, it holds a paid-but-missed order and DELIVERS NOTHING", async () => {
+await t("outstanding-order check records paid orders as ready without sending to Techlink; scheduled worker then fulfills them", async () => {
   seed({ reference: "RW1" }); world.paystack.RW1 = { status: "success", amount: 206, currency: "GHS" };
   assert.equal((await call("pages/api/admin/run-worker.js", "vw", "viewer", { method: "POST" })).code, 403);
-  const r = await call("pages/api/admin/run-worker.js", "op", "operator", { method: "POST" }); assert.equal(r.code, 200, JSON.stringify(r.body)); assert.equal(get("RW1").fulfilled, false); assert.equal(get("RW1").fulfillment_status, "manual_review"); assert.equal(r.body.deliveries, 0); assert.equal(r.body.paidHeld, 1); assert.equal(r.body.needsAttentionTotal, 1); assert.equal(world.techlinkCalls.length, 0); assert.equal(audit("admin_checked_outstanding_orders").length, 1);
+  const r = await call("pages/api/admin/run-worker.js", "op", "operator", { method: "POST" }); assert.equal(r.code, 200, JSON.stringify(r.body)); assert.equal(get("RW1").fulfilled, false); assert.equal(get("RW1").fulfillment_status, "ready"); assert.equal(r.body.deliveries, 0); assert.equal(r.body.paidReady, 1); assert.equal(world.techlinkCalls.length, 0); assert.equal(audit("admin_checked_outstanding_orders").length, 1);
+  await runWorkerCycle({}); assert.equal(get("RW1").fulfilled, true); assert.equal(get("RW1").fulfillment_status, "fulfilled"); assert.equal(world.techlinkCalls.length, 1);
 });
-await t("the scheduled worker endpoint: wrong secret 401, right secret runs, returns 200 and does not deliver an old unpaid checkout", async () => {
+await t("the scheduled worker endpoint: wrong secret 401; correct secret runs and fulfills valid paid orders", async () => {
   const h = (await load("pages/api/jobs/fulfill.js")).default;
   const bad = mkRes(); await h({ method: "POST", headers: { authorization: "Bearer nope" } }, bad); assert.equal(bad.code, 401);
   seed({ reference: "CR1" }); world.paystack.CR1 = { status: "success", amount: 206, currency: "GHS" };
-  const ok = mkRes(); await h({ method: "POST", headers: { authorization: "Bearer " + process.env.CRON_SECRET } }, ok); assert.equal(ok.code, 200, JSON.stringify(ok.body)); assert.equal(get("CR1").fulfilled, false); assert.equal(get("CR1").fulfillment_status, "manual_review"); assert.equal(world.techlinkCalls.length, 0);
+  const ok = mkRes(); await h({ method: "POST", headers: { authorization: "Bearer " + process.env.CRON_SECRET } }, ok); assert.equal(ok.code, 200, JSON.stringify(ok.body)); assert.equal(get("CR1").fulfilled, true); assert.equal(get("CR1").fulfillment_status, "fulfilled"); assert.equal(world.techlinkCalls.length, 1);
 });
 await t("Needs Attention list: unpaid checkouts are categorised separately from paid orders", async () => {
   seed({ reference: "U1" }); seed({ reference: "P1", status: "payment_verified", fulfillment_status: "ready" }); seed({ reference: "Q1", status: "payment_verified", fulfillment_status: "queued_with_provider" });
@@ -230,7 +254,7 @@ await t("MANUAL: mark_paid_send refuses an order that is not waiting on payment"
 await t("API CHECKS STILL WORK alongside manual control: Verify only records, Approve & deliver sends, process_now sends", async () => {
   seed({ reference: "API1", status: "pending" }); world.paystack.API1 = { status: "success", amount: 206, currency: "GHS" };
   assert.equal((await manual("op", "operator", { reference: "API1", action: "verify_and_process", note: "checking paystack" })).code, 200);
-  assert.equal(get("API1").fulfilled, false, "Verify with Paystack must not deliver"); assert.equal(get("API1").fulfillment_status, "manual_review"); assert.equal(world.techlinkCalls.length, 0);
+  assert.equal(get("API1").fulfilled, false, "Verify with Paystack records the payment but does not send from the admin check itself"); assert.equal(get("API1").fulfillment_status, "ready"); assert.equal(world.techlinkCalls.length, 0);
   const ap = await manual("ad", "admin", { reference: "API1", action: "approve_delivery", note: "checked in Paystack dashboard" }); assert.equal(ap.code, 200, JSON.stringify(ap.body));
   assert.equal(get("API1").fulfilled, true); assert.equal(world.techlinkCalls.length, 1); assert.equal(audit("admin_approve_delivery").length, 1);
   seed({ reference: "API2", status: "payment_verified", fulfillment_status: "ready" }); assert.equal((await manual("ad", "admin", { reference: "API2", action: "process_now", note: "push it now" })).code, 200); assert.equal(get("API2").fulfilled, true);
