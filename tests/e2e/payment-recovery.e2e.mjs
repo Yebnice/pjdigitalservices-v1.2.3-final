@@ -56,6 +56,29 @@ await t("PAID-BUT-MISSED: reconciliation records a genuine payment and the regul
   assert.equal(audit("paid_order_held_for_approval").length, 0);
   assert.equal(r.failures.length, 0, JSON.stringify(r.failures));
 });
+await t("LEGACY HELD PAYMENT: re-verifies Paystack and automatically releases a zero-attempt held order to the normal worker", async () => {
+  seed({
+    reference: "HELDREC1",
+    status: "payment_verified",
+    fulfillment_status: "manual_review",
+    fail_reason: "held_for_approval",
+    fulfillment_attempts: 0,
+    payment_verified_at: minsAgo(20),
+    payment_amount: 489,
+    checkout_amount: 4.79,
+    customer_product_amount: 4.79,
+    created_at: minsAgo(30),
+  });
+  world.paystack.HELDREC1 = { status: "success", id: 1234567, amount: 489, currency: "GHS", domain: "test" };
+  const r = await runWorkerCycle({ batchSize: 3, sweepLimit: 8 });
+  const row = get("HELDREC1");
+  assert.equal(world.paystackCalls.includes("HELDREC1"), true, "Paystack must be re-verified before recovery");
+  assert.equal(row.fulfilled, true, "eligible legacy paid orders should reach the normal worker automatically");
+  assert.equal(row.fulfillment_status, "fulfilled");
+  assert.equal(row.fail_reason, null);
+  assert.equal(world.techlinkCalls.length, 1, "the claim-protected worker sends exactly once");
+  assert.equal(r.failures.length, 0, JSON.stringify(r.failures));
+});
 await t("ABANDONED: a checkout Paystack says was never paid is closed, and nothing is sent to Techlink", async () => {
   seed({ reference: "GONE1" }); world.paystack.GONE1 = { status: "abandoned", amount: 206, currency: "GHS" };
   const r = await runWorkerCycle({}); assert.equal(r.sweep.closed, 1);
