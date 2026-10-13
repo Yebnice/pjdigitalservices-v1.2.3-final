@@ -98,16 +98,16 @@ await tt("a real LIVE payment in production still works: fresh order is delivere
 });
 
 // ---------------------------------------------------------------- the three locks
-await tt("LOCK 1 (outstanding check): a paid order it finds is HELD, deliveries is 0, Techlink untouched", async () => {
+await tt("reconciliation of an old but genuinely paid checkout queues it and the regular worker fulfills it", async () => {
   seed({ reference: "OLD1", created_at: minsAgo(400) }); world.paystack.OLD1 = live();
   const r = await runWorkerCycle({ batchSize: 10, sweepLimit: 20 });
-  assert.equal(r.sweep.paidHeld, 1); assert.equal(r.sweep.deliveries, 0); assert.equal(world.techlinkCalls.length, 0); assert.equal(get("OLD1").fulfillment_status, "manual_review");
+  assert.equal(r.sweep.paidReady, 1); assert.equal(get("OLD1").fulfilled, true); assert.equal(get("OLD1").fulfillment_status, "fulfilled"); assert.equal(world.techlinkCalls.length, 1);
 });
 
-await tt("LOCK 2 (age): a webhook-style verify of an OLD checkout is held, not delivered, even though Paystack confirms it", async () => {
+await tt("a webhook-style verify of an old but valid paid checkout is delivered automatically", async () => {
   seed({ reference: "OLD2", created_at: minsAgo(300) }); world.paystack.OLD2 = live();
   const r = await verifyAndFulfillOrder("OLD2");
-  assert.equal(r.kind, "held"); assert.equal(r.reason, "too_old"); assert.equal(world.techlinkCalls.length, 0); assert.equal(get("OLD2").payment_amount, 206);
+  assert.equal(r.kind, "fulfilled"); assert.equal(get("OLD2").fulfilled, true); assert.equal(world.techlinkCalls.length, 1); assert.equal(get("OLD2").payment_amount, 206);
 });
 
 await tt("LOCK 3 (manual mode): the admin switch holds even a brand-new, genuine payment", async () => {
@@ -131,14 +131,14 @@ await tt("LAST MILE: an order verified for LESS than its total is not delivered 
   await runWorkerCycle({ batchSize: 10, sweepLimit: 20 }); assert.equal(world.techlinkCalls.length, 0); assert.equal(get("SHORT1").fulfillment_status, "manual_review");
 });
 
-await tt("LAST MILE: an OLD 'ready' order is held by the worker (approval is the only way through)", async () => {
+await tt("LAST MILE: a valid paid ready order is not blocked because it is old", async () => {
   seed({ reference: "OLDRDY", status: "payment_verified", fulfillment_status: "ready", payment_verified_at: minsAgo(1000), payment_amount: 206, created_at: minsAgo(1100) });
-  await runWorkerCycle({ batchSize: 10, sweepLimit: 20 }); assert.equal(world.techlinkCalls.length, 0); assert.equal(get("OLDRDY").fulfillment_status, "manual_review");
+  await runWorkerCycle({ batchSize: 10, sweepLimit: 20 }); assert.equal(world.techlinkCalls.length, 1); assert.equal(get("OLDRDY").fulfilled, true); assert.equal(get("OLDRDY").fulfillment_status, "fulfilled");
 });
 
-await tt("FAIL CLOSED: an order with no creation time is treated as too old and held, never delivered", async () => {
+await tt("missing checkout creation time does not block a genuine payment with full payment evidence", async () => {
   const row = seed({ reference: "NOTIME1" }); delete row.created_at; world.paystack.NOTIME1 = live();
-  const r = await verifyAndFulfillOrder("NOTIME1"); assert.equal(r.kind, "held"); assert.equal(world.techlinkCalls.length, 0);
+  const r = await verifyAndFulfillOrder("NOTIME1"); assert.equal(r.kind, "fulfilled"); assert.equal(get("NOTIME1").fulfilled, true); assert.equal(world.techlinkCalls.length, 1);
 });
 
 await tt("the scheduled worker still delivers a FRESH, recorded, genuine payment (webhook-then-worker path)", async () => {
@@ -178,10 +178,10 @@ await tt("APPROVE & DELIVER will not deliver twice when Techlink already shows i
   const ad = await manual("ad", "admin", { reference: "APP5", action: "approve_delivery", note: "verified it never arrived", force: true }); assert.equal(ad.code, 200, JSON.stringify(ad.body)); assert.equal(world.techlinkCalls.length, 1);
 });
 
-await tt("'Verify with Paystack' on an unpaid checkout records the answer and NEVER delivers", async () => {
+await tt("'Verify with Paystack' records a genuine payment as ready without sending from the admin check itself", async () => {
   seed({ reference: "VER1", created_at: minsAgo(20) }); world.paystack.VER1 = live();
   const r = await manual("op", "operator", { reference: "VER1", action: "verify_and_process", note: "checking" }); assert.equal(r.code, 200);
-  assert.equal(r.body.result.deliveries, 0); assert.equal(world.techlinkCalls.length, 0); assert.equal(get("VER1").fulfillment_status, "manual_review");
+  assert.equal(r.body.result.deliveries, 0); assert.equal(world.techlinkCalls.length, 0); assert.equal(get("VER1").fulfillment_status, "ready");
 });
 
 await tt("process_now / mark_paid_send / accept_charged by an admin still deliver (explicit decisions)", async () => {
@@ -255,9 +255,9 @@ await tt("FALSE HOLD: a genuinely paid order is still delivered when the cron ru
   await runWorkerCycle({ batchSize: 10, sweepLimit: 20 }); assert.equal(get("SLOW1").fulfilled, true, "late cron must not strand a paid order"); assert.equal(world.techlinkCalls.length, 1);
 });
 
-await tt("a verified order stuck for many hours is NOT retried automatically (a person decides)", async () => {
+await tt("a verified order is not stranded by a retry-age cutoff", async () => {
   seed({ reference: "STALE1", status: "payment_verified", fulfillment_status: "ready", payment_verified_at: minsAgo(60 * 12), payment_amount: 206, created_at: minsAgo(60 * 12 + 3) });
-  await runWorkerCycle({ batchSize: 10, sweepLimit: 20 }); assert.equal(world.techlinkCalls.length, 0); assert.equal(get("STALE1").fulfillment_status, "manual_review");
+  await runWorkerCycle({ batchSize: 10, sweepLimit: 20 }); assert.equal(world.techlinkCalls.length, 1); assert.equal(get("STALE1").fulfilled, true); assert.equal(get("STALE1").fulfillment_status, "fulfilled");
 });
 
 await tt("FALSE HOLD: a one-second database blip reading the delivery mode does not convert paid orders into manual approvals", async () => {
@@ -298,9 +298,9 @@ await tt("a SECOND Paystack notification for an order already accepted and queue
   const r = await verifyAndFulfillOrder("DUP1"); assert.notEqual(r.kind, "held"); assert.equal(get("DUP1").fulfillment_status, "queued_with_provider"); assert.equal(world.techlinkCalls.length, 0);
 });
 
-await tt("a late verify of an order that is already HELD leaves it held: nothing delivered, nothing thrown", async () => {
-  seed({ reference: "DUP2", status: "payment_verified", fulfillment_status: "manual_review", fail_reason: "held_for_approval", payment_verified_at: minsAgo(30), payment_amount: 206, created_at: minsAgo(40) }); world.paystack.DUP2 = live();
-  const r = await verifyAndFulfillOrder("DUP2"); assert.equal(get("DUP2").fulfillment_status, "manual_review"); assert.equal(get("DUP2").fulfilled, false); assert.equal(world.techlinkCalls.length, 0);
+await tt("a legacy held payment with zero provider attempts is re-verified and automatically recovered", async () => {
+  seed({ reference: "DUP2", status: "payment_verified", fulfillment_status: "manual_review", fail_reason: "held_for_approval", payment_verified_at: minsAgo(30), payment_amount: 206, fulfillment_attempts: 0, created_at: minsAgo(40) }); world.paystack.DUP2 = live();
+  const r = await verifyAndFulfillOrder("DUP2"); assert.equal(r.kind, "fulfilled"); assert.equal(get("DUP2").fulfillment_status, "fulfilled"); assert.equal(get("DUP2").fulfilled, true); assert.equal(world.techlinkCalls.length, 1);
 });
 
 console.log(out.join("\n"));
